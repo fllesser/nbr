@@ -1,0 +1,116 @@
+[package]
+name = "nb-cli"
+version = "0.1.0"
+edition = "2024"
+authors = ["NoneBot Team"]
+description = "CLI for NoneBot2 - A Rust implementation"
+license = "MIT"
+repository = "https://github.com/nonebot/nb-cli-rust"
+readme = "README.md"
+keywords = ["nonebot", "cli", "chatbot", "bot"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "nb"
+path = "src/main.rs"
+
+[dependencies]
+# CLI framework
+clap = { version = "4.4", features = ["derive", "color", "suggestions"] }
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.11", features = [
+    "json",
+    "rustls-tls",
+    "stream",
+], default-features = false }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# TOML handling
+toml = "0.8"
+
+# File system operations
+fs_extra = "1.3"
+
+# Terminal UI and progress bars
+indicatif = "0.17"
+console = "0.15"
+dialoguer = "0.11"
+
+# Colored output
+colored = "2.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Path utilities
+path-absolutize = "3.1"
+
+# Template engine
+handlebars = "4.5"
+
+# Archive handling
+zip = "0.6"
+tar = "0.4"
+flate2 = "1.0"
+
+# Git operations
+git2 = { version = "0.18", default-features = false }
+
+# Process management (using std::process instead)
+
+# Directory management
+directories = "5.0"
+
+# UUID for temp files
+uuid = { version = "1.6", features = ["v4"] }
+
+# Regex support
+regex = "1.10"
+
+# URL parsing
+url = "2.5"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Config file parsing
+config = "0.14"
+
+# Cross-platform support
+crossterm = "0.27"
+
+# File watching
+notify = "6.1"
+
+# System information
+sysinfo = "0.30"
+
+# Futures utilities
+futures-util = "0.3"
+
+# URL encoding
+urlencoding = "2.1"
+erased-serde = "0.4.6"
+
+[dev-dependencies]
+tempfile = "3.8"
+assert_cmd = "2.0"
+predicates = "3.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"

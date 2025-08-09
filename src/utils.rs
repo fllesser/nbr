@@ -1,0 +1,869 @@
+//! Utility functions module for nb-cli
+//!
+//! This module contains common utility functions used throughout the application.
+#![allow(dead_code)]
+
+use crate::error::{NbCliError, Result};
+use console::Term;
+use indicatif::{ProgressBar, ProgressStyle};
+use regex::Regex;
+use reqwest::Client;
+use std::collections::HashMap;
+
+use std::fs;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::{Output, Stdio};
+use std::time::Duration;
+use tokio::process::Command;
+use tokio::time::timeout;
+use tracing::{debug, info};
+use url::Url;
+
+/// File system utilities
+pub mod fs_utils {
+    use super::*;
+
+    /// Check if a directory exists and is writable
+    pub fn is_dir_writable<P: AsRef<Path>>(path: P) -> bool {
+        let path = path.as_ref();
+        if !path.exists() || !path.is_dir() {
+            return false;
+        }
+
+        // Try to create a temporary file
+        let temp_file = path.join(".nb_test_write");
+        match std::fs::File::create(&temp_file) {
+            Ok(_) => {
+                let _ = std::fs::remove_file(&temp_file);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    /// Create directory recursively if it doesn't exist
+    pub fn ensure_dir<P: AsRef<Path>>(path: P) -> Result<()> {
+        let path = path.as_ref();
+        if !path.exists() {
+            fs::create_dir_all(path).map_err(|e| {
+                NbCliError::io(format!("Failed to create directory {:?}: {}", path, e))
+            })?;
+            debug!("Created directory: {:?}", path);
+        }
+        Ok(())
+    }
+
+    /// Copy file with progress reporting
+    pub fn copy_file_with_progress<P: AsRef<Path>, Q: AsRef<Path>>(
+        from: P,
+        to: Q,
+        show_progress: bool,
+    ) -> Result<()> {
+        let from = from.as_ref();
+        let to = to.as_ref();
+
+        let file_size = from.metadata()?.len();
+        let mut source = fs::File::open(from)?;
+        let mut dest = fs::File::create(to)?;
+
+        let pb = if show_progress {
+            let pb = ProgressBar::new(file_size);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                    .unwrap()
+                    .progress_chars("█▉▊▋▌▍▎▏  "),
+            );
+            pb.set_message(format!("Copying {}", from.display()));
+            Some(pb)
+        } else {
+            None
+        };
+
+        let mut buffer = [0; 8192];
+        let mut total_bytes = 0;
+
+        loop {
+            let bytes_read = source.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            dest.write_all(&buffer[..bytes_read])?;
+            total_bytes += bytes_read as u64;
+
+            if let Some(ref pb) = pb {
+                pb.set_position(total_bytes);
+            }
+        }
+
+        if let Some(pb) = pb {
+            pb.finish_with_message(format!("Copied {} bytes", total_bytes));
+        }
+
+        Ok(())
+    }
+
+    /// Find files matching a pattern
+    pub fn find_files<P: AsRef<Path>>(
+        dir: P,
+        pattern: &str,
+        recursive: bool,
+    ) -> Result<Vec<PathBuf>> {
+        let dir = dir.as_ref();
+        let mut matches = Vec::new();
+        let regex = Regex::new(pattern)
+            .map_err(|e| NbCliError::invalid_argument(format!("Invalid pattern: {}", e)))?;
+
+        find_files_recursive(dir, &regex, recursive, &mut matches)?;
+        Ok(matches)
+    }
+
+    fn find_files_recursive(
+        dir: &Path,
+        regex: &Regex,
+        recursive: bool,
+        matches: &mut Vec<PathBuf>,
+    ) -> Result<()> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_file() {
+                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
+                    if regex.is_match(filename) {
+                        matches.push(path);
+                    }
+                }
+            } else if path.is_dir() && recursive {
+                find_files_recursive(&path, regex, recursive, matches)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Get file size in a human-readable format
+    pub fn format_file_size(size: u64) -> String {
+        const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+        let mut size = size as f64;
+        let mut unit_index = 0;
+
+        while size >= 1024.0 && unit_index < UNITS.len() - 1 {
+            size /= 1024.0;
+            unit_index += 1;
+        }
+
+        if unit_index == 0 {
+            format!("{} {}", size as u64, UNITS[unit_index])
+        } else {
+            format!("{:.2} {}", size, UNITS[unit_index])
+        }
+    }
+}
+
+/// Process execution utilities
+pub mod process_utils {
+    use super::*;
+
+    /// Execute a command with timeout and capture output
+    pub async fn execute_command_with_output(
+        program: &str,
+        args: &[&str],
+        working_dir: Option<&Path>,
+        timeout_secs: u64,
+    ) -> Result<Output> {
+        debug!("Executing command: {} {}", program, args.join(" "));
+
+        if program.is_empty() {
+            return Err(NbCliError::invalid_argument("Program name cannot be empty"));
+        }
+
+        let mut cmd = Command::new(program);
+        cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+
+        if let Some(dir) = working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let output = timeout(Duration::from_secs(timeout_secs), async {
+            cmd.output().await
+        })
+        .await
+        .map_err(|_| NbCliError::command_execution(format!("{} {}", program, args.join(" ")), -1))?
+        .map_err(|e| NbCliError::io(format!("Failed to execute command: {}", e)))?;
+
+        if !output.status.success() {
+            let exit_code = output.status.code().unwrap_or(-1);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(NbCliError::command_execution(
+                format!("{} {} - {}", program, args.join(" "), stderr),
+                exit_code,
+            ));
+        }
+
+        debug!("Command executed successfully");
+        Ok(output)
+    }
+
+    /// Execute a command interactively (inherit stdio)
+    /// Execute a command interactively (inherit stdin/stdout/stderr)
+    pub fn execute_interactive(
+        program: &str,
+        args: &[&str],
+        working_dir: Option<&Path>,
+    ) -> Result<()> {
+        debug!("Executing interactively: {} {}", program, args.join(" "));
+
+        let mut cmd = std::process::Command::new(program);
+        cmd.args(args);
+
+        if let Some(dir) = working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let status = cmd
+            .status()
+            .map_err(|e| NbCliError::io(format!("Failed to execute command: {}", e)))?;
+
+        if !status.success() {
+            let exit_code = status.code().unwrap_or(-1);
+            return Err(NbCliError::command_execution(
+                format!("{} {}", program, args.join(" ")),
+                exit_code,
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Check if a command is available in PATH
+    pub fn command_exists(command: &str) -> bool {
+        std::process::Command::new(command)
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
+    /// Find Python executable
+    pub fn find_python() -> Option<String> {
+        let candidates = if cfg!(windows) {
+            vec!["python", "python3", "py"]
+        } else {
+            vec!["python3", "python", "python3.11", "python3.10", "python3.9"]
+        };
+
+        for candidate in candidates {
+            if command_exists(candidate) {
+                // Verify it's actually Python 3
+                if let Ok(output) = std::process::Command::new(candidate)
+                    .arg("--version")
+                    .output()
+                {
+                    let version = String::from_utf8_lossy(&output.stdout);
+                    if version.contains("Python 3") {
+                        return Some(candidate.to_string());
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Get Python version
+    pub async fn get_python_version(python_path: &str) -> Result<String> {
+        let output = execute_command_with_output(python_path, &["--version"], None, 10).await?;
+        let version = String::from_utf8_lossy(&output.stdout);
+        Ok(version.trim().to_string())
+    }
+
+    /// Check if uv is available
+    pub async fn check_uv() -> Result<bool> {
+        match execute_command_with_output("uv", &["--version"], None, 10).await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
+}
+
+/// Network utilities
+pub mod net_utils {
+    use super::*;
+
+    /// Download file with progress bar
+    pub async fn download_file(url: &str, destination: &Path, show_progress: bool) -> Result<()> {
+        let client = Client::new();
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| NbCliError::Network(e))?;
+
+        if !response.status().is_success() {
+            return Err(NbCliError::unknown(format!(
+                "Failed to download {}: HTTP {}",
+                url,
+                response.status()
+            )));
+        }
+
+        let total_size = response.content_length().unwrap_or(0);
+        let pb = if show_progress && total_size > 0 {
+            let pb = ProgressBar::new(total_size);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
+                    .unwrap()
+                    .progress_chars("█▉▊▋▌▍▎▏  "),
+            );
+            pb.set_message(format!("Downloading {}", url));
+            Some(pb)
+        } else {
+            None
+        };
+
+        let mut file = fs::File::create(destination)
+            .map_err(|e| NbCliError::io(format!("Failed to create file: {}", e)))?;
+
+        let mut downloaded = 0u64;
+        let mut stream = response.bytes_stream();
+
+        use futures_util::StreamExt;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| NbCliError::Network(e))?;
+            file.write_all(&chunk).map_err(|e| {
+                NbCliError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to write to file: {}", e),
+                ))
+            })?;
+
+            downloaded += chunk.len() as u64;
+            if let Some(ref pb) = pb {
+                pb.set_position(downloaded);
+            }
+        }
+
+        if let Some(pb) = pb {
+            pb.finish_with_message("Download completed");
+        }
+
+        info!("Downloaded {} ({} bytes)", url, downloaded);
+        Ok(())
+    }
+
+    /// Check if URL is accessible
+    pub async fn check_url_accessible(url: &str) -> bool {
+        let client = Client::builder()
+            .timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_default();
+
+        match client.head(url).send().await {
+            Ok(response) => response.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
+    /// Parse and validate URL
+    pub fn parse_url(url: &str) -> Result<Url> {
+        Url::parse(url)
+            .map_err(|e| NbCliError::invalid_argument(format!("Invalid URL {}: {}", url, e)))
+    }
+}
+
+/// String utilities
+pub mod string_utils {
+    use super::*;
+
+    /// Convert string to snake_case
+    pub fn to_snake_case(s: &str) -> String {
+        let re = Regex::new(r"([a-z0-9])([A-Z])").unwrap();
+        re.replace_all(s, "${1}_${2}")
+            .to_lowercase()
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>()
+            .split('_')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("_")
+    }
+
+    /// Convert string to PascalCase
+    pub fn to_pascal_case(s: &str) -> String {
+        s.split('_')
+            .filter(|s| !s.is_empty())
+            .map(|word| {
+                let mut chars = word.chars();
+                match chars.next() {
+                    Some(first) => {
+                        first.to_uppercase().collect::<String>() + &chars.collect::<String>()
+                    }
+                    None => String::new(),
+                }
+            })
+            .collect()
+    }
+
+    /// Validate project name
+    pub fn validate_project_name(name: &str) -> Result<()> {
+        if name.is_empty() {
+            return Err(NbCliError::validation("Project name cannot be empty"));
+        }
+
+        if name.len() > 100 {
+            return Err(NbCliError::validation(
+                "Project name is too long (max 100 characters)",
+            ));
+        }
+
+        let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
+        if !re.is_match(name) {
+            return Err(NbCliError::validation(
+                "Project name must start with a letter and contain only letters, numbers, underscores, and hyphens",
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Validate package name
+    pub fn validate_package_name(name: &str) -> Result<()> {
+        if name.is_empty() {
+            return Err(NbCliError::validation("Package name cannot be empty"));
+        }
+
+        let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
+        if !re.is_match(name) {
+            return Err(NbCliError::validation(
+                "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens",
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Sanitize filename
+    pub fn sanitize_filename(name: &str) -> String {
+        let forbidden_chars: Vec<char> = if cfg!(windows) {
+            vec!['<', '>', ':', '"', '|', '?', '*', '/', '\\']
+        } else {
+            vec!['/', '\0']
+        };
+
+        let mut result = String::new();
+        for ch in name.chars() {
+            if forbidden_chars.contains(&ch) || ch.is_control() {
+                result.push('_');
+            } else {
+                result.push(ch);
+            }
+        }
+
+        // Trim dots and spaces from the end (Windows restriction)
+        result.trim_end_matches(&['.', ' '][..]).to_string()
+    }
+
+    /// Truncate string with ellipsis
+    pub fn truncate_with_ellipsis(s: &str, max_len: usize) -> String {
+        if s.len() <= max_len {
+            s.to_string()
+        } else if max_len <= 3 {
+            "...".to_string()
+        } else {
+            format!("{}...", &s[..max_len - 3])
+        }
+    }
+}
+
+/// Archive utilities
+pub mod archive_utils {
+    use super::*;
+    use flate2::read::GzDecoder;
+    use std::io;
+    use tar::Archive;
+    use zip::ZipArchive;
+
+    /// Extract ZIP archive
+    pub fn extract_zip<R: Read + std::io::Seek>(
+        reader: R,
+        destination: &Path,
+        show_progress: bool,
+    ) -> Result<()> {
+        let mut archive = ZipArchive::new(reader)
+            .map_err(|e| NbCliError::archive(format!("Failed to read ZIP archive: {}", e)))?;
+
+        let pb = if show_progress {
+            let pb = ProgressBar::new(archive.len() as u64);
+            pb.set_style(
+                ProgressStyle::default_bar()
+                    .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} files")
+                    .unwrap()
+                    .progress_chars("█▉▊▋▌▍▎▏  "),
+            );
+            pb.set_message("Extracting ZIP archive");
+            Some(pb)
+        } else {
+            None
+        };
+
+        for i in 0..archive.len() {
+            let mut file = archive
+                .by_index(i)
+                .map_err(|e| NbCliError::archive(format!("Failed to read file from ZIP: {}", e)))?;
+
+            let outpath = destination.join(file.mangled_name());
+
+            if file.name().ends_with('/') {
+                fs::create_dir_all(&outpath)
+                    .map_err(|e| NbCliError::io(format!("Failed to create directory: {}", e)))?;
+            } else {
+                if let Some(p) = outpath.parent() {
+                    if !p.exists() {
+                        fs::create_dir_all(p).map_err(|e| {
+                            NbCliError::io(format!("Failed to create directory: {}", e))
+                        })?;
+                    }
+                }
+
+                let mut outfile = fs::File::create(&outpath)
+                    .map_err(|e| NbCliError::io(format!("Failed to create file: {}", e)))?;
+
+                io::copy(&mut file, &mut outfile)
+                    .map_err(|e| NbCliError::io(format!("Failed to extract file: {}", e)))?;
+            }
+
+            if let Some(ref pb) = pb {
+                pb.set_position(i as u64 + 1);
+            }
+        }
+
+        if let Some(pb) = pb {
+            pb.finish_with_message("ZIP extraction completed");
+        }
+
+        Ok(())
+    }
+
+    /// Extract TAR.GZ archive
+    pub fn extract_tar_gz<R: Read>(
+        reader: R,
+        destination: &Path,
+        show_progress: bool,
+    ) -> Result<()> {
+        let tar = GzDecoder::new(reader);
+        let mut archive = Archive::new(tar);
+
+        let entries = archive
+            .entries()
+            .map_err(|e| NbCliError::archive(format!("Failed to read TAR entries: {}", e)))?;
+
+        let pb = if show_progress {
+            let pb = ProgressBar::new_spinner();
+            pb.set_style(
+                ProgressStyle::default_spinner()
+                    .template("{spinner:.green} Extracting TAR.GZ archive... {msg}")
+                    .unwrap(),
+            );
+            Some(pb)
+        } else {
+            None
+        };
+
+        for (index, entry) in entries.enumerate() {
+            let mut entry = entry
+                .map_err(|e| NbCliError::archive(format!("Failed to read TAR entry: {}", e)))?;
+
+            if let Some(ref pb) = pb {
+                pb.set_message(format!("Extracting file {}", index + 1));
+                pb.tick();
+            }
+
+            entry
+                .unpack_in(destination)
+                .map_err(|e| NbCliError::archive(format!("Failed to extract TAR entry: {}", e)))?;
+        }
+
+        if let Some(pb) = pb {
+            pb.finish_with_message("TAR.GZ extraction completed");
+        }
+
+        Ok(())
+    }
+}
+
+/// Git utilities
+pub mod git_utils {
+    use super::*;
+    use git2::{Repository, RepositoryInitOptions};
+
+    /// Clone a Git repository
+    pub fn clone_repository(url: &str, path: &Path, branch: Option<&str>) -> Result<()> {
+        info!("Cloning repository {} to {:?}", url, path);
+
+        let mut builder = git2::build::RepoBuilder::new();
+
+        if let Some(branch) = branch {
+            builder.branch(branch);
+        }
+
+        builder.clone(url, path).map_err(|e| NbCliError::git(e))?;
+
+        info!("Repository cloned successfully");
+        Ok(())
+    }
+
+    /// Initialize a new Git repository
+    pub fn init_repository(path: &Path, bare: bool) -> Result<()> {
+        let mut opts = RepositoryInitOptions::new();
+        opts.bare(bare);
+
+        Repository::init_opts(path, &opts).map_err(|e| NbCliError::git(e))?;
+
+        info!("Initialized Git repository at {:?}", path);
+        Ok(())
+    }
+
+    /// Check if a directory is a Git repository
+    pub fn is_git_repository(path: &Path) -> bool {
+        Repository::open(path).is_ok()
+    }
+
+    /// Get the current Git branch
+    pub fn get_current_branch(repo_path: &Path) -> Result<String> {
+        let repo = Repository::open(repo_path).map_err(|e| NbCliError::git(e))?;
+
+        let head = repo.head().map_err(|e| NbCliError::git(e))?;
+
+        let branch_name = head
+            .shorthand()
+            .ok_or_else(|| NbCliError::unknown("Could not get branch name"))?;
+
+        Ok(branch_name.to_string())
+    }
+}
+
+/// Template utilities
+pub mod template_utils {
+    use super::*;
+    use handlebars::Handlebars;
+
+    /// Render template with context
+    pub fn render_template(template: &str, context: &HashMap<String, String>) -> Result<String> {
+        let mut handlebars = Handlebars::new();
+
+        // Register built-in helpers
+        handlebars.register_helper("snake_case", Box::new(snake_case_helper));
+        handlebars.register_helper("pascal_case", Box::new(pascal_case_helper));
+        handlebars.register_helper("upper", Box::new(upper_case_helper));
+        handlebars.register_helper("lower", Box::new(lower_case_helper));
+
+        let rendered = handlebars
+            .render_template(template, context)
+            .map_err(|e| NbCliError::template(format!("Failed to render template: {}", e)))?;
+
+        Ok(rendered)
+    }
+
+    fn snake_case_helper(
+        h: &handlebars::Helper,
+        _: &handlebars::Handlebars,
+        _: &handlebars::Context,
+        _: &mut handlebars::RenderContext,
+        out: &mut dyn handlebars::Output,
+    ) -> handlebars::HelperResult {
+        if let Some(param) = h.param(0) {
+            let snake_case = super::string_utils::to_snake_case(&param.value().to_string());
+            out.write(&snake_case)?;
+        }
+        Ok(())
+    }
+
+    fn pascal_case_helper(
+        h: &handlebars::Helper,
+        _: &handlebars::Handlebars,
+        _: &handlebars::Context,
+        _: &mut handlebars::RenderContext,
+        out: &mut dyn handlebars::Output,
+    ) -> handlebars::HelperResult {
+        if let Some(param) = h.param(0) {
+            let pascal_case = super::string_utils::to_pascal_case(&param.value().to_string());
+            out.write(&pascal_case)?;
+        }
+        Ok(())
+    }
+
+    fn upper_case_helper(
+        h: &handlebars::Helper,
+        _: &handlebars::Handlebars,
+        _: &handlebars::Context,
+        _: &mut handlebars::RenderContext,
+        out: &mut dyn handlebars::Output,
+    ) -> handlebars::HelperResult {
+        if let Some(param) = h.param(0) {
+            out.write(&param.value().to_string().to_uppercase())?;
+        }
+        Ok(())
+    }
+
+    fn lower_case_helper(
+        h: &handlebars::Helper,
+        _: &handlebars::Handlebars,
+        _: &handlebars::Context,
+        _: &mut handlebars::RenderContext,
+        out: &mut dyn handlebars::Output,
+    ) -> handlebars::HelperResult {
+        if let Some(param) = h.param(0) {
+            out.write(&param.value().to_string().to_lowercase())?;
+        }
+        Ok(())
+    }
+}
+
+/// Terminal utilities
+pub mod terminal_utils {
+    use super::*;
+
+    /// Get terminal size
+    pub fn get_terminal_size() -> (usize, usize) {
+        let term = Term::stdout();
+        term.size_checked()
+            .map(|(rows, cols)| (rows as usize, cols as usize))
+            .unwrap_or((24, 80))
+    }
+
+    /// Check if running in TTY
+    pub fn is_tty() -> bool {
+        Term::stdout().is_term()
+    }
+
+    /// Clear terminal screen
+    pub fn clear_screen() -> Result<()> {
+        Term::stdout()
+            .clear_screen()
+            .map_err(|e| NbCliError::io(format!("Failed to clear screen: {}", e)))?;
+        Ok(())
+    }
+
+    /// Create a progress bar with custom style
+    pub fn create_progress_bar(len: u64, message: &str) -> ProgressBar {
+        let pb = ProgressBar::new(len);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
+                .unwrap()
+                .progress_chars("█▉▊▋▌▍▎▏  "),
+        );
+        pb.set_message(message.to_string());
+        pb
+    }
+
+    /// Create a spinner with custom message
+    pub fn create_spinner(message: &str) -> ProgressBar {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .unwrap(),
+        );
+        pb.set_message(message.to_string());
+        pb.enable_steady_tick(Duration::from_millis(100));
+        pb
+    }
+}
+
+/// Path utilities
+pub mod path_utils {
+    use super::*;
+    use path_absolutize::Absolutize;
+
+    /// Resolve and canonicalize path
+    pub fn resolve_path<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
+        let path = path.as_ref();
+        path.absolutize()
+            .map_err(|e| NbCliError::io(format!("Failed to resolve path {:?}: {}", path, e)))
+            .map(|p| p.to_path_buf())
+    }
+
+    /// Check if path is inside another path
+    pub fn is_subpath<P: AsRef<Path>, Q: AsRef<Path>>(path: P, parent: Q) -> bool {
+        let path = path.as_ref();
+        let parent = parent.as_ref();
+
+        path.canonicalize()
+            .and_then(|p| parent.canonicalize().map(|parent| p.starts_with(parent)))
+            .unwrap_or(false)
+    }
+
+    /// Get relative path from base to target
+    pub fn get_relative_path<P: AsRef<Path>, Q: AsRef<Path>>(
+        base: P,
+        target: Q,
+    ) -> Option<PathBuf> {
+        let base = base.as_ref();
+        let target = target.as_ref();
+
+        target.strip_prefix(base).ok().map(|p| p.to_path_buf())
+    }
+
+    /// Join paths safely (prevents directory traversal)
+    pub fn safe_join<P: AsRef<Path>, Q: AsRef<Path>>(base: P, path: Q) -> Result<PathBuf> {
+        let base = base.as_ref();
+        let path = path.as_ref();
+
+        // Check for directory traversal attempts
+        for component in path.components() {
+            if component == std::path::Component::ParentDir {
+                return Err(NbCliError::validation("Path contains '..' components"));
+            }
+        }
+
+        Ok(base.join(path))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_snake_case() {
+        assert_eq!(string_utils::to_snake_case("CamelCase"), "camel_case");
+        assert_eq!(
+            string_utils::to_snake_case("already_snake"),
+            "already_snake"
+        );
+        assert_eq!(string_utils::to_snake_case("mixedCASE"), "mixed_case");
+    }
+
+    #[test]
+    fn test_pascal_case() {
+        assert_eq!(string_utils::to_pascal_case("snake_case"), "SnakeCase");
+        assert_eq!(
+            string_utils::to_pascal_case("already_pascal"),
+            "AlreadyPascal"
+        );
+    }
+
+    #[test]
+    fn test_project_name_validation() {
+        assert!(string_utils::validate_project_name("valid_project").is_ok());
+        assert!(string_utils::validate_project_name("ValidProject").is_ok());
+        assert!(string_utils::validate_project_name("valid-project").is_ok());
+
+        assert!(string_utils::validate_project_name("").is_err());
+        assert!(string_utils::validate_project_name("1invalid").is_err());
+        assert!(string_utils::validate_project_name("invalid@project").is_err());
+    }
+}
