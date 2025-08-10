@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{Context, Result};
 use clap::ArgMatches;
 use colored::*;
@@ -12,6 +10,7 @@ use tracing::{debug, info, warn};
 
 use super::env::AdapterInfo;
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct Template {
     pub name: String,
@@ -62,6 +61,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("📂 Location: {}", options.output_dir.display());
     println!("\n🚀 Next steps:");
     println!("  cd {}", options.name);
+    println!("  uv sync");
     println!("  nb run");
 
     // Show additional setup instructions
@@ -185,7 +185,7 @@ async fn get_available_adapters() -> Result<Vec<super::env::AdapterInfo>> {
     let adapters = vec![AdapterInfo {
         name: "OneBot V11".to_string(),
         version: "2.4.6".to_string(),
-        location: "https://github.com/nonebot/nonebot2".to_string(),
+        location: "https://github.com/nonebot/adapter-onebot".to_string(),
     }];
 
     Ok(adapters)
@@ -274,7 +274,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     data.insert("plugins", &options.plugins);
 
     // Create directory structure
-    create_project_structure(&options.output_dir)?;
+    create_project_structure(&options.output_dir, &package_name)?;
 
     // Generate files
     generate_bot_file(&handlebars, &data, &options.output_dir)?;
@@ -282,7 +282,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_env_files(&handlebars, &data, &options.output_dir)?;
     generate_readme_file(&handlebars, &data, &options.output_dir)?;
     generate_gitignore(&options.output_dir)?;
-    generate_dockerfile(&handlebars, &data, &options.output_dir)?;
+    //generate_dockerfile(&handlebars, &data, &options.output_dir)?;
 
     Ok(())
 }
@@ -316,7 +316,7 @@ fn register_templates(handlebars: &mut Handlebars) -> Result<()> {
 
 import nonebot
 {{#each adapters}}
-from nonebot.adapters.{{snake_case this}} import Adapter as {{pascal_case this}}_Adapter
+from {{module_name this}} import Adapter as {{pascal_case this}}Adapter
 {{/each}}
 
 # Custom your logger
@@ -330,11 +330,10 @@ from nonebot.adapters.{{snake_case this}} import Adapter as {{pascal_case this}}
 
 # You can pass some keyword args config to init function
 nonebot.init()
-app = nonebot.get_asgi()
 
 driver = nonebot.get_driver()
 {{#each adapters}}
-driver.register_adapter({{pascal_case this}}_Adapter)
+driver.register_adapter({{pascal_case this}}Adapter)
 {{/each}}
 
 nonebot.load_from_toml("pyproject.toml")
@@ -345,7 +344,6 @@ nonebot.load_from_toml("pyproject.toml")
 # do something...
 
 if __name__ == "__main__":
-    nonebot.logger.warning("Always use `nb run` to start the bot instead of manually running!")
     nonebot.run(app="__mp_main__:app")
 "#,
     )?;
@@ -359,12 +357,12 @@ authors = []
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "nonebot2>=2.3.0"
-    "{{#each adapters}}"
-    "{{adapter_package this}}>=2.0.0"
-    "{{/each}}"
-    "{{#each plugins}}"
-    {{this}} = "*"
+    "nonebot2[fastapi, httpx, websockets]>=2.4.0",
+    {{#each adapters}}
+    "{{adapter_package this}}",
+    {{/each}}
+    {{#each plugins}}
+    "{{this}}",
     {{/each}}
 ]
 
@@ -372,15 +370,15 @@ dependencies = [
 [tool.nonebot]
 adapters = [
 {{#each adapters}}
-    { name = "{{this}}", module_name = "{{module_name this}}", project_link = "{{adapter_package this}}", desc = "{{this}} 协议" },
+    { name = "{{this}}", module_name = "{{module_name this}}", project_link = "https://github.com/nonebot/{{adapter_package this}}", desc = "{{this}} 协议" },
 {{/each}}
 ]
 plugins = [
 {{#each plugins}}
-    "{{this}}",
+    "{{snake_case this}}",
 {{/each}}
 ]
-plugin_dirs = ["{{package_name}}/plugins"]
+plugin_dirs = ["/src/{{package_name}}/plugins"]
 builtin_plugins = ["echo"]
 
 [build-system]
@@ -393,7 +391,6 @@ build-backend = "uv_build"
     handlebars.register_helper("pascal_case", Box::new(pascal_case_helper));
     handlebars.register_helper("adapter_package", Box::new(adapter_package_helper));
     handlebars.register_helper("module_name", Box::new(module_name_helper));
-
     Ok(())
 }
 
@@ -487,9 +484,10 @@ fn module_name_helper(
     Ok(())
 }
 
-fn create_project_structure(base_dir: &Path) -> Result<()> {
+fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
     let dirs = vec![
-        base_dir.join("plugins"),
+        base_dir.join("src/plugins"),
+        base_dir.join(format!("src/{}", module_name)),
         base_dir.join("data"),
         base_dir.join("resources"),
         base_dir.join("tests"),
@@ -500,6 +498,10 @@ fn create_project_structure(base_dir: &Path) -> Result<()> {
             .with_context(|| format!("Failed to create directory: {}", dir.display()))?;
     }
 
+    fs::write(
+        base_dir.join(format!("src/{}/__init__.py", module_name)),
+        "",
+    )?;
     Ok(())
 }
 
@@ -565,12 +567,12 @@ DRIVER=~httpx+~websockets
 # Superusers (replace with actual user IDs)
 SUPERUSERS=["123456789"]
 
-# Command prefix
-COMMAND_PREFIX=[""]
+# Command Start
+COMMAND_START=[""]
 NICKNAME=["Bot"]
 
 # API settings
-HOST=0.0.0.0
+HOST=127.0.0.1
 PORT=8080
 "#;
 
@@ -641,7 +643,7 @@ nb run
 ├── pyproject.toml      # 项目配置文件
 ├── .env               # 开发环境配置
 ├── .env.prod          # 生产环境配置
-├── plugins/           # 插件目录
+├── src/plugins/           # 插件目录
 ├── data/             # 数据目录
 ├── resources/        # 资源文件目录
 └── tests/            # 测试文件目录
@@ -758,6 +760,7 @@ poetry.lock
     Ok(())
 }
 
+#[allow(unused)]
 fn generate_dockerfile(
     _handlebars: &Handlebars,
     data: &HashMap<&str, &dyn erased_serde::Serialize>,
