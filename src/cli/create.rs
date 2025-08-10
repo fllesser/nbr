@@ -8,6 +8,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
+use crate::cli::pyproject::PyProject;
+
 use super::env::AdapterInfo;
 
 #[allow(unused)]
@@ -278,7 +280,8 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
 
     // Generate files
     generate_bot_file(&handlebars, &data, &options.output_dir)?;
-    generate_pyproject_file(&handlebars, &data, &options.output_dir)?;
+    //generate_pyproject_file(&handlebars, &data, &options.output_dir)?;
+    generate_uv_project_file(&data, &options.output_dir)?;
     generate_env_files(&handlebars, &data, &options.output_dir)?;
     generate_readme_file(&handlebars, &data, &options.output_dir)?;
     generate_gitignore(&options.output_dir)?;
@@ -521,6 +524,15 @@ fn generate_pyproject_file(
     output_dir: &Path,
 ) -> Result<()> {
     let content = handlebars.render("pyproject.toml", data)?;
+    fs::write(output_dir.join("pyproject.toml"), content)?;
+    Ok(())
+}
+
+fn generate_uv_project_file(
+    data: &HashMap<&str, &dyn erased_serde::Serialize>,
+    output_dir: &Path,
+) -> Result<()> {
+    let content = toml::to_string(&PyProject::default())?;
     fs::write(output_dir.join("pyproject.toml"), content)?;
     Ok(())
 }
