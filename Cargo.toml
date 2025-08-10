@@ -63,7 +63,7 @@ tar = "0.4"
 flate2 = "1.0"
 
 # Git operations
-git2 = { version = "0.18", default-features = false }
+git2 = { version = "0.20", default-features = false }
 
 # Process management (using std::process instead)
 
