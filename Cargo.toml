@@ -90,7 +90,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 config = "0.15.13"
 
 # Cross-platform support
-crossterm = "0.27"
+crossterm = "0.29"
 
 # File watching
 notify = "8.2.0"
