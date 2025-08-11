@@ -34,7 +34,7 @@ serde_json = "1.0"
 serde_yaml = "0.9"
 
 # TOML handling
-toml = "0.8"
+toml = "0.9"
 
 # File system operations
 fs_extra = "1.3"
