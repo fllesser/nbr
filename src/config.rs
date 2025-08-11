@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use crate::error::{NbCliError, Result};
+use crate::pyproject::PyProjectConfig;
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ pub struct Config {
     pub user: UserConfig,
     /// Project-specific configuration
     pub project: Option<ProjectConfig>,
+    /// Pyproject configuration
+    pub pyproject: Option<PyProjectConfig>,
     /// Template registry configuration
     pub templates: TemplateConfig,
     /// Cache configuration
@@ -232,6 +235,8 @@ pub struct AdapterInfo {
 pub struct PluginInfo {
     /// Plugin name
     pub name: String,
+    /// Module name
+    pub module_name: String,
     /// Installed version
     pub version: String,
     /// Installation method (uv, git, local)
@@ -309,6 +314,7 @@ impl Default for Config {
         Self {
             user: UserConfig::default(),
             project: None,
+            pyproject: None,
             templates: TemplateConfig::default(),
             cache: CacheConfig::default(),
             registry: RegistryConfig::default(),
@@ -380,6 +386,7 @@ impl TryFrom<&toml::Value> for ProjectConfig {
                     .filter_map(|v| v.as_str())
                     .map(|name| PluginInfo {
                         name: name.to_string(),
+                        module_name: name.replace("-", "_"),
                         version: "latest".to_string(),
                         install_method: "pip".to_string(),
                         source: name.to_string(),
@@ -512,6 +519,11 @@ impl ConfigManager {
             info!("Loaded project configuration");
         }
 
+        if let Some(pyproject_config) = PyProjectConfig::load().await? {
+            self.current_config.pyproject = Some(pyproject_config);
+            info!("Loaded pyproject configuration");
+        }
+
         Ok(())
     }
 
@@ -532,6 +544,10 @@ impl ConfigManager {
             self.save_project_config(project_config).await?;
         }
 
+        if let Some(ref pyproject_config) = self.current_config.pyproject {
+            pyproject_config.save().await?;
+        }
+
         info!("Configuration saved successfully");
         Ok(())
     }
@@ -541,17 +557,12 @@ impl ConfigManager {
         let current_dir = std::env::current_dir()
             .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
 
-        let config_files = ["pyproject.toml", "nb.toml", ".nb.toml"];
-
-        for config_file in &config_files {
-            let config_path = current_dir.join(config_file);
-            if config_path.exists() {
-                debug!("Found project config at {:?}", config_path);
-                return self.parse_project_config(&config_path).await.map(Some);
-            }
+        let config_path = current_dir.join("nb.toml");
+        if config_path.exists() {
+            self.parse_project_config(&config_path).await.map(Some)
+        } else {
+            Ok(None)
         }
-
-        Ok(None)
     }
 
     /// Parse project configuration from file

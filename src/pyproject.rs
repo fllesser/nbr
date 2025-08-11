@@ -1,8 +1,12 @@
+use std::{fs, path::Path};
+
 use serde::{Deserialize, Serialize};
+
+use crate::error::{NbCliError, Result};
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
-pub struct PyProject {
+pub struct PyProjectConfig {
     pub project: Project,
     pub tool: Tool,
     pub build_system: BuildSystem,
@@ -67,5 +71,38 @@ impl Default for BuildSystem {
             requires: vec!["uv_build>=0.8.3,<0.9.0".to_string()],
             build_backend: "uv_build".to_string(),
         }
+    }
+}
+impl PyProjectConfig {
+    pub async fn load() -> Result<Option<Self>> {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
+        let config_path = current_dir.join("pyproject.toml");
+        PyProjectConfig::parse(&config_path).map(Some)
+    }
+
+    pub fn parse(config_path: &Path) -> Result<Self> {
+        let content = fs::read_to_string(config_path)
+            .map_err(|e| NbCliError::config(format!("Failed to read pyproject.toml: {}", e)))?;
+
+        let parsed: toml::Value = toml::from_str(&content)
+            .map_err(|e| NbCliError::config(format!("Failed to parse TOML: {}", e)))?;
+
+        parsed
+            .try_into()
+            .map_err(|e| NbCliError::config(format!("Failed to parse pyproject.toml: {}", e)))
+    }
+
+    pub async fn save(&self) -> Result<()> {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
+
+        let config_path = current_dir.join("pyproject.toml");
+        let config_content = toml::to_string(self).map_err(|e| {
+            NbCliError::config(format!("Failed to serialize pyproject config: {}", e))
+        })?;
+
+        fs::write(&config_path, config_content)
+            .map_err(|e| NbCliError::config(format!("Failed to write pyproject config: {}", e)))
     }
 }

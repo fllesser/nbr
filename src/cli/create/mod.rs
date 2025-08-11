@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use crate::cli::pyproject::{Adapter, PyProject};
+use crate::pyproject::{Adapter, PyProjectConfig};
 
 use super::env::AdapterInfo;
 
@@ -444,7 +444,7 @@ fn generate_bot_file(
 }
 
 fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
-    let mut pyproject = PyProject::default();
+    let mut pyproject = PyProjectConfig::default();
     pyproject.project.name = options.name.to_string();
 
     // 补齐插件, 适配器相关表

@@ -10,6 +10,3 @@ pub mod generate;
 pub mod init;
 pub mod plugin;
 pub mod run;
-pub mod pyproject;
-
-// Re-export handler functions for convenience

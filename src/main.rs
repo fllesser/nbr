@@ -6,6 +6,7 @@ use tracing::info;
 mod cli;
 mod config;
 mod error;
+mod pyproject;
 mod utils;
 
 use cli::*;
@@ -23,7 +24,7 @@ VP   V8P  `Y88P'  VP   V8P Y88888P Y8888P'  `Y88P'     YP
 fn build_cli() -> Command {
     Command::new("nb")
         .version(VERSION)
-        .author("NoneBot Team")
+        .author("fllesser")
         .about("CLI for NoneBot2 - Rust implementation")
         .before_help(BANNER.bright_cyan().to_string())
         .arg_required_else_help(true)

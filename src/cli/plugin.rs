@@ -156,6 +156,10 @@ impl PluginManager {
                 .as_ref()
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| package_name.clone()),
+            module_name: plugin_info
+                .as_ref()
+                .map(|p| p.name.replace("-", "_"))
+                .unwrap_or_else(|| package_name.replace("-", "_")),
             version: self
                 .get_installed_package_version(&package_name)
                 .await
@@ -169,7 +173,10 @@ impl PluginManager {
             installed_at: Utc::now(),
         };
 
-        self.add_plugin_to_config(installed_plugin).await?;
+        self.add_plugin_to_config(installed_plugin.clone()).await?;
+
+        self.add_plugin_to_pyproject(installed_plugin.clone())
+            .await?;
 
         println!(
             "{} Successfully installed plugin: {}",
@@ -178,6 +185,12 @@ impl PluginManager {
         );
 
         Ok(())
+    }
+
+    pub async fn add_plugin_to_pyproject(&mut self, plugin: PluginInfo) -> Result<()> {
+        let pyproject = self.config_manager.config_mut().pyproject.as_mut().unwrap();
+        pyproject.tool.nonebot.plugins.push(plugin.module_name);
+        self.config_manager.save().await
     }
 
     /// Uninstall a plugin
@@ -493,6 +506,11 @@ impl PluginManager {
 
         spinner.finish_and_clear();
 
+        // 重新读取 pyproject.toml
+        // if let Some(pyproject_config) = PyProjectConfig::load().await? {
+        //     self.config_manager.config_mut().pyproject = Some(pyproject_config);
+        // }
+
         output.map(|_| ())
     }
 
@@ -583,7 +601,6 @@ impl PluginManager {
             .await
             .map_err(|_| NbCliError::unknown("Request timeout"))?
             .map_err(|e| NbCliError::Network(e))?;
-
         if !response.status().is_success() {
             return Err(NbCliError::not_found(format!(
                 "Plugin '{}' not found in registry",
