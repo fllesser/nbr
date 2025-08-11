@@ -246,7 +246,12 @@ impl AdapterManager {
 
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
-        println!("{}", "Installed Adapters:".bright_green().bold());
+        if show_all {
+            println!("{}", "All Adapters:".bright_green().bold());
+        } else {
+            println!("{}", "Installed Adapters:".bright_green().bold());
+        }
+
         println!();
         let pyproject = PyProjectConfig::load().await?;
         let installed_adapters = if let Some(project) = pyproject {
@@ -261,9 +266,7 @@ impl AdapterManager {
         } else {
             adapters_map
                 .iter()
-                .filter(|(name, _)| {
-                    installed_adapters.iter().any(|a| a.name == name.as_str())
-                })
+                .filter(|(name, _)| installed_adapters.iter().any(|a| a.name == name.as_str()))
                 .map(|(name, adapter)| (name.clone(), adapter.clone()))
                 .collect()
         };
