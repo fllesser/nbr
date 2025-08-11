@@ -6,6 +6,7 @@
 
 use crate::config::{ConfigManager, PluginInfo};
 use crate::error::{NbCliError, Result};
+use crate::pyproject::PyProjectConfig;
 use crate::utils::{process_utils, terminal_utils};
 use chrono::Utc;
 use clap::ArgMatches;
@@ -15,6 +16,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+use std::collections::HashMap;
 use std::env;
 
 use std::path::PathBuf;
@@ -22,35 +24,45 @@ use std::time::Duration;
 use tokio::time::timeout;
 use tracing::info;
 
+//  "module_name": "nonebot_plugin_status",
+// "project_link": "nonebot-plugin-status",
+// "name": "服务器状态查看",
+// "desc": "通过戳一戳获取服务器状态",
+// "author": "yanyongyu",
+// "homepage": "https://github.com/nonebot/plugin-status",
+// "tags": [
+//     {
+//         "label": "server",
+//         "color": "#aeeaa8"
+//     }
+// ],
+// "is_official": true,
+// "type": "application",
+// "supported_adapters": null,
+// "valid": true,
+// "time": "2024-09-03T09:20:59.379554Z",
+// "version": "0.9.0",
+// "skip_test": false
+// },
 /// Plugin registry information
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryPlugin {
-    /// Plugin name
+    pub module_name: String,
+    pub project_link: String,
     pub name: String,
-    /// Plugin description
-    pub description: String,
-    /// Plugin version
-    pub version: String,
-    /// Plugin author
+    pub desc: String,
     pub author: String,
-    /// PyPI package name
-    pub pypi_name: String,
-    /// Plugin homepage
     pub homepage: Option<String>,
-    /// Plugin tags
-    pub tags: Vec<String>,
-    /// Plugin type (adapter, plugin, etc.)
-    pub plugin_type: String,
-    /// Supported Python versions
-    pub python_requires: String,
-    /// Plugin dependencies
-    pub dependencies: Vec<String>,
-    /// Download count
-    pub downloads: u64,
-    /// Last updated
-    pub updated_at: String,
-    /// Plugin rating
-    pub rating: Option<f32>,
+    pub tags: Vec<HashMap<String, String>>,
+    pub is_official: bool,
+    #[serde(rename = "type")]
+    pub plugin_type: Option<String>,
+    pub supported_adapters: Option<Vec<String>>,
+    pub valid: bool,
+    pub time: String,
+    pub version: String,
+    pub skip_test: bool,
 }
 
 /// Plugin search result
@@ -116,7 +128,7 @@ impl PluginManager {
 
         let package_name = plugin_info
             .as_ref()
-            .map(|p| p.pypi_name.clone())
+            .map(|p| p.project_link.clone())
             .unwrap_or_else(|| name.to_string());
 
         // Basic validation - ensure package name is not empty
@@ -168,15 +180,14 @@ impl PluginManager {
             source: index_url.unwrap_or("PyPI").to_string(),
             plugin_type: plugin_info
                 .as_ref()
-                .map(|p| p.plugin_type.clone())
-                .unwrap_or_else(|| "external".to_string()),
+                .map(|p| p.plugin_type.clone().unwrap_or("application".to_string()))
+                .unwrap_or_else(|| "application".to_string()),
             installed_at: Utc::now(),
         };
 
-        self.add_plugin_to_config(installed_plugin.clone()).await?;
+        // self.add_plugin_to_config(installed_plugin.clone()).await?;
 
-        self.add_plugin_to_pyproject(installed_plugin.clone())
-            .await?;
+        PyProjectConfig::add_plugin_to_tool_nonebot(&installed_plugin.module_name).await?;
 
         println!(
             "{} Successfully installed plugin: {}",
@@ -185,12 +196,6 @@ impl PluginManager {
         );
 
         Ok(())
-    }
-
-    pub async fn add_plugin_to_pyproject(&mut self, plugin: PluginInfo) -> Result<()> {
-        let pyproject = self.config_manager.config_mut().pyproject.as_mut().unwrap();
-        pyproject.tool.nonebot.plugins.push(plugin.module_name);
-        self.config_manager.save().await
     }
 
     /// Uninstall a plugin
@@ -219,8 +224,8 @@ impl PluginManager {
         self.uv_uninstall(package_name).await?;
 
         // Remove from configuration
-        self.remove_plugin_from_config(&plugin_info.name).await?;
-
+        //self.remove_plugin_from_config(&plugin_info.name).await?;
+        PyProjectConfig::remove_plugin_from_tool_nonebot(&plugin_info.name).await?;
         println!(
             "{} Successfully uninstalled plugin: {}",
             "✓".bright_green(),
@@ -232,55 +237,49 @@ impl PluginManager {
 
     /// List installed plugins
     pub async fn list_plugins(&self, show_outdated: bool) -> Result<()> {
-        let config = self.config_manager.config();
+        // let config = self.config_manager.config();
+        let pyproject = PyProjectConfig::load().await?;
+        if pyproject.is_none() {
+            println!(
+                "{}",
+                "can't found pyproject.toml configuration found.".bright_yellow()
+            );
+            return Ok(());
+        }
+        let pyproject = pyproject.unwrap();
+        let plugins = pyproject
+            .tool
+            .nonebot
+            .plugins
+            .iter()
+            .map(|p| p.replace("_", "-"))
+            .collect::<Vec<String>>();
 
-        if let Some(ref project_config) = config.project {
-            let plugins = &project_config.plugins;
-
-            if plugins.is_empty() {
-                println!("{}", "No plugins installed.".bright_yellow());
-                return Ok(());
-            }
-
-            println!("{}", "Installed plugins:".bright_green().bold());
-            println!();
-
-            let mut outdated_plugins = Vec::new();
-
-            for plugin in plugins {
-                if show_outdated {
-                    // Check if plugin is outdated
-                    if let Ok(latest_version) = self.get_latest_package_version(&plugin.name).await
-                    {
-                        if plugin.version != latest_version {
-                            outdated_plugins.push((plugin, latest_version));
-                        }
-                    }
-                } else {
-                    // Display all plugins
-                    self.display_installed_plugin(plugin);
-                }
-            }
+        for plugin_name in plugins {
+            let plugin = self.get_registry_plugin(&plugin_name).await?;
+            let installed_version = self.get_installed_package_version(&plugin.name).await?;
+            let plugin_info = PluginInfo {
+                name: plugin.name.clone(),
+                module_name: plugin.name.replace("-", "_"),
+                version: installed_version,
+                install_method: "uv".to_string(),
+                source: "PyPI".to_string(),
+                plugin_type: "plugin".to_string(),
+                installed_at: Utc::now(),
+            };
+            self.display_installed_plugin(&plugin_info);
 
             if show_outdated {
-                if outdated_plugins.is_empty() {
-                    println!("{}", "All plugins are up to date.".bright_green());
-                } else {
-                    println!("{}", "Outdated plugins:".bright_yellow().bold());
-                    println!();
-                    for (plugin, latest_version) in &outdated_plugins {
-                        println!(
-                            "  {} {} → {} {}",
-                            "•".bright_blue(),
-                            plugin.name.bright_white(),
-                            plugin.version.red(),
-                            latest_version.bright_green()
-                        );
-                    }
+                if plugin_info.version != plugin.version {
+                    println!(
+                        "  {} {} → {} {}",
+                        "•".bright_blue(),
+                        plugin_info.name.bright_white(),
+                        plugin_info.version.red(),
+                        plugin.version.bright_green()
+                    );
                 }
             }
-        } else {
-            println!("{}", "No project configuration found.".bright_yellow());
         }
 
         Ok(())
@@ -506,11 +505,6 @@ impl PluginManager {
 
         spinner.finish_and_clear();
 
-        // 重新读取 pyproject.toml
-        // if let Some(pyproject_config) = PyProjectConfig::load().await? {
-        //     self.config_manager.config_mut().pyproject = Some(pyproject_config);
-        // }
-
         output.map(|_| ())
     }
 
@@ -590,17 +584,41 @@ impl PluginManager {
         }
     }
 
+    async fn get_all_regsitry_plugin(&self) -> Result<Vec<RegistryPlugin>> {
+        let plugins_json_url = "https://registry.nonebot.dev/plugins.json";
+        let response = timeout(
+            Duration::from_secs(10),
+            self.client.get(plugins_json_url).send(),
+        )
+        .await
+        .map_err(|_| NbCliError::unknown("Request timeout"))?
+        .map_err(|e| NbCliError::Network(e))?;
+
+        if !response.status().is_success() {
+            return Err(NbCliError::not_found("Plugin registry not found"));
+        }
+
+        let plugins: Vec<RegistryPlugin> = response
+            .json()
+            .await
+            .map_err(|e| NbCliError::plugin(format!("Failed to parse plugin info: {}", e)))?;
+
+        Ok(plugins)
+    }
+
     /// Get plugin from registry
     async fn get_registry_plugin(&self, name: &str) -> Result<RegistryPlugin> {
         let config = self.config_manager.config();
         let registry_url = &config.registry.plugin_registry;
 
         let url = format!("{}/plugins/{}", registry_url, name);
-
+        println!("url: {}", url);
         let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
             .await
             .map_err(|_| NbCliError::unknown("Request timeout"))?
             .map_err(|e| NbCliError::Network(e))?;
+
+        println!("response: {:?}", response);
         if !response.status().is_success() {
             return Err(NbCliError::not_found(format!(
                 "Plugin '{}' not found in registry",
@@ -736,7 +754,7 @@ impl PluginManager {
     /// Display plugin information
     fn display_plugin_info(&self, plugin: &RegistryPlugin) {
         println!("{}", plugin.name.bright_blue().bold());
-        println!("  {}", plugin.description);
+        println!("  {}", plugin.desc);
         println!(
             "  {} {}",
             "Version:".bright_black(),
@@ -760,15 +778,14 @@ impl PluginManager {
             println!(
                 "  {} {}",
                 "Tags:".bright_black(),
-                plugin.tags.join(", ").bright_yellow()
+                plugin
+                    .tags
+                    .iter()
+                    .map(|t| t.get("label").unwrap().bright_yellow().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
         }
-
-        println!(
-            "  {} {}",
-            "Downloads:".bright_black(),
-            plugin.downloads.to_string().bright_white()
-        );
     }
 
     /// Display installed plugin
@@ -793,7 +810,7 @@ impl PluginManager {
             format!("v{}", plugin.version).bright_green()
         );
 
-        println!("   {}", plugin.description);
+        println!("   {}", plugin.desc);
 
         if !plugin.tags.is_empty() {
             println!(
@@ -803,7 +820,7 @@ impl PluginManager {
                     .tags
                     .iter()
                     .take(3)
-                    .map(|t| t.bright_yellow().to_string())
+                    .map(|t| t.get("label").unwrap().bright_yellow().to_string())
                     .collect::<Vec<_>>()
                     .join(", ")
             );
@@ -902,24 +919,14 @@ fn calculate_search_relevance(plugin: &RegistryPlugin, query: &str) -> f32 {
     }
 
     // Description match
-    if plugin.description.to_lowercase().contains(&query_lower) {
+    if plugin.desc.to_lowercase().contains(&query_lower) {
         score += 20.0;
-    }
-
-    // Tags match
-    for tag in &plugin.tags {
-        if tag.to_lowercase().contains(&query_lower) {
-            score += 10.0;
-        }
     }
 
     // Author match
     if plugin.author.to_lowercase().contains(&query_lower) {
         score += 5.0;
     }
-
-    // Boost score based on downloads (popularity)
-    score += (plugin.downloads as f32).log10() * 2.0;
 
     score
 }
@@ -928,28 +935,14 @@ fn calculate_search_relevance(plugin: &RegistryPlugin, query: &str) -> f32 {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_search_relevance() {
-        let plugin = RegistryPlugin {
-            name: "nonebot-plugin-test".to_string(),
-            description: "A test plugin for NoneBot".to_string(),
-            version: "1.0.0".to_string(),
-            author: "Test Author".to_string(),
-            pypi_name: "nonebot-plugin-test".to_string(),
-            homepage: None,
-            tags: vec!["test".to_string(), "demo".to_string()],
-            plugin_type: "plugin".to_string(),
-            python_requires: ">=3.8".to_string(),
-            dependencies: vec![],
-            downloads: 1000,
-            updated_at: "2023-01-01T00:00:00Z".to_string(),
-            rating: None,
-        };
-
-        let score = calculate_search_relevance(&plugin, "test");
-        assert!(score > 0.0);
-
-        let exact_score = calculate_search_relevance(&plugin, "nonebot-plugin-test");
-        assert!(exact_score > score);
+    #[tokio::test]
+    async fn test_get_all_regsitry_plugin() {
+        let plugin_manager = PluginManager::new(ConfigManager::new().unwrap())
+            .await
+            .unwrap();
+        let plugins = plugin_manager.get_all_regsitry_plugin().await.unwrap();
+        for plugin in plugins {
+            println!("{}", plugin.project_link);
+        }
     }
 }

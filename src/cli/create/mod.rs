@@ -416,9 +416,9 @@ fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
     let dirs = vec![
         base_dir.join("src/plugins"),
         base_dir.join(format!("src/{}", module_name)),
-        base_dir.join("data"),
-        base_dir.join("resources"),
-        base_dir.join("tests"),
+        //base_dir.join("data"),
+        //base_dir.join("resources"),
+        //base_dir.join("tests"),
     ];
 
     for dir in dirs {

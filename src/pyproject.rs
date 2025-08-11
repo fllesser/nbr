@@ -105,4 +105,24 @@ impl PyProjectConfig {
         fs::write(&config_path, config_content)
             .map_err(|e| NbCliError::config(format!("Failed to write pyproject config: {}", e)))
     }
+
+    pub async fn add_plugin_to_tool_nonebot(plugin_module_name: &str) -> Result<()> {
+        let mut pyproject = PyProjectConfig::load().await?.unwrap();
+        pyproject
+            .tool
+            .nonebot
+            .plugins
+            .push(plugin_module_name.to_string());
+        pyproject.save().await
+    }
+
+    pub async fn remove_plugin_from_tool_nonebot(plugin_module_name: &str) -> Result<()> {
+        let mut pyproject = PyProjectConfig::load().await?.unwrap();
+        pyproject
+            .tool
+            .nonebot
+            .plugins
+            .retain(|p| p != &plugin_module_name);
+        pyproject.save().await
+    }
 }

@@ -5,7 +5,6 @@
 #![allow(dead_code)]
 
 use crate::error::{NbCliError, Result};
-use crate::pyproject::PyProjectConfig;
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -21,8 +20,6 @@ pub struct Config {
     pub user: UserConfig,
     /// Project-specific configuration
     pub project: Option<ProjectConfig>,
-    /// Pyproject configuration
-    pub pyproject: Option<PyProjectConfig>,
     /// Template registry configuration
     pub templates: TemplateConfig,
     /// Cache configuration
@@ -314,7 +311,6 @@ impl Default for Config {
         Self {
             user: UserConfig::default(),
             project: None,
-            pyproject: None,
             templates: TemplateConfig::default(),
             cache: CacheConfig::default(),
             registry: RegistryConfig::default(),
@@ -519,11 +515,6 @@ impl ConfigManager {
             info!("Loaded project configuration");
         }
 
-        if let Some(pyproject_config) = PyProjectConfig::load().await? {
-            self.current_config.pyproject = Some(pyproject_config);
-            info!("Loaded pyproject configuration");
-        }
-
         Ok(())
     }
 
@@ -542,10 +533,6 @@ impl ConfigManager {
         // Save project config if it exists
         if let Some(ref project_config) = self.current_config.project {
             self.save_project_config(project_config).await?;
-        }
-
-        if let Some(ref pyproject_config) = self.current_config.pyproject {
-            pyproject_config.save().await?;
         }
 
         info!("Configuration saved successfully");
