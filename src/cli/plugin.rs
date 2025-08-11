@@ -421,14 +421,14 @@ impl PluginManager {
             registry_plugin.version.bright_green()
         );
         let plugin_deps_str = format!(
-            "'{} >= {}'",
+            "{} >= {}",
             registry_plugin.project_link, registry_plugin.version
         );
         self.uv_install(&plugin_deps_str, None, true).await?;
 
         // Add plugin to tool.nonnebot.plugins
         PyProjectConfig::add_plugin_to_tool_nonebot(&registry_plugin.module_name).await?;
-        
+
         self.refresh_plugin_info().await?;
 
         println!(
