@@ -232,6 +232,8 @@ pub struct AdapterInfo {
 pub struct PluginInfo {
     /// Plugin name
     pub name: String,
+    /// Package name
+    pub package_name: String,
     /// Module name
     pub module_name: String,
     /// Installed version
@@ -242,8 +244,6 @@ pub struct PluginInfo {
     pub source: String,
     /// Plugin type (builtin, external)
     pub plugin_type: String,
-    /// Installation timestamp
-    pub installed_at: DateTime<Utc>,
 }
 
 impl Default for UserConfig {
@@ -382,12 +382,12 @@ impl TryFrom<&toml::Value> for ProjectConfig {
                     .filter_map(|v| v.as_str())
                     .map(|name| PluginInfo {
                         name: name.to_string(),
+                        package_name: name.to_string(),
                         module_name: name.replace("-", "_"),
                         version: "latest".to_string(),
                         install_method: "pip".to_string(),
                         source: name.to_string(),
                         plugin_type: "plugin".to_string(),
-                        installed_at: Utc::now(),
                     })
                     .collect()
             })

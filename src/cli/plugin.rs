@@ -8,7 +8,6 @@ use crate::config::{ConfigManager, PluginInfo};
 use crate::error::{NbCliError, Result};
 use crate::pyproject::PyProjectConfig;
 use crate::utils::{process_utils, terminal_utils};
-use chrono::Utc;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
@@ -168,6 +167,7 @@ impl PluginManager {
                 .as_ref()
                 .map(|p| p.name.clone())
                 .unwrap_or_else(|| package_name.clone()),
+            package_name: package_name.clone(),
             module_name: plugin_info
                 .as_ref()
                 .map(|p| p.name.replace("-", "_"))
@@ -182,7 +182,6 @@ impl PluginManager {
                 .as_ref()
                 .map(|p| p.plugin_type.clone().unwrap_or("application".to_string()))
                 .unwrap_or_else(|| "application".to_string()),
-            installed_at: Utc::now(),
         };
 
         // self.add_plugin_to_config(installed_plugin.clone()).await?;
@@ -236,7 +235,7 @@ impl PluginManager {
     }
 
     /// List installed plugins
-    pub async fn list_plugins(&self, show_outdated: bool) -> Result<()> {
+    pub async fn list_plugins(&self, _show_outdated: bool) -> Result<()> {
         // let config = self.config_manager.config();
         let pyproject = PyProjectConfig::load().await?;
         if pyproject.is_none() {
@@ -255,31 +254,22 @@ impl PluginManager {
             .map(|p| p.replace("_", "-"))
             .collect::<Vec<String>>();
 
-        for plugin_name in plugins {
-            let plugin = self.get_registry_plugin(&plugin_name).await?;
-            let installed_version = self.get_installed_package_version(&plugin.name).await?;
-            let plugin_info = PluginInfo {
-                name: plugin.name.clone(),
-                module_name: plugin.name.replace("-", "_"),
-                version: installed_version,
-                install_method: "uv".to_string(),
-                source: "PyPI".to_string(),
-                plugin_type: "plugin".to_string(),
-                installed_at: Utc::now(),
-            };
-            self.display_installed_plugin(&plugin_info);
-
-            if show_outdated {
-                if plugin_info.version != plugin.version {
-                    println!(
-                        "  {} {} → {} {}",
-                        "•".bright_blue(),
-                        plugin_info.name.bright_white(),
-                        plugin_info.version.red(),
-                        plugin.version.bright_green()
-                    );
-                }
+        for package_name in plugins {
+            let plugin = self.get_registry_plugin(&package_name).await?;
+            let installed_version = self.get_installed_package_version(&package_name).await?;
+            let mut plugin_display = format!(
+                "  {} {} v{}",
+                "•".bright_blue(),
+                package_name.bright_white(),
+                installed_version.bright_green(),
+            );
+            if installed_version != plugin.version {
+                plugin_display += format!(" (available: {})", plugin.version)
+                    .bright_yellow()
+                    .to_string()
+                    .as_str();
             }
+            println!("{}", plugin_display);
         }
 
         Ok(())
@@ -584,7 +574,7 @@ impl PluginManager {
         }
     }
 
-    async fn get_all_regsitry_plugin(&self) -> Result<Vec<RegistryPlugin>> {
+    async fn get_all_regsitry_plugin(&self) -> Result<HashMap<String, RegistryPlugin>> {
         let plugins_json_url = "https://registry.nonebot.dev/plugins.json";
         let response = timeout(
             Duration::from_secs(10),
@@ -603,35 +593,18 @@ impl PluginManager {
             .await
             .map_err(|e| NbCliError::plugin(format!("Failed to parse plugin info: {}", e)))?;
 
-        Ok(plugins)
+        let mut plugins_map = HashMap::new();
+        for plugin in plugins {
+            plugins_map.insert(plugin.project_link.clone(), plugin);
+        }
+
+        Ok(plugins_map)
     }
 
     /// Get plugin from registry
-    async fn get_registry_plugin(&self, name: &str) -> Result<RegistryPlugin> {
-        let config = self.config_manager.config();
-        let registry_url = &config.registry.plugin_registry;
-
-        let url = format!("{}/plugins/{}", registry_url, name);
-        println!("url: {}", url);
-        let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
-            .await
-            .map_err(|_| NbCliError::unknown("Request timeout"))?
-            .map_err(|e| NbCliError::Network(e))?;
-
-        println!("response: {:?}", response);
-        if !response.status().is_success() {
-            return Err(NbCliError::not_found(format!(
-                "Plugin '{}' not found in registry",
-                name
-            )));
-        }
-
-        let plugin_info = response
-            .json::<RegistryPlugin>()
-            .await
-            .map_err(|e| NbCliError::plugin(format!("Failed to parse plugin info: {}", e)))?;
-
-        Ok(plugin_info)
+    async fn get_registry_plugin(&self, package_name: &str) -> Result<RegistryPlugin> {
+        let plugins = self.get_all_regsitry_plugin().await?;
+        Ok(plugins.get(package_name).unwrap().clone())
     }
 
     /// Search plugins in registry
@@ -790,12 +763,12 @@ impl PluginManager {
 
     /// Display installed plugin
     fn display_installed_plugin(&self, plugin: &PluginInfo) {
+        // • nonebot-plugin-abs v0.15.11 (available: v0.16.0)
         println!(
-            "  {} {} {} ({})",
+            "  {} {} {}",
             "•".bright_blue(),
-            plugin.name.bright_white(),
+            plugin.package_name.bright_white(),
             format!("v{}", plugin.version).bright_green(),
-            plugin.plugin_type.bright_black()
         );
     }
 
@@ -941,8 +914,27 @@ mod tests {
             .await
             .unwrap();
         let plugins = plugin_manager.get_all_regsitry_plugin().await.unwrap();
-        for plugin in plugins {
+        for (_, plugin) in plugins {
             println!("{}", plugin.project_link);
         }
+    }
+
+    #[tokio::test]
+    async fn test_get_registry_plugin() {
+        let plugin_manager = PluginManager::new(ConfigManager::new().unwrap())
+            .await
+            .unwrap();
+        let plugin = plugin_manager
+            .get_registry_plugin("nonebot-plugin-status")
+            .await
+            .unwrap();
+        println!("{}", plugin.project_link);
+        println!("{}", plugin.name);
+        println!("{}", plugin.desc);
+        println!("{}", plugin.author);
+        println!("{:?}", plugin.homepage);
+        println!("{:?}", plugin.tags);
+        println!("{:?}", plugin.plugin_type);
+        println!("{:?}", plugin.supported_adapters);
     }
 }
