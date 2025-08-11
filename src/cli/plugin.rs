@@ -886,13 +886,18 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_get_all_regsitry_plugin() {
+    async fn test_get_regsitry_plugins_map() {
         let plugin_manager = PluginManager::new(ConfigManager::new().unwrap())
             .await
             .unwrap();
         let plugins = plugin_manager.get_regsitry_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
-            println!("{}", plugin.project_link);
+            println!(
+                "{} {} ({})",
+                plugin.project_link.bright_green(),
+                format!("v{}", plugin.version).bright_yellow(),
+                plugin.name.bright_blue()
+            );
         }
     }
 

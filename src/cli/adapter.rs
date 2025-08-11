@@ -598,4 +598,21 @@ mod tests {
         assert!(template.is_some());
         assert!(template.unwrap().contains_key("onebot_access_token"));
     }
+
+    #[tokio::test]
+    async fn test_get_regsitry_adapters_map() {
+        let manager = AdapterManager::new(ConfigManager::new().unwrap())
+            .await
+            .unwrap();
+        let adapters = manager.get_regsitry_adapters_map().await.unwrap();
+        assert!(adapters.len() > 0);
+        for (_, adapter) in adapters {
+            println!(
+                "{} {} ({})",
+                adapter.project_link.bright_green(),
+                format!("v{}", adapter.version).bright_yellow(),
+                adapter.name.bright_blue()
+            );
+        }
+    }
 }
