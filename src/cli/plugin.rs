@@ -119,74 +119,32 @@ impl PluginManager {
         info!("Installing plugin: {}", name);
 
         // Check if it's a registry plugin or PyPI package
-        let plugin_info = if let Ok(registry_plugin) = self.get_registry_plugin(name).await {
-            Some(registry_plugin)
-        } else {
-            None
-        };
-
-        let package_name = plugin_info
-            .as_ref()
-            .map(|p| p.project_link.clone())
-            .unwrap_or_else(|| name.to_string());
-
-        // Basic validation - ensure package name is not empty
-        if package_name.trim().is_empty() {
-            return Err(NbCliError::invalid_argument("Package name cannot be empty"));
-        }
-
+        let registry_plugin = self.get_registry_plugin(name).await?;
+        let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !upgrade && self.is_plugin_installed(&package_name).await? {
             return Err(NbCliError::already_exists(format!(
                 "Plugin '{}' is already installed. Use --upgrade to update it.",
-                package_name
+                registry_plugin.project_link
             )));
         }
 
         // Show plugin information if available
-        if let Some(ref plugin) = plugin_info {
-            self.display_plugin_info(plugin);
+        self.display_plugin_info(&registry_plugin);
 
-            if !Confirm::new()
-                .with_prompt("Do you want to install this plugin?")
-                .default(true)
-                .interact()
-                .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
-            {
-                info!("Installation cancelled by user");
-                return Ok(());
-            }
+        if !Confirm::new()
+            .with_prompt("Do you want to install this plugin?")
+            .default(true)
+            .interact()
+            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+        {
+            info!("Installation cancelled by user");
+            return Ok(());
         }
-
         // Install the plugin
         self.uv_install(&package_name, index_url, upgrade).await?;
 
-        // Update plugin registry
-        let installed_plugin = PluginInfo {
-            name: plugin_info
-                .as_ref()
-                .map(|p| p.name.clone())
-                .unwrap_or_else(|| package_name.clone()),
-            package_name: package_name.clone(),
-            module_name: plugin_info
-                .as_ref()
-                .map(|p| p.name.replace("-", "_"))
-                .unwrap_or_else(|| package_name.replace("-", "_")),
-            version: self
-                .get_installed_package_version(&package_name)
-                .await
-                .unwrap_or_else(|_| "unknown".to_string()),
-            install_method: "uv".to_string(),
-            source: index_url.unwrap_or("PyPI").to_string(),
-            plugin_type: plugin_info
-                .as_ref()
-                .map(|p| p.plugin_type.clone().unwrap_or("application".to_string()))
-                .unwrap_or_else(|| "application".to_string()),
-        };
-
-        // self.add_plugin_to_config(installed_plugin.clone()).await?;
-
-        PyProjectConfig::add_plugin_to_tool_nonebot(&installed_plugin.module_name).await?;
+        PyProjectConfig::add_plugin_to_tool_nonebot(&registry_plugin.module_name).await?;
 
         println!(
             "{} Successfully installed plugin: {}",
@@ -224,7 +182,7 @@ impl PluginManager {
 
         // Remove from configuration
         //self.remove_plugin_from_config(&plugin_info.name).await?;
-        PyProjectConfig::remove_plugin_from_tool_nonebot(&plugin_info.name).await?;
+        PyProjectConfig::remove_plugin_from_tool_nonebot(&plugin_info.module_name).await?;
         println!(
             "{} Successfully uninstalled plugin: {}",
             "✓".bright_green(),
