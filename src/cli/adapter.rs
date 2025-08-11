@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::env;
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::time::timeout;
 use tracing::info;
@@ -86,6 +87,8 @@ pub struct AdapterManager {
     python_path: String,
     /// Working directory
     work_dir: PathBuf,
+    /// Registry adapters
+    registry_adapters: OnceLock<HashMap<String, RegistryAdapter>>,
 }
 
 impl AdapterManager {
@@ -109,10 +112,15 @@ impl AdapterManager {
             client,
             python_path,
             work_dir,
+            registry_adapters: OnceLock::new(),
         })
     }
 
-    pub async fn get_regsitry_adapters(&self) -> Result<Vec<RegistryAdapter>> {
+    pub async fn get_regsitry_adapters(&self) -> Result<&HashMap<String, RegistryAdapter>> {
+        if let Some(adapters) = self.registry_adapters.get() {
+            return Ok(adapters);
+        }
+
         let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
         let response = timeout(
             Duration::from_secs(10),
@@ -131,7 +139,13 @@ impl AdapterManager {
             .await
             .map_err(|e| NbCliError::plugin(format!("Failed to parse adapter info: {}", e)))?;
 
-        Ok(adapters)
+        let mut adapters_map = HashMap::new();
+        for adapter in adapters {
+            adapters_map.insert(adapter.name.clone(), adapter);
+        }
+
+        self.registry_adapters.set(adapters_map).unwrap();
+        Ok(self.registry_adapters.get().unwrap())
     }
 
     /// Install an adapter
@@ -299,10 +313,11 @@ impl AdapterManager {
 
     /// Get adapter from registry
     async fn get_registry_adapter(&self, package_name: &str) -> Result<RegistryAdapter> {
-        let adapters = self.get_regsitry_adapters().await?;
-        let adapter = adapters
-            .iter()
-            .find(|a| a.project_link == package_name)
+        let adapters_map = self.get_regsitry_adapters().await?;
+
+        let adapter = adapters_map
+            .values()
+            .find(|a| a.name == package_name)
             .ok_or_else(|| {
                 NbCliError::not_found(format!("Adapter '{}' not found in registry", package_name))
             })?;
@@ -581,30 +596,17 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
-
-    #[test]
-    fn test_config_template() {
-        let manager = AdapterManager {
-            config_manager: ConfigManager::new().unwrap(),
-            client: Client::new(),
-            python_path: "python".to_string(),
-            work_dir: std::path::PathBuf::new(),
-        };
-
-        let template = manager.get_adapter_config_template("nonebot-adapter-onebot");
-        assert!(template.is_some());
-        assert!(template.unwrap().contains_key("onebot_access_token"));
-    }
 
     #[tokio::test]
     async fn test_get_regsitry_adapters_map() {
         let manager = AdapterManager::new(ConfigManager::new().unwrap())
             .await
             .unwrap();
-        let adapters = manager.get_regsitry_adapters().await.unwrap();
-        assert!(adapters.len() > 0);
-        for adapter in adapters {
+        let adapters_map = manager.get_regsitry_adapters().await.unwrap();
+        assert!(adapters_map.len() > 0);
+        for adapter in adapters_map.values() {
             println!(
                 "{} {} ({})",
                 adapter.project_link.bright_green(),

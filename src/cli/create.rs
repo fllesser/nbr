@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Context;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
@@ -10,8 +10,11 @@ use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
+
 use crate::config::ConfigManager;
+use crate::error::{NbCliError, Result};
 use crate::pyproject::{Adapter, PyProjectConfig};
+use crate::utils::{process_utils, terminal_utils};
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -49,7 +52,8 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
                 options.output_dir.display()
             ))
             .default(false)
-            .interact()?;
+            .interact()
+            .map_err(|e| NbCliError::io(e.to_string()))?;
 
         if !should_continue {
             println!("{}", "❌ Operation cancelled.".bright_red());
@@ -64,8 +68,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("📂 Location: {}", options.output_dir.display());
     println!("\n🚀 Next steps:");
     println!("  cd {}", options.name);
-    println!("  uv sync");
-    println!("  nb run");
+    println!("  nbuv run");
 
     // Show additional setup instructions
     show_setup_instructions(&options).await?;
@@ -80,11 +83,15 @@ async fn gather_project_options(matches: &ArgMatches) -> Result<ProjectOptions> 
         Input::<String>::new()
             .with_prompt("Project name")
             .default("awesome-bot".to_string())
-            .validate_with(|input: &String| -> Result<(), String> {
+            .validate_with(|input: &String| -> Result<()> {
                 if input.is_empty() {
-                    Err("Project name cannot be empty".to_string())
+                    Err(NbCliError::invalid_argument(
+                        "Project name cannot be empty".to_string(),
+                    ))
                 } else if input.contains(' ') {
-                    Err("Project name cannot contain spaces".to_string())
+                    Err(NbCliError::invalid_argument(
+                        "Project name cannot contain spaces".to_string(),
+                    ))
                 } else {
                     Ok(())
                 }
@@ -107,20 +114,16 @@ async fn gather_project_options(matches: &ArgMatches) -> Result<ProjectOptions> 
 
     let force = matches.get_flag("force");
 
+    let adapter_manager = AdapterManager::new(ConfigManager::new().unwrap()).await?;
+
     // Get template info and let user select adapters/plugins
     let template = get_template_info(&template_name).await?;
     let (adapters, plugins) = select_components(&template).await?;
-    let adapter_manager = AdapterManager::new(ConfigManager::new()?).await?;
     let registry_adapters = adapter_manager.get_regsitry_adapters().await?;
+
     let adapters = adapters
         .iter()
-        .map(|a| {
-            registry_adapters
-                .iter()
-                .find(|r| r.name == *a)
-                .unwrap()
-                .clone()
-        })
+        .map(|a| registry_adapters.get(a).unwrap().clone())
         .collect();
 
     Ok(ProjectOptions {
@@ -150,25 +153,29 @@ async fn select_template() -> Result<String> {
         .with_prompt("Select a template")
         .default(0)
         .items(&template_descriptions)
-        .interact()?;
+        .interact()
+        .map_err(|e| NbCliError::io(e.to_string()))?;
 
     Ok(templates[selection].name.clone())
 }
 
 async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<String>)> {
+    let adapter_manager = AdapterManager::new(ConfigManager::new().unwrap()).await?;
     // Select adapters
-    let adapter_manager = AdapterManager::new(ConfigManager::new()?).await?;
     let registry_adapters = adapter_manager.get_regsitry_adapters().await?;
 
-    let adapter_names: Vec<&str> = registry_adapters.iter().map(|a| a.name.as_str()).collect();
+    // 将 keys 按名称排序生成 vec
+    let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
+    adapter_names.sort();
 
     let selected_adapters = if !adapter_names.is_empty() {
         println!("\n{}", "🔌 Select adapters to install:".bright_cyan());
         let selections = MultiSelect::new()
             .with_prompt("Adapters")
             .items(&adapter_names)
-            //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
-            .interact()?;
+            .defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
+            .interact()
+            .map_err(|e| NbCliError::io(e.to_string()))?;
 
         selections
             .into_iter()
@@ -179,50 +186,21 @@ async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<Str
     };
 
     // Select plugins
-    let recommended_plugins = vec!["nonebot-plugin-status", "nonebot-plugin-abs"];
+    let recommended_plugins = vec!["nonebot-plugin-status", "nonebot-plugin-emojilike"];
 
     println!("\n{}", "📦 Select plugins to install:".bright_cyan());
     let selected_plugins = MultiSelect::new()
         .with_prompt("Plugins (recommended)")
         .items(&recommended_plugins)
         .defaults(&vec![false; recommended_plugins.len()])
-        .interact()?
+        .interact()
+        .map_err(|e| NbCliError::io(e.to_string()))?
         .into_iter()
         .map(|i| recommended_plugins[i].to_string())
         .collect();
 
     Ok((selected_adapters, selected_plugins))
 }
-
-// async fn get_available_adapters() -> Result<Vec<super::env::AdapterInfo>> {
-//     let adapters = vec![
-//         AdapterInfo {
-//             name: "OneBot V11".to_string(),
-//             version: "2.4.6".to_string(),
-//             location: "https://github.com/nonebot/adapter-onebot".to_string(),
-//             package_name: "nonebot-adapter-onebot".to_string(),
-//             module_name: "nonebot.adapters.onebot.v11".to_string(),
-//         },
-//         AdapterInfo {
-//             name: "OneBot V12".to_string(),
-//             version: "2.4.6".to_string(),
-//             location: "https://github.com/nonebot/adapter-onebot".to_string(),
-//             package_name: "nonebot-adapter-onebot".to_string(),
-//             module_name: "nonebot.adapters.onebot.v12".to_string(),
-//         },
-//     ];
-
-//     Ok(adapters)
-// }
-
-// async fn get_available_adapters_map() -> Result<HashMap<String, AdapterInfo>> {
-//     let adapters = get_available_adapters().await?;
-//     let adapters_map = adapters
-//         .iter()
-//         .map(|a| (a.name.clone(), a.clone()))
-//         .collect();
-//     Ok(adapters_map)
-// }
 
 async fn get_available_templates() -> Result<Vec<Template>> {
     let templates = vec![
@@ -263,7 +241,7 @@ async fn get_template_info(name: &str) -> Result<Template> {
     templates
         .into_iter()
         .find(|t| t.name == name)
-        .ok_or_else(|| anyhow::anyhow!("Template '{}' not found", name))
+        .ok_or_else(|| NbCliError::not_found(format!("Template '{}' not found", name)))
 }
 
 async fn create_project(options: &ProjectOptions) -> Result<()> {
@@ -294,6 +272,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
 
     // Create directory structure
     create_project_structure(&options.output_dir, &package_name)?;
+
     // Generate files
     generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(&options)?;
@@ -301,7 +280,25 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_readme_file(&options)?;
     generate_gitignore(&options.output_dir)?;
 
+    // Install dependencies
+    uv_sync(&options.output_dir).await?;
+
     Ok(())
+}
+
+async fn uv_sync(output_dir: &Path) -> Result<()> {
+    let args = vec!["sync"];
+    let spinner = terminal_utils::create_spinner(&format!("Installing dependencies..."));
+    let output = process_utils::execute_command_with_output(
+        "uv",
+        &args,
+        Some(output_dir),
+        300, // 5 minutes timeout
+    )
+    .await;
+    spinner.finish_and_clear();
+
+    output.map(|_| ())
 }
 
 async fn create_simple_project(options: &ProjectOptions) -> Result<()> {
@@ -371,7 +368,7 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
             .push(plugin.replace("-", "_"));
     }
 
-    let content = toml::to_string(&pyproject)?;
+    let content = toml::to_string_pretty(&pyproject)?;
     fs::write(options.output_dir.join("pyproject.toml"), content)?;
     Ok(())
 }

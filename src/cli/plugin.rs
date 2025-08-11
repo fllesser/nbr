@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::env;
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::time::timeout;
 use tracing::info;
@@ -83,6 +84,8 @@ pub struct PluginManager {
     python_path: String,
     /// Working directory
     work_dir: PathBuf,
+    /// Registry plugins
+    registry_plugins: OnceLock<HashMap<String, RegistryPlugin>>,
 }
 
 impl PluginManager {
@@ -106,6 +109,7 @@ impl PluginManager {
             client,
             python_path,
             work_dir,
+            registry_plugins: OnceLock::new(),
         })
     }
 
@@ -551,7 +555,11 @@ impl PluginManager {
         }
     }
 
-    async fn get_regsitry_plugins_map(&self) -> Result<HashMap<String, RegistryPlugin>> {
+    async fn get_regsitry_plugins_map(&self) -> Result<&HashMap<String, RegistryPlugin>> {
+        if let Some(plugins) = self.registry_plugins.get() {
+            return Ok(plugins);
+        }
+
         let plugins_json_url = "https://registry.nonebot.dev/plugins.json";
         let response = timeout(
             Duration::from_secs(10),
@@ -575,7 +583,9 @@ impl PluginManager {
             plugins_map.insert(plugin.project_link.clone(), plugin);
         }
 
-        Ok(plugins_map)
+        self.registry_plugins.set(plugins_map).unwrap();
+
+        Ok(self.registry_plugins.get().unwrap())
     }
 
     /// Get plugin from registry
@@ -590,29 +600,19 @@ impl PluginManager {
         query: &str,
         limit: usize,
     ) -> Result<Vec<PluginSearchResult>> {
-        let config = self.config_manager.config();
-        let registry_url = &config.registry.plugin_registry;
+        let plugins_map = self.get_regsitry_plugins_map().await?;
 
-        let url = format!(
-            "{}/search?q={}&limit={}",
-            registry_url,
-            urlencoding::encode(query),
-            limit
-        );
-
-        let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
-            .await
-            .map_err(|_| NbCliError::unknown("Request timeout"))?
-            .map_err(|e| NbCliError::Network(e))?;
-
-        if !response.status().is_success() {
-            return Err(NbCliError::unknown("Plugin registry search failed"));
-        }
-
-        let results: Vec<RegistryPlugin> = response
-            .json()
-            .await
-            .map_err(|e| NbCliError::plugin(format!("Failed to parse search results: {}", e)))?;
+        let results: Vec<RegistryPlugin> = plugins_map
+            .values()
+            .filter(|plugin| {
+                plugin.project_link.contains(query)
+                    || plugin.name.contains(query)
+                    || plugin.desc.contains(query)
+                    || plugin.author.contains(query)
+            })
+            .take(limit)
+            .cloned()
+            .collect();
 
         // Convert to search results with relevance scoring
         let search_results = results
