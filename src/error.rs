@@ -21,7 +21,10 @@ pub enum NbCliError {
     Yaml(#[from] serde_yaml::Error),
 
     #[error("TOML parsing error: {0}")]
-    Toml(#[from] toml::de::Error),
+    TomlDeserialize(#[from] toml::de::Error),
+
+    #[error("TOML serialization error: {0}")]
+    TomlSerialize(#[from] toml::ser::Error),
 
     #[error("Git error: {0}")]
     Git(#[from] git2::Error),
@@ -204,7 +207,7 @@ impl NbCliError {
             Self::Network(_) => true,
             Self::Serialization(_) => false,
             Self::Yaml(_) => false,
-            Self::Toml(_) => false,
+            Self::TomlDeserialize(_) | Self::TomlSerialize(_) => false,
             Self::Git(_) => true,
             Self::Template { .. } => true,
             Self::ProjectCreation { .. } => true,
@@ -229,7 +232,10 @@ impl NbCliError {
         match self {
             Self::Io(_) => "io",
             Self::Network(_) => "network",
-            Self::Serialization(_) | Self::Yaml(_) | Self::Toml(_) => "serialization",
+            Self::Serialization(_)
+            | Self::Yaml(_)
+            | Self::TomlDeserialize(_)
+            | Self::TomlSerialize(_) => "serialization",
             Self::Git(_) => "git",
             Self::Template { .. } => "template",
             Self::ProjectCreation { .. } => "project",
