@@ -9,6 +9,7 @@ use crate::error::{NbCliError, Result};
 use crate::utils::{process_utils, terminal_utils};
 use clap::ArgMatches;
 use colored::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -60,11 +61,13 @@ pub struct NoneBotInfo {
 }
 
 /// Adapter information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdapterInfo {
     pub name: String,
     pub version: String,
     pub location: String,
+    pub package_name: String,
+    pub module_name: String,
 }
 
 /// Plugin information
@@ -341,6 +344,8 @@ impl EnvironmentChecker {
                         name: name.to_string(),
                         version: version.to_string(),
                         location: "".to_string(), // Could be enhanced to show actual location
+                        package_name: package.to_string(),
+                        module_name: name.to_string(),
                     });
                 }
             }
@@ -443,7 +448,7 @@ impl EnvironmentChecker {
         let total_memory = self.system.total_memory();
         let available_memory = self.system.available_memory();
         let cpu_count = self.system.cpus().len();
-        let cpu_usage = self.system.global_cpu_info().cpu_usage();
+        let cpu_usage = self.system.global_cpu_usage();
 
         // let disk_usage = self
         //     .system.

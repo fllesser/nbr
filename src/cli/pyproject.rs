@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-#[serde(rename_all = "kebab-case")]
 #[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct PyProject {
     pub project: Project,
     pub tool: Tool,
     pub build_system: BuildSystem,
 }
 
-#[serde(rename_all = "kebab-case")]
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Project {
     pub name: String,
     pub version: String,
@@ -34,8 +34,8 @@ impl Default for Project {
     }
 }
 
-#[serde(rename_all = "kebab-case")]
 #[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct Tool {
     pub nonebot: Nonebot,
 }
@@ -54,8 +54,8 @@ pub struct Adapter {
     pub module_name: String,
 }
 
-#[serde(rename_all = "kebab-case")]
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct BuildSystem {
     pub requires: Vec<String>,
     pub build_backend: String,

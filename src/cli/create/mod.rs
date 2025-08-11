@@ -3,12 +3,13 @@ use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 use handlebars::Handlebars;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use crate::cli::pyproject::PyProject;
+use crate::cli::pyproject::{Adapter, PyProject};
 
 use super::env::AdapterInfo;
 
@@ -23,13 +24,13 @@ pub struct Template {
     pub plugins: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectOptions {
     pub name: String,
     pub template: String,
     pub output_dir: PathBuf,
     pub force: bool,
-    pub adapters: Vec<String>,
+    pub adapters: Vec<AdapterInfo>,
     pub plugins: Vec<String>,
 }
 
@@ -109,6 +110,11 @@ async fn gather_project_options(matches: &ArgMatches) -> Result<ProjectOptions> 
     // Get template info and let user select adapters/plugins
     let template = get_template_info(&template_name).await?;
     let (adapters, plugins) = select_components(&template).await?;
+    let adapters_map = get_available_adapters_map().await?;
+    let adapters = adapters
+        .iter()
+        .map(|a| adapters_map.get(a).unwrap().clone())
+        .collect();
 
     Ok(ProjectOptions {
         name: project_name,
@@ -145,6 +151,7 @@ async fn select_template() -> Result<String> {
 async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<String>)> {
     // Select adapters
     let available_adapters = get_available_adapters().await?;
+
     let adapter_names: Vec<&str> = available_adapters.iter().map(|a| a.name.as_str()).collect();
 
     let selected_adapters = if !adapter_names.is_empty() {
@@ -164,11 +171,7 @@ async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<Str
     };
 
     // Select plugins
-    let recommended_plugins = vec![
-        "nonebot-plugin-echo",
-        "nonebot-plugin-status",
-        "nonebot-plugin-help",
-    ];
+    let recommended_plugins = vec!["nonebot-plugin-status", "nonebot-plugin-abs"];
 
     println!("\n{}", "📦 Select plugins to install:".bright_cyan());
     let selected_plugins = MultiSelect::new()
@@ -184,13 +187,33 @@ async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<Str
 }
 
 async fn get_available_adapters() -> Result<Vec<super::env::AdapterInfo>> {
-    let adapters = vec![AdapterInfo {
-        name: "OneBot V11".to_string(),
-        version: "2.4.6".to_string(),
-        location: "https://github.com/nonebot/adapter-onebot".to_string(),
-    }];
+    let adapters = vec![
+        AdapterInfo {
+            name: "OneBot V11".to_string(),
+            version: "2.4.6".to_string(),
+            location: "https://github.com/nonebot/adapter-onebot".to_string(),
+            package_name: "nonebot-adapter-onebot".to_string(),
+            module_name: "nonebot.adapters.onebot.v11".to_string(),
+        },
+        AdapterInfo {
+            name: "OneBot V12".to_string(),
+            version: "2.4.6".to_string(),
+            location: "https://github.com/nonebot/adapter-onebot".to_string(),
+            package_name: "nonebot-adapter-onebot".to_string(),
+            module_name: "nonebot.adapters.onebot.v12".to_string(),
+        },
+    ];
 
     Ok(adapters)
+}
+
+async fn get_available_adapters_map() -> Result<HashMap<String, AdapterInfo>> {
+    let adapters = get_available_adapters().await?;
+    let adapters_map = adapters
+        .iter()
+        .map(|a| (a.name.clone(), a.clone()))
+        .collect();
+    Ok(adapters_map)
 }
 
 async fn get_available_templates() -> Result<Vec<Template>> {
@@ -268,22 +291,17 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     // Register built-in templates
     register_templates(&mut handlebars)?;
 
-    let mut data: HashMap<&str, &dyn erased_serde::Serialize> = HashMap::new();
-    data.insert("project_name", &options.name);
     let package_name = options.name.replace("-", "_");
-    data.insert("package_name", &package_name);
+    let mut data = HashMap::<&str, &dyn erased_serde::Serialize>::new();
     data.insert("adapters", &options.adapters);
-    data.insert("plugins", &options.plugins);
 
     // Create directory structure
     create_project_structure(&options.output_dir, &package_name)?;
-
     // Generate files
     generate_bot_file(&handlebars, &data, &options.output_dir)?;
-    //generate_pyproject_file(&handlebars, &data, &options.output_dir)?;
-    generate_uv_project_file(&data, &options.output_dir)?;
-    generate_env_files(&handlebars, &data, &options.output_dir)?;
-    generate_readme_file(&handlebars, &data, &options.output_dir)?;
+    generate_pyproject_file(&options)?;
+    generate_env_files(&options.output_dir)?;
+    generate_readme_file(&options)?;
     generate_gitignore(&options.output_dir)?;
     //generate_dockerfile(&handlebars, &data, &options.output_dir)?;
 
@@ -304,99 +322,24 @@ async fn create_full_project(options: &ProjectOptions) -> Result<()> {
     // Start with simple template
     create_simple_project(options).await?;
 
-    // Add more sophisticated examples
-    create_advanced_examples(&options.output_dir)?;
-
     Ok(())
 }
 
 fn register_templates(handlebars: &mut Handlebars) -> Result<()> {
     // Bot file template
-    handlebars.register_template_string(
-        "bot.py",
-        r#"#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import nonebot
-{{#each adapters}}
-from {{module_name this}} import Adapter as {{pascal_case this}}Adapter
-{{/each}}
-
-# Custom your logger
-#
-# from nonebot.log import logger, default_format
-# logger.add("error.log",
-#            rotation="00:00",
-#            diagnose=False,
-#            level="ERROR",
-#            format=default_format)
-
-# You can pass some keyword args config to init function
-nonebot.init()
-
-driver = nonebot.get_driver()
-{{#each adapters}}
-driver.register_adapter({{pascal_case this}}Adapter)
-{{/each}}
-
-nonebot.load_from_toml("pyproject.toml")
-
-# Modify some config / config depends on loaded configs
-#
-# config = driver.config
-# do something...
-
-if __name__ == "__main__":
-    nonebot.run(app="__mp_main__:app")
-"#,
-    )?;
-
-    // pyproject.toml template
-    handlebars.register_template_string("pyproject.toml", r#"[project]
-name = "{{project_name}}"
-version = "0.1.0"
-description = ""
-authors = []
-readme = "README.md"
-requires-python = ">=3.10"
-dependencies = [
-    "nonebot2[fastapi, httpx, websockets]>=2.4.0",
-    {{#each adapters}}
-    "{{adapter_package this}}",
-    {{/each}}
-    {{#each plugins}}
-    "{{this}}",
-    {{/each}}
-]
-
-
-[tool.nonebot]
-adapters = [
-{{#each adapters}}
-    { name = "{{this}}", module_name = "{{module_name this}}", project_link = "https://github.com/nonebot/{{adapter_package this}}", desc = "{{this}} 协议" },
-{{/each}}
-]
-plugins = [
-{{#each plugins}}
-    "{{snake_case this}}",
-{{/each}}
-]
-plugin_dirs = ["/src/{{package_name}}/plugins"]
-builtin_plugins = ["echo"]
-
-[build-system]
-requires = ["uv_build>=0.8.3,<0.9.0"]
-build-backend = "uv_build"
-"#)?;
-
+    let bot_py_template = include_str!("botpy.template");
+    handlebars.register_template_string("bot.py", bot_py_template)?;
     // Register helper functions
-    handlebars.register_helper("snake_case", Box::new(snake_case_helper));
-    handlebars.register_helper("pascal_case", Box::new(pascal_case_helper));
-    handlebars.register_helper("adapter_package", Box::new(adapter_package_helper));
-    handlebars.register_helper("module_name", Box::new(module_name_helper));
+    handlebars.register_helper("adapter_pascal_case", Box::new(adapter_pascal_case_helper));
+    handlebars.register_helper(
+        "adapter_package_name",
+        Box::new(adapter_package_name_helper),
+    );
+    handlebars.register_helper("adapter_module_name", Box::new(adapter_module_name_helper));
     Ok(())
 }
 
+#[allow(unused)]
 fn snake_case_helper(
     h: &handlebars::Helper,
     _: &handlebars::Handlebars,
@@ -413,7 +356,7 @@ fn snake_case_helper(
     Ok(())
 }
 
-fn pascal_case_helper(
+fn adapter_pascal_case_helper(
     h: &handlebars::Helper,
     _: &handlebars::Handlebars,
     _: &handlebars::Context,
@@ -423,8 +366,9 @@ fn pascal_case_helper(
     let param = h
         .param(0)
         .ok_or_else(|| handlebars::RenderError::new("Expected parameter"))?;
-    let value = param.value().as_str().unwrap_or("");
-    let pascal_case = value
+    let adapter = serde_json::from_value::<AdapterInfo>(param.value().clone())?;
+    let pascal_case = adapter
+        .name
         .split_whitespace()
         .map(|word| {
             let mut chars: Vec<char> = word.chars().collect();
@@ -438,7 +382,7 @@ fn pascal_case_helper(
     Ok(())
 }
 
-fn adapter_package_helper(
+fn adapter_package_name_helper(
     h: &handlebars::Helper,
     _: &handlebars::Handlebars,
     _: &handlebars::Context,
@@ -448,21 +392,12 @@ fn adapter_package_helper(
     let param = h
         .param(0)
         .ok_or_else(|| handlebars::RenderError::new("Expected parameter"))?;
-    let adapter_name = param.value().as_str().unwrap_or("");
-
-    let package = match adapter_name.to_lowercase().as_str() {
-        "onebot v11" | "onebot v12" => "nonebot-adapter-onebot",
-        "console" => "nonebot-adapter-console",
-        "telegram" => "nonebot-adapter-telegram",
-        "discord" => "nonebot-adapter-discord",
-        _ => "nonebot-adapter-unknown",
-    };
-
-    out.write(package)?;
+    let adapter = serde_json::from_value::<AdapterInfo>(param.value().clone())?;
+    out.write(&adapter.package_name)?;
     Ok(())
 }
 
-fn module_name_helper(
+fn adapter_module_name_helper(
     h: &handlebars::Helper,
     _: &handlebars::Handlebars,
     _: &handlebars::Context,
@@ -472,18 +407,8 @@ fn module_name_helper(
     let param = h
         .param(0)
         .ok_or_else(|| handlebars::RenderError::new("Expected parameter"))?;
-    let adapter_name = param.value().as_str().unwrap_or("");
-
-    let module = match adapter_name.to_lowercase().as_str() {
-        "onebot v11" => "nonebot.adapters.onebot.v11",
-        "onebot v12" => "nonebot.adapters.onebot.v12",
-        "console" => "nonebot.adapters.console",
-        "telegram" => "nonebot.adapters.telegram",
-        "discord" => "nonebot.adapters.discord",
-        _ => "nonebot.adapters.unknown",
-    };
-
-    out.write(module)?;
+    let adapter = serde_json::from_value::<AdapterInfo>(param.value().clone())?;
+    out.write(&adapter.module_name)?;
     Ok(())
 }
 
@@ -518,75 +443,38 @@ fn generate_bot_file(
     Ok(())
 }
 
-fn generate_pyproject_file(
-    handlebars: &Handlebars,
-    data: &HashMap<&str, &dyn erased_serde::Serialize>,
-    output_dir: &Path,
-) -> Result<()> {
-    let content = handlebars.render("pyproject.toml", data)?;
-    fs::write(output_dir.join("pyproject.toml"), content)?;
+fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
+    let mut pyproject = PyProject::default();
+    pyproject.project.name = options.name.to_string();
+
+    // 补齐插件, 适配器相关表
+    for adapter in &options.adapters {
+        pyproject
+            .project
+            .dependencies
+            .push(adapter.package_name.to_string());
+        pyproject.tool.nonebot.adapters.push(Adapter {
+            name: adapter.package_name.to_string(),       // Onebot v11
+            module_name: adapter.module_name.to_string(), // nonebot.adapters.onebot.v11
+        });
+    }
+    for plugin in &options.plugins {
+        pyproject.project.dependencies.push(plugin.to_string());
+        pyproject
+            .tool
+            .nonebot
+            .plugins
+            .push(plugin.replace("-", "_"));
+    }
+
+    let content = toml::to_string(&pyproject)?;
+    fs::write(options.output_dir.join("pyproject.toml"), content)?;
     Ok(())
 }
 
-fn generate_uv_project_file(
-    data: &HashMap<&str, &dyn erased_serde::Serialize>,
-    output_dir: &Path,
-) -> Result<()> {
-    let content = toml::to_string(&PyProject::default())?;
-    fs::write(output_dir.join("pyproject.toml"), content)?;
-    Ok(())
-}
-
-fn generate_env_files(
-    _handlebars: &Handlebars,
-    _data: &HashMap<&str, &dyn erased_serde::Serialize>,
-    output_dir: &Path,
-) -> Result<()> {
-    let env_dev = r#"ENVIRONMENT=dev
-LOG_LEVEL=DEBUG
-
-# Driver
-DRIVER=~httpx+~websockets
-
-# Adapter configurations
-# OneBot V11
-# ONEBOT_ACCESS_TOKEN=
-# ONEBOT_SECRET=
-
-# Superusers
-SUPERUSERS=["123456789"]
-
-# Command prefix
-COMMAND_PREFIX=[""]
-NICKNAME=["Bot"]
-
-# API settings
-HOST=127.0.0.1
-PORT=8080
-"#;
-
-    let env_prod = r#"ENVIRONMENT=prod
-LOG_LEVEL=INFO
-
-# Driver
-DRIVER=~httpx+~websockets
-
-# Adapter configurations
-# OneBot V11
-# ONEBOT_ACCESS_TOKEN=your_token_here
-# ONEBOT_SECRET=your_secret_here
-
-# Superusers (replace with actual user IDs)
-SUPERUSERS=["123456789"]
-
-# Command Start
-COMMAND_START=[""]
-NICKNAME=["Bot"]
-
-# API settings
-HOST=127.0.0.1
-PORT=8080
-"#;
+fn generate_env_files(output_dir: &Path) -> Result<()> {
+    let env_dev = include_str!("env.dev");
+    let env_prod = include_str!("env.prod");
 
     fs::write(output_dir.join(".env"), env_dev)?;
     fs::write(output_dir.join(".env.prod"), env_prod)?;
@@ -594,179 +482,20 @@ PORT=8080
     Ok(())
 }
 
-fn generate_readme_file(
-    _handlebars: &Handlebars,
-    data: &HashMap<&str, &dyn erased_serde::Serialize>,
-    output_dir: &Path,
-) -> Result<()> {
-    let project_name = data
-        .get("project_name")
-        .and_then(|v| serde_json::to_string(v).ok())
-        .unwrap_or("nb-bot-project".to_string());
+fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
+    let project_name = options.name.clone();
 
     let readme = format!(
-        r#"# {}
-
-基于 NoneBot2 的聊天机器人
-
-## 快速开始
-
-1. 安装依赖
-```bash
-uv sync
-# 或者
-uv pip install -r requirements.txt
-```
-
-2. 配置机器人
-复制 `.env.prod` 到 `.env` 并编辑配置文件，填入你的机器人连接信息。
-
-3. 运行机器人
-```bash
-nb run
-```
-
-## 配置说明
-
-### 环境变量
-
-- `ENVIRONMENT`: 运行环境 (dev/prod)
-- `LOG_LEVEL`: 日志级别 (DEBUG/INFO/WARNING/ERROR)
-- `DRIVER`: 驱动器配置
-- `SUPERUSERS`: 超级用户列表
-- `COMMAND_PREFIX`: 命令前缀
-
-### 适配器配置
-
-请根据你使用的平台配置相应的适配器参数。
-
-## 开发
-
-### 添加插件
-
-- 在 `plugins/` 目录下添加你的插件文件
-- 或者使用 `nb plugin install <plugin_name>` 安装插件
-
-### 项目结构
-
-```
-{}/
-├── bot.py              # 机器人入口文件
-├── pyproject.toml      # 项目配置文件
-├── .env               # 开发环境配置
-├── .env.prod          # 生产环境配置
-├── src/plugins/           # 插件目录
-├── data/             # 数据目录
-├── resources/        # 资源文件目录
-└── tests/            # 测试文件目录
-```
-
-## 部署
-
-### 使用 Docker
-
-```bash
-docker build -t {} .
-docker run -d --name {} -p 8080:8080 {}
-```
-
-### 使用 systemd (Linux)
-
-1. 复制 `nb-bot.service` 到 `/etc/systemd/system/`
-2. 启动服务：`sudo systemctl start nb-bot`
-3. 设置开机自启：`sudo systemctl enable nb-bot`
-
-## 许可证
-
-MIT License
-"#,
+        include_str!("readme.template"),
         project_name, project_name, project_name, project_name, project_name
     );
 
-    fs::write(output_dir.join("README.md"), readme)?;
+    fs::write(options.output_dir.join("README.md"), readme)?;
     Ok(())
 }
 
 fn generate_gitignore(output_dir: &Path) -> Result<()> {
-    let gitignore = r#"# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-*.manifest
-*.spec
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
-
-# Environment variables
-.env
-.env.local
-.env.prod
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
-*.log
-logs/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# NoneBot
-data/
-resources/temp/
-
-# macOS
-.DS_Store
-
-# Windows
-Thumbs.db
-ehthumbs.db
-
-# Poetry
-poetry.lock
-
-# Temporary files
-*.tmp
-*.temp
-"#;
+    let gitignore = include_str!("gitignore");
 
     fs::write(output_dir.join(".gitignore"), gitignore)?;
     Ok(())
@@ -784,35 +513,7 @@ fn generate_dockerfile(
         .unwrap_or("nb-bot-project".to_string());
 
     let dockerfile = format!(
-        r#"FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements
-COPY pyproject.toml ./
-COPY poetry.lock* ./
-
-# Install Python dependencies
-RUN pip install uv && \
-    uv sync --no-dev
-
-# Copy application
-COPY . .
-
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash {}
-RUN chown -R {}:{} /app
-USER {}
-
-EXPOSE 8080
-
-CMD ["python", "bot.py"]
-"#,
+        include_str!("dockerfile.template"),
         project_name, project_name, project_name, project_name
     );
 
@@ -821,108 +522,11 @@ CMD ["python", "bot.py"]
 }
 
 fn create_example_plugin(output_dir: &Path) -> Result<()> {
-    let plugins_dir = output_dir.join("plugins");
+    let plugins_dir = output_dir.join("src/plugins");
 
-    let hello_plugin = r#"from nonebot import on_command
-from nonebot.adapters import Message
-from nonebot.params import CommandArg
-from nonebot.plugin import PluginMetadata
-
-__plugin_meta__ = PluginMetadata(
-    name="Hello Plugin",
-    description="A simple hello plugin",
-    usage="Send 'hello' to get a greeting",
-)
-
-hello = on_command("hello", aliases={"hi"}, priority=10, block=True)
-
-@hello.handle()
-async def hello_handler(args: Message = CommandArg()):
-    msg = args.extract_plain_text()
-    if msg:
-        await hello.finish(f"Hello, {msg}!")
-    else:
-        await hello.finish("Hello, World!")
-"#;
+    let hello_plugin = include_str!("plugin.example");
 
     fs::write(plugins_dir.join("hello.py"), hello_plugin)?;
-    Ok(())
-}
-
-fn create_advanced_examples(output_dir: &Path) -> Result<()> {
-    let plugins_dir = output_dir.join("plugins");
-
-    // Create a weather plugin example
-    let weather_plugin = r#"from nonebot import on_command
-from nonebot.adapters import Message
-from nonebot.params import CommandArg
-from nonebot.plugin import PluginMetadata
-import httpx
-
-__plugin_meta__ = PluginMetadata(
-    name="Weather Plugin",
-    description="Get weather information",
-    usage="Send 'weather <city>' to get weather info",
-)
-
-weather = on_command("weather", priority=10, block=True)
-
-@weather.handle()
-async def weather_handler(args: Message = CommandArg()):
-    city = args.extract_plain_text().strip()
-    if not city:
-        await weather.finish("请输入城市名称！")
-
-    try:
-        # This is just an example - you'd need to use a real weather API
-        async with httpx.AsyncClient() as client:
-            # Replace with actual weather API
-            await weather.finish(f"{city} 的天气信息：\n晴，25°C\n（这是示例数据）")
-    except Exception as e:
-        await weather.finish(f"获取天气信息失败：{e}")
-"#;
-
-    fs::write(plugins_dir.join("weather.py"), weather_plugin)?;
-
-    // Create a status plugin example
-    let status_plugin = r#"from nonebot import on_command
-from nonebot.plugin import PluginMetadata
-import psutil
-import time
-
-__plugin_meta__ = PluginMetadata(
-    name="Status Plugin",
-    description="Show bot status information",
-    usage="Send 'status' to get bot status",
-)
-
-status = on_command("status", priority=10, block=True)
-
-@status.handle()
-async def status_handler():
-    # Get system information
-    cpu_percent = psutil.cpu_percent(interval=1)
-    memory = psutil.virtual_memory()
-    disk = psutil.disk_usage('/')
-
-    uptime = time.time() - psutil.boot_time()
-    uptime_hours = uptime // 3600
-    uptime_minutes = (uptime % 3600) // 60
-
-    status_msg = f"""🤖 Bot Status:
-
-📊 System Info:
-• CPU: {cpu_percent}%
-• Memory: {memory.percent}% ({memory.used // 1024 // 1024}MB / {memory.total // 1024 // 1024}MB)
-• Disk: {disk.percent}% ({disk.used // 1024 // 1024 // 1024}GB / {disk.total // 1024 // 1024 // 1024}GB)
-
-⏰ Uptime: {uptime_hours:.0f}h {uptime_minutes:.0f}m
-"""
-
-    await status.finish(status_msg)
-"#;
-
-    fs::write(plugins_dir.join("status.py"), status_plugin)?;
     Ok(())
 }
 
@@ -932,23 +536,7 @@ async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
     if !options.adapters.is_empty() {
         println!("2. Set up your adapters:");
         for adapter in &options.adapters {
-            match adapter.as_str() {
-                "OneBot V11" => {
-                    println!("   • OneBot V11: Configure ONEBOT_ACCESS_TOKEN and ONEBOT_SECRET");
-                }
-                "Console" => {
-                    println!("   • Console: Ready to use for testing");
-                }
-                "Telegram" => {
-                    println!("   • Telegram: Configure TELEGRAM_BOT_TOKEN");
-                }
-                _ => {
-                    println!(
-                        "   • {}: Check adapter documentation for configuration",
-                        adapter
-                    );
-                }
-            }
+            println!("   • {}: Configure {}", adapter.name, adapter.location);
         }
     }
     if !options.plugins.is_empty() {
@@ -976,8 +564,17 @@ mod tests {
             template: "bootstrap".to_string(),
             output_dir: temp_dir.path().to_path_buf(),
             force: true,
-            adapters: vec!["OneBot V11".to_string()],
-            plugins: vec![],
+            adapters: vec![AdapterInfo {
+                name: "OneBot V11".to_string(),
+                version: "2.4.6".to_string(),
+                location: "https://github.com/nonebot/adapter-onebot".to_string(),
+                package_name: "nonebot-adapter-onebot".to_string(),
+                module_name: "nonebot.adapters.onebot.v11".to_string(),
+            }],
+            plugins: vec![
+                "nonebot-plugin-status".to_string(),
+                "nonebot-plugin-abs".to_string(),
+            ],
         };
 
         create_bootstrap_project(&options).await.unwrap();
