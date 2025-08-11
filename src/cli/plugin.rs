@@ -599,7 +599,7 @@ impl PluginManager {
         &self,
         query: &str,
         limit: usize,
-    ) -> Result<Vec<PluginSearchResult>> {
+    ) -> Result<Vec<RegistryPlugin>> {
         let plugins_map = self.get_regsitry_plugins_map().await?;
 
         let results: Vec<RegistryPlugin> = plugins_map
@@ -614,16 +614,7 @@ impl PluginManager {
             .cloned()
             .collect();
 
-        // Convert to search results with relevance scoring
-        let search_results = results
-            .into_iter()
-            .map(|plugin| {
-                let score = calculate_search_relevance(&plugin, query);
-                PluginSearchResult { plugin, score }
-            })
-            .collect::<Vec<_>>();
-
-        Ok(search_results)
+        Ok(results)
     }
 
     /// Find installed plugin by name
@@ -750,17 +741,19 @@ impl PluginManager {
     }
 
     /// Display search result
-    fn display_search_result(&self, result: &PluginSearchResult, index: usize) {
-        let plugin = &result.plugin;
-
+    fn display_search_result(&self, plugin: &RegistryPlugin, index: usize) {
         println!(
-            "{}. {} {}",
+            "{}. {} ({}) {}",
             index.to_string().bright_black(),
             plugin.name.bright_blue().bold(),
+            plugin.project_link.bright_cyan(),
             format!("v{}", plugin.version).bright_green()
         );
 
-        println!("   {}", plugin.desc);
+        println!("   Desc: {}", plugin.desc);
+        if let Some(ref homepage) = plugin.homepage {
+            println!("   Homepage: {}", homepage.bright_cyan());
+        }
 
         if !plugin.tags.is_empty() {
             println!(

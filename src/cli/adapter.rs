@@ -246,68 +246,25 @@ impl AdapterManager {
 
     /// List available and installed adapters
     pub async fn list_adapters(&self) -> Result<()> {
-        println!("{}", "Available Adapters:".bright_green().bold());
+        println!("{}", "Installed Adapters:".bright_green().bold());
         println!();
-
-        let config = self.config_manager.config();
-        let installed_adapters = if let Some(ref project_config) = config.project {
-            &project_config.adapters
+        let pyproject = PyProjectConfig::load().await?;
+        let installed_adapters = if let Some(project) = pyproject {
+            project.tool.nonebot.adapters
         } else {
-            &Vec::new()
+            Vec::new()
         };
 
-        // Show built-in adapters
-        println!("{}", "Built-in Adapters:".bright_blue());
-        for (name, package, description) in BUILTIN_ADAPTERS {
-            let is_installed = installed_adapters.iter().any(|a| {
-                a.name == *name || a.name.contains(&package.replace("nonebot-adapter-", ""))
-            });
-
-            let status = if is_installed {
-                "installed".bright_green()
-            } else {
-                "available".bright_black()
-            };
-
-            println!(
-                "  {} {} {} ({})",
-                if is_installed { "✓" } else { "•" },
-                name.bright_white(),
-                format!("[{}]", status),
-                description.bright_black()
-            );
-        }
-
-        // Show installed adapters that are not built-in
-        let non_builtin_installed: Vec<_> = installed_adapters
+        let adapters_map = self.get_regsitry_adapters().await?;
+        for (name, adapter) in adapters_map
             .iter()
-            .filter(|adapter| {
-                !BUILTIN_ADAPTERS
-                    .iter()
-                    .any(|(name, _, _)| adapter.name == *name)
-            })
-            .collect();
-
-        if !non_builtin_installed.is_empty() {
-            println!();
-            println!("{}", "Other Installed Adapters:".bright_blue());
-            for adapter in &non_builtin_installed {
-                println!(
-                    "  {} {} {} (v{})",
-                    "✓",
-                    adapter.name.bright_white(),
-                    "[installed]".bright_green(),
-                    adapter.version.bright_black()
-                );
-            }
+            .filter(|(name, _)| installed_adapters.iter().any(|a| a.name == name.as_str()))
+        {
+            println!(" {}", name.bright_blue().bold());
+            println!("   Package: {}", adapter.project_link);
+            println!("   Module: {}", adapter.module_name);
+            println!("   Desc: {}", adapter.desc);
         }
-
-        if installed_adapters.is_empty() {
-            println!();
-            println!("{}", "No adapters installed.".bright_yellow());
-            println!("Use 'nb adapter install <name>' to install an adapter.");
-        }
-
         Ok(())
     }
 
