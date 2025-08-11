@@ -98,7 +98,7 @@ impl PyProjectConfig {
             .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
 
         let config_path = current_dir.join("pyproject.toml");
-        let config_content = toml::to_string(self).map_err(|e| {
+        let config_content = toml::to_string_pretty(self).map_err(|e| {
             NbCliError::config(format!("Failed to serialize pyproject config: {}", e))
         })?;
 

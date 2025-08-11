@@ -159,10 +159,15 @@ impl PluginManager {
     pub async fn uninstall_plugin(&mut self, name: &str) -> Result<()> {
         info!("Uninstalling plugin: {}", name);
 
-        // Find the plugin in configuration
-        let plugin_info = self.find_installed_plugin(name)?;
-        let package_name = &plugin_info.name;
-
+        let registry_plugin = self.get_registry_plugin(name).await?;
+        let package_name = registry_plugin.project_link.clone();
+        // Check if already installed
+        if !self.is_plugin_installed(&package_name).await? {
+            return Err(NbCliError::not_found(format!(
+                "Plugin '{}' is not installed.",
+                registry_plugin.project_link
+            )));
+        }
         // Confirm uninstallation
         if !Confirm::new()
             .with_prompt(&format!(
@@ -178,11 +183,11 @@ impl PluginManager {
         }
 
         // Uninstall the package
-        self.uv_uninstall(package_name).await?;
+        self.uv_uninstall(&package_name).await?;
 
         // Remove from configuration
         //self.remove_plugin_from_config(&plugin_info.name).await?;
-        PyProjectConfig::remove_plugin_from_tool_nonebot(&plugin_info.module_name).await?;
+        PyProjectConfig::remove_plugin_from_tool_nonebot(&registry_plugin.module_name).await?;
         println!(
             "{} Successfully uninstalled plugin: {}",
             "✓".bright_green(),
@@ -388,34 +393,42 @@ impl PluginManager {
 
     /// Update a single plugin
     async fn update_single_plugin(&mut self, name: &str) -> Result<()> {
-        let plugin_info = self.find_installed_plugin(name)?;
+        let registry_plugin = self.get_registry_plugin(name).await?;
+        let package_name = registry_plugin.project_link.clone();
+        let installed_version = self.get_installed_package_version(&package_name).await?;
+        // Check if already installed
+        if !self.is_plugin_installed(&package_name).await? {
+            return Err(NbCliError::not_found(format!(
+                "Plugin '{}' is not installed.",
+                registry_plugin.project_link
+            )));
+        }
 
-        let latest_version = self.get_latest_package_version(&plugin_info.name).await?;
-
-        if plugin_info.version == latest_version {
+        if registry_plugin.version == installed_version {
             println!(
                 "{} Plugin '{}' is already up to date (v{})",
                 "✓".bright_green(),
-                plugin_info.name.bright_blue(),
-                latest_version
+                registry_plugin.project_link.bright_blue(),
+                installed_version
             );
             return Ok(());
         }
 
         println!(
             "Updating {} {} → {}",
-            plugin_info.name.bright_white(),
-            plugin_info.version.red(),
-            latest_version.bright_green()
+            registry_plugin.project_link.bright_white(),
+            installed_version.red(),
+            registry_plugin.version.bright_green()
         );
 
-        self.uv_install(&plugin_info.name, None, true).await?;
+        self.uv_install(&registry_plugin.project_link, None, true)
+            .await?;
         self.refresh_plugin_info().await?;
 
         println!(
             "{} Successfully updated plugin: {}",
             "✓".bright_green(),
-            plugin_info.name.bright_blue()
+            registry_plugin.project_link.bright_blue()
         );
 
         Ok(())
