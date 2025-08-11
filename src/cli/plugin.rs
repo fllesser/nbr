@@ -144,7 +144,7 @@ impl PluginManager {
         // Install the plugin
         self.uv_install(&package_name, index_url, upgrade).await?;
 
-        PyProjectConfig::add_plugin_to_tool_nonebot(&registry_plugin.module_name).await?;
+        PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
 
         println!(
             "{} Successfully installed plugin: {}",
@@ -187,7 +187,7 @@ impl PluginManager {
 
         // Remove from configuration
         //self.remove_plugin_from_config(&plugin_info.name).await?;
-        PyProjectConfig::remove_plugin_from_tool_nonebot(&registry_plugin.module_name).await?;
+        PyProjectConfig::remove_plugin(&registry_plugin.module_name).await?;
         println!(
             "{} Successfully uninstalled plugin: {}",
             "✓".bright_green(),
@@ -427,7 +427,7 @@ impl PluginManager {
         self.uv_install(&plugin_deps_str, None, true).await?;
 
         // Add plugin to tool.nonnebot.plugins
-        PyProjectConfig::add_plugin_to_tool_nonebot(&registry_plugin.module_name).await?;
+        PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
 
         self.refresh_plugin_info().await?;
 
@@ -551,7 +551,7 @@ impl PluginManager {
         }
     }
 
-    async fn get_all_regsitry_plugin(&self) -> Result<HashMap<String, RegistryPlugin>> {
+    async fn get_regsitry_plugins_map(&self) -> Result<HashMap<String, RegistryPlugin>> {
         let plugins_json_url = "https://registry.nonebot.dev/plugins.json";
         let response = timeout(
             Duration::from_secs(10),
@@ -580,7 +580,7 @@ impl PluginManager {
 
     /// Get plugin from registry
     async fn get_registry_plugin(&self, package_name: &str) -> Result<RegistryPlugin> {
-        let plugins = self.get_all_regsitry_plugin().await?;
+        let plugins = self.get_regsitry_plugins_map().await?;
         Ok(plugins.get(package_name).unwrap().clone())
     }
 
@@ -890,7 +890,7 @@ mod tests {
         let plugin_manager = PluginManager::new(ConfigManager::new().unwrap())
             .await
             .unwrap();
-        let plugins = plugin_manager.get_all_regsitry_plugin().await.unwrap();
+        let plugins = plugin_manager.get_regsitry_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
             println!("{}", plugin.project_link);
         }

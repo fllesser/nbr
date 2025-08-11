@@ -6,8 +6,8 @@
 
 use crate::config::{AdapterInfo, ConfigManager};
 use crate::error::{NbCliError, Result};
+use crate::pyproject::PyProjectConfig;
 use crate::utils::{process_utils, string_utils, terminal_utils};
-use chrono::Utc;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
@@ -21,39 +21,32 @@ use std::time::Duration;
 use tokio::time::timeout;
 use tracing::info;
 
+// {
+// "module_name": "nonebot.adapters.onebot.v11",
+// "project_link": "nonebot-adapter-onebot",
+// "name": "OneBot V11",
+// "desc": "OneBot V11 协议",
+// "author": "yanyongyu",
+// "homepage": "https://onebot.adapters.nonebot.dev/",
+// "tags": [],
+// "is_official": true,
+// "time": "2024-10-24T07:34:56.115315Z",
+// "version": "2.4.6"
+// },
 /// Adapter registry information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryAdapter {
     /// Adapter name
+    pub module_name: String,
+    pub project_link: String,
     pub name: String,
-    /// Adapter description
-    pub description: String,
-    /// Adapter version
-    pub version: String,
-    /// Adapter author
+    pub desc: String,
     pub author: String,
-    /// PyPI package name
-    pub pypi_name: String,
-    /// Adapter homepage
     pub homepage: Option<String>,
-    /// Supported protocols
-    pub protocols: Vec<String>,
-    /// Platform support (QQ, Telegram, Discord, etc.)
-    pub platforms: Vec<String>,
-    /// Adapter type (official, community)
-    pub adapter_type: String,
-    /// Supported Python versions
-    pub python_requires: String,
-    /// Adapter dependencies
-    pub dependencies: Vec<String>,
-    /// Download count
-    pub downloads: u64,
-    /// Last updated
-    pub updated_at: String,
-    /// Adapter rating
-    pub rating: Option<f32>,
-    /// Configuration template
-    pub config_template: Option<HashMap<String, String>>,
+    pub tags: Vec<HashMap<String, String>>,
+    pub is_official: bool,
+    pub time: String,
+    pub version: String,
 }
 
 /// Built-in adapter definitions
@@ -119,87 +112,87 @@ impl AdapterManager {
         })
     }
 
+    pub async fn get_regsitry_adapters_map(&self) -> Result<HashMap<String, RegistryAdapter>> {
+        let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
+        let response = timeout(
+            Duration::from_secs(10),
+            self.client.get(adapters_json_url).send(),
+        )
+        .await
+        .map_err(|_| NbCliError::unknown("Request timeout"))?
+        .map_err(|e| NbCliError::Network(e))?;
+
+        if !response.status().is_success() {
+            return Err(NbCliError::not_found("Adapter registry not found"));
+        }
+
+        let adapters: Vec<RegistryAdapter> = response
+            .json()
+            .await
+            .map_err(|e| NbCliError::plugin(format!("Failed to parse adapter info: {}", e)))?;
+
+        let mut adapters_map = HashMap::new();
+        for adapter in adapters {
+            adapters_map.insert(adapter.project_link.clone(), adapter);
+        }
+
+        Ok(adapters_map)
+    }
+
     /// Install an adapter
     pub async fn install_adapter(&mut self, name: &str) -> Result<()> {
         info!("Installing adapter: {}", name);
 
         // Check if it's a built-in adapter
-        let adapter_info = if let Some(builtin) = self.get_builtin_adapter(name) {
-            Some(builtin)
-        } else {
-            self.get_registry_adapter(name).await.ok()
-        };
-
-        let package_name = adapter_info
-            .as_ref()
-            .map(|a| a.pypi_name.clone())
-            .unwrap_or_else(|| {
-                // If not found, assume it's a PyPI package name
-                if name.starts_with("nonebot-adapter-") {
-                    name.to_string()
-                } else {
-                    format!("nonebot-adapter-{}", name)
-                }
-            });
+        let registry_adapter = self.get_registry_adapter(name).await?;
 
         // Validate package name
-        string_utils::validate_package_name(&package_name)?;
+        string_utils::validate_package_name(&registry_adapter.project_link)?;
 
         // Check if already installed
-        if self.is_adapter_installed(&package_name).await? {
+        if self
+            .is_adapter_installed(&registry_adapter.project_link)
+            .await?
+        {
             return Err(NbCliError::already_exists(format!(
                 "Adapter '{}' is already installed",
-                package_name
+                registry_adapter.project_link
             )));
         }
 
         // Show adapter information if available
-        if let Some(ref adapter) = adapter_info {
-            self.display_adapter_info(adapter);
 
-            if !Confirm::new()
-                .with_prompt("Do you want to install this adapter?")
-                .default(true)
-                .interact()
-                .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
-            {
-                info!("Installation cancelled by user");
-                return Ok(());
-            }
+        self.display_adapter_info(&registry_adapter);
+
+        if !Confirm::new()
+            .with_prompt("Do you want to install this adapter?")
+            .default(true)
+            .interact()
+            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+        {
+            info!("Installation cancelled by user");
+            return Ok(());
         }
 
         // Install the adapter
-        self.uv_install(&package_name).await?;
+        self.uv_install(&registry_adapter.project_link).await?;
 
-        // Update adapter registry
-        let installed_adapter = AdapterInfo {
-            name: adapter_info
-                .as_ref()
-                .map(|a| a.name.clone())
-                .unwrap_or_else(|| package_name.clone()),
-            version: self
-                .get_installed_package_version(&package_name)
-                .await
-                .unwrap_or_else(|_| "unknown".to_string()),
-            install_method: "uv".to_string(),
-            source: "PyPI".to_string(),
-            installed_at: Utc::now(),
-        };
-
-        self.add_adapter_to_config(installed_adapter).await?;
+        PyProjectConfig::add_adapter(&registry_adapter.name, &registry_adapter.module_name).await?;
 
         println!(
-            "{} Successfully installed adapter: {}",
+            "{} Successfully installed adapter: {} ({} v{})",
             "✓".bright_green(),
-            package_name.bright_blue()
+            registry_adapter.name.bright_blue(),
+            registry_adapter.project_link.bright_black(),
+            registry_adapter.version.bright_white()
         );
 
         // Show configuration instructions
-        if let Some(ref adapter) = adapter_info {
-            if let Some(ref config_template) = adapter.config_template {
-                self.show_configuration_instructions(adapter, config_template);
-            }
-        }
+        // if let Some(ref adapter) = adapter_info {
+        //     if let Some(ref config_template) = adapter.config_template {
+        //         self.show_configuration_instructions(adapter, config_template);
+        //     }
+        // }
 
         Ok(())
     }
@@ -209,14 +202,13 @@ impl AdapterManager {
         info!("Uninstalling adapter: {}", name);
 
         // Find the adapter in configuration
-        let adapter_info = self.find_installed_adapter(name)?;
-        let package_name = &adapter_info.name;
+        let registry_adapter = self.get_registry_adapter(name).await?;
 
         // Confirm uninstallation
         if !Confirm::new()
             .with_prompt(&format!(
                 "Are you sure you want to uninstall '{}'?",
-                package_name
+                registry_adapter.project_link
             ))
             .default(false)
             .interact()
@@ -227,15 +219,17 @@ impl AdapterManager {
         }
 
         // Uninstall the package
-        self.uv_uninstall(package_name).await?;
+        self.uv_uninstall(&registry_adapter.project_link).await?;
 
         // Remove from configuration
-        self.remove_adapter_from_config(&adapter_info.name).await?;
+        PyProjectConfig::remove_adapter(&registry_adapter.name).await?;
 
         println!(
-            "{} Successfully uninstalled adapter: {}",
+            "{} Successfully uninstalled adapter: {} ({} v{})",
             "✓".bright_green(),
-            package_name.bright_blue()
+            registry_adapter.name.bright_blue(),
+            registry_adapter.project_link.bright_black(),
+            registry_adapter.version.bright_white()
         );
 
         Ok(())
@@ -308,59 +302,13 @@ impl AdapterManager {
         Ok(())
     }
 
-    /// Get built-in adapter information
-    fn get_builtin_adapter(&self, name: &str) -> Option<RegistryAdapter> {
-        for (adapter_name, package_name, description) in BUILTIN_ADAPTERS {
-            if adapter_name.to_lowercase() == name.to_lowercase()
-                || package_name.replace("nonebot-adapter-", "").to_lowercase()
-                    == name.to_lowercase()
-                || package_name.to_lowercase() == name.to_lowercase()
-            {
-                return Some(RegistryAdapter {
-                    name: adapter_name.to_string(),
-                    description: description.to_string(),
-                    version: "latest".to_string(),
-                    author: "NoneBot Team".to_string(),
-                    pypi_name: package_name.to_string(),
-                    homepage: Some("https://nonebot.dev/".to_string()),
-                    protocols: vec![], // Would be filled from actual registry
-                    platforms: vec![], // Would be filled from actual registry
-                    adapter_type: "official".to_string(),
-                    python_requires: ">=3.8".to_string(),
-                    dependencies: vec!["nonebot2".to_string()],
-                    downloads: 0,
-                    updated_at: "".to_string(),
-                    rating: None,
-                    config_template: self.get_adapter_config_template(package_name),
-                });
-            }
-        }
-        None
-    }
-
     /// Get adapter from registry
     async fn get_registry_adapter(&self, name: &str) -> Result<RegistryAdapter> {
-        let config = self.config_manager.config();
-        let registry_url = &config.registry.adapter_registry;
-
-        let url = format!("{}/adapters/{}", registry_url, name);
-
-        let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
-            .await
-            .map_err(|_| NbCliError::unknown("Request timeout"))?
-            .map_err(|e| NbCliError::Network(e))?;
-
-        if !response.status().is_success() {
-            return Err(NbCliError::not_found(format!(
-                "Adapter '{}' not found in registry",
-                name
-            )));
-        }
-
-        response
-            .json::<RegistryAdapter>()
-            .await
-            .map_err(|e| NbCliError::network(e))
+        let registry_adapter_map = self.get_regsitry_adapters_map().await?;
+        let adapter = registry_adapter_map.get(name).ok_or_else(|| {
+            NbCliError::not_found(format!("Adapter '{}' not found in registry", name))
+        })?;
+        Ok(adapter.clone())
     }
 
     /// Get adapter configuration template
@@ -534,7 +482,9 @@ impl AdapterManager {
     /// Display adapter information
     fn display_adapter_info(&self, adapter: &RegistryAdapter) {
         println!("{}", adapter.name.bright_blue().bold());
-        println!("  {}", adapter.description);
+        println!("  Package: {}", adapter.project_link);
+        println!("  Module: {}", adapter.module_name);
+        println!("  Desc: {}", adapter.desc);
         println!(
             "  {} {}",
             "Version:".bright_black(),
@@ -553,28 +503,6 @@ impl AdapterManager {
                 homepage.bright_cyan()
             );
         }
-
-        if !adapter.platforms.is_empty() {
-            println!(
-                "  {} {}",
-                "Platforms:".bright_black(),
-                adapter.platforms.join(", ").bright_yellow()
-            );
-        }
-
-        if !adapter.protocols.is_empty() {
-            println!(
-                "  {} {}",
-                "Protocols:".bright_black(),
-                adapter.protocols.join(", ").bright_yellow()
-            );
-        }
-
-        println!(
-            "  {} {}",
-            "Type:".bright_black(),
-            adapter.adapter_type.bright_white()
-        );
     }
 
     /// Show configuration instructions
@@ -656,23 +584,6 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_builtin_adapter_lookup() {
-        let manager = AdapterManager {
-            config_manager: ConfigManager::new().unwrap(),
-            client: Client::new(),
-            python_path: "python".to_string(),
-            work_dir: std::path::PathBuf::new(),
-        };
-
-        let adapter = manager.get_builtin_adapter("onebot");
-        assert!(adapter.is_some());
-        assert_eq!(adapter.unwrap().pypi_name, "nonebot-adapter-onebot");
-
-        let adapter = manager.get_builtin_adapter("OneBot V11");
-        assert!(adapter.is_some());
-    }
 
     #[test]
     fn test_config_template() {

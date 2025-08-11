@@ -565,7 +565,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 fn load_environment_variables(work_dir: &Path) -> Result<Vec<(String, String)>> {
     let mut env_vars = Vec::new();
 
-    let env_files = [".env", ".env.local", ".env.dev"];
+    let env_files = [".env", ".env.dev", ".env.prod"];
 
     for env_file in &env_files {
         let env_path = work_dir.join(env_file);
