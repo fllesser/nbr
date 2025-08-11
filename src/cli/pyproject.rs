@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PyProject {
     pub project: Project,
@@ -8,7 +8,7 @@ pub struct PyProject {
     pub build_system: BuildSystem,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Project {
     pub name: String,
@@ -34,13 +34,13 @@ impl Default for Project {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Tool {
     pub nonebot: Nonebot,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Nonebot {
     pub adapters: Vec<Adapter>,
     pub plugins: Vec<String>,
@@ -48,13 +48,13 @@ pub struct Nonebot {
     pub builtin_plugins: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct Adapter {
     pub name: String,
     pub module_name: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct BuildSystem {
     pub requires: Vec<String>,

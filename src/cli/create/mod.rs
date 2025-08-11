@@ -327,7 +327,7 @@ async fn create_full_project(options: &ProjectOptions) -> Result<()> {
 
 fn register_templates(handlebars: &mut Handlebars) -> Result<()> {
     // Bot file template
-    let bot_py_template = include_str!("botpy.template");
+    let bot_py_template = include_str!("templates/botpy.template");
     handlebars.register_template_string("bot.py", bot_py_template)?;
     // Register helper functions
     handlebars.register_helper("adapter_pascal_case", Box::new(adapter_pascal_case_helper));
@@ -473,8 +473,8 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_env_files(output_dir: &Path) -> Result<()> {
-    let env_dev = include_str!("env.dev");
-    let env_prod = include_str!("env.prod");
+    let env_dev = include_str!("templates/env.dev");
+    let env_prod = include_str!("templates/env.prod");
 
     fs::write(output_dir.join(".env"), env_dev)?;
     fs::write(output_dir.join(".env.prod"), env_prod)?;
@@ -486,7 +486,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
     let project_name = options.name.clone();
 
     let readme = format!(
-        include_str!("readme.template"),
+        include_str!("templates/readme.template"),
         project_name, project_name, project_name, project_name, project_name
     );
 
@@ -495,7 +495,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_gitignore(output_dir: &Path) -> Result<()> {
-    let gitignore = include_str!("gitignore");
+    let gitignore = include_str!("templates/gitignore");
 
     fs::write(output_dir.join(".gitignore"), gitignore)?;
     Ok(())
@@ -513,7 +513,7 @@ fn generate_dockerfile(
         .unwrap_or("nb-bot-project".to_string());
 
     let dockerfile = format!(
-        include_str!("dockerfile.template"),
+        include_str!("templates/dockerfile.template"),
         project_name, project_name, project_name, project_name
     );
 
@@ -524,7 +524,7 @@ fn generate_dockerfile(
 fn create_example_plugin(output_dir: &Path) -> Result<()> {
     let plugins_dir = output_dir.join("src/plugins");
 
-    let hello_plugin = include_str!("plugin.example");
+    let hello_plugin = include_str!("templates/plugin.example");
 
     fs::write(plugins_dir.join("hello.py"), hello_plugin)?;
     Ok(())
