@@ -245,7 +245,7 @@ impl AdapterManager {
     }
 
     /// List available and installed adapters
-    pub async fn list_adapters(&self) -> Result<()> {
+    pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
         println!("{}", "Installed Adapters:".bright_green().bold());
         println!();
         let pyproject = PyProjectConfig::load().await?;
@@ -256,10 +256,18 @@ impl AdapterManager {
         };
 
         let adapters_map = self.get_regsitry_adapters().await?;
-        for (name, adapter) in adapters_map
-            .iter()
-            .filter(|(name, _)| installed_adapters.iter().any(|a| a.name == name.as_str()))
-        {
+        let show_adapters = if show_all {
+            adapters_map.clone()
+        } else {
+            adapters_map
+                .iter()
+                .filter(|(name, _)| {
+                    installed_adapters.iter().any(|a| a.name == name.as_str())
+                })
+                .map(|(name, adapter)| (name.clone(), adapter.clone()))
+                .collect()
+        };
+        for (name, adapter) in show_adapters {
             println!(" {}", name.bright_blue().bold());
             println!("   Package: {}", adapter.project_link);
             println!("   Module: {}", adapter.module_name);
@@ -512,7 +520,10 @@ pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
             let name = sub_matches.get_one::<String>("name").unwrap();
             adapter_manager.uninstall_adapter(name).await
         }
-        Some(("list", _)) => adapter_manager.list_adapters().await,
+        Some(("list", sub_matches)) => {
+            let show_all = sub_matches.get_flag("all");
+            adapter_manager.list_adapters(show_all).await
+        }
         _ => Err(NbCliError::invalid_argument("Invalid adapter subcommand")),
     }
 }

@@ -591,7 +591,10 @@ impl PluginManager {
     /// Get plugin from registry
     async fn get_registry_plugin(&self, package_name: &str) -> Result<RegistryPlugin> {
         let plugins = self.get_regsitry_plugins_map().await?;
-        Ok(plugins.get(package_name).unwrap().clone())
+        let plugin = plugins
+            .get(package_name)
+            .ok_or_else(|| NbCliError::not_found(format!("Plugin '{}' not found", package_name)))?;
+        Ok(plugin.clone())
     }
 
     /// Search plugins in registry

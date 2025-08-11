@@ -189,7 +189,17 @@ fn build_cli() -> Command {
                             .index(1),
                     ),
                 )
-                .subcommand(Command::new("list").about("List available and installed adapters")),
+                .subcommand(
+                    Command::new("list")
+                        .about("List available and installed adapters")
+                        .arg(
+                            Arg::new("all")
+                                .long("all")
+                                .short('a')
+                                .help("List all adapters, including uninstalled ones")
+                                .action(clap::ArgAction::SetTrue),
+                        ),
+                ),
         )
         .subcommand(
             Command::new("generate")
