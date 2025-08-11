@@ -112,7 +112,7 @@ impl AdapterManager {
         })
     }
 
-    pub async fn get_regsitry_adapters_map(&self) -> Result<HashMap<String, RegistryAdapter>> {
+    pub async fn get_regsitry_adapters(&self) -> Result<Vec<RegistryAdapter>> {
         let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
         let response = timeout(
             Duration::from_secs(10),
@@ -131,12 +131,7 @@ impl AdapterManager {
             .await
             .map_err(|e| NbCliError::plugin(format!("Failed to parse adapter info: {}", e)))?;
 
-        let mut adapters_map = HashMap::new();
-        for adapter in adapters {
-            adapters_map.insert(adapter.project_link.clone(), adapter);
-        }
-
-        Ok(adapters_map)
+        Ok(adapters)
     }
 
     /// Install an adapter
@@ -303,11 +298,14 @@ impl AdapterManager {
     }
 
     /// Get adapter from registry
-    async fn get_registry_adapter(&self, name: &str) -> Result<RegistryAdapter> {
-        let registry_adapter_map = self.get_regsitry_adapters_map().await?;
-        let adapter = registry_adapter_map.get(name).ok_or_else(|| {
-            NbCliError::not_found(format!("Adapter '{}' not found in registry", name))
-        })?;
+    async fn get_registry_adapter(&self, package_name: &str) -> Result<RegistryAdapter> {
+        let adapters = self.get_regsitry_adapters().await?;
+        let adapter = adapters
+            .iter()
+            .find(|a| a.project_link == package_name)
+            .ok_or_else(|| {
+                NbCliError::not_found(format!("Adapter '{}' not found in registry", package_name))
+            })?;
         Ok(adapter.clone())
     }
 
@@ -604,9 +602,9 @@ mod tests {
         let manager = AdapterManager::new(ConfigManager::new().unwrap())
             .await
             .unwrap();
-        let adapters = manager.get_regsitry_adapters_map().await.unwrap();
+        let adapters = manager.get_regsitry_adapters().await.unwrap();
         assert!(adapters.len() > 0);
-        for (_, adapter) in adapters {
+        for adapter in adapters {
             println!(
                 "{} {} ({})",
                 adapter.project_link.bright_green(),

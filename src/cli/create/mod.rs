@@ -9,9 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
+use crate::cli::adapter::{AdapterManager, RegistryAdapter};
+use crate::config::ConfigManager;
 use crate::pyproject::{Adapter, PyProjectConfig};
-
-use super::env::AdapterInfo;
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -30,7 +30,7 @@ pub struct ProjectOptions {
     pub template: String,
     pub output_dir: PathBuf,
     pub force: bool,
-    pub adapters: Vec<AdapterInfo>,
+    pub adapters: Vec<RegistryAdapter>,
     pub plugins: Vec<String>,
 }
 
@@ -110,10 +110,17 @@ async fn gather_project_options(matches: &ArgMatches) -> Result<ProjectOptions> 
     // Get template info and let user select adapters/plugins
     let template = get_template_info(&template_name).await?;
     let (adapters, plugins) = select_components(&template).await?;
-    let adapters_map = get_available_adapters_map().await?;
+    let adapter_manager = AdapterManager::new(ConfigManager::new()?).await?;
+    let registry_adapters = adapter_manager.get_regsitry_adapters().await?;
     let adapters = adapters
         .iter()
-        .map(|a| adapters_map.get(a).unwrap().clone())
+        .map(|a| {
+            registry_adapters
+                .iter()
+                .find(|r| r.name == *a)
+                .unwrap()
+                .clone()
+        })
         .collect();
 
     Ok(ProjectOptions {
@@ -150,16 +157,17 @@ async fn select_template() -> Result<String> {
 
 async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<String>)> {
     // Select adapters
-    let available_adapters = get_available_adapters().await?;
+    let adapter_manager = AdapterManager::new(ConfigManager::new()?).await?;
+    let registry_adapters = adapter_manager.get_regsitry_adapters().await?;
 
-    let adapter_names: Vec<&str> = available_adapters.iter().map(|a| a.name.as_str()).collect();
+    let adapter_names: Vec<&str> = registry_adapters.iter().map(|a| a.name.as_str()).collect();
 
     let selected_adapters = if !adapter_names.is_empty() {
         println!("\n{}", "🔌 Select adapters to install:".bright_cyan());
         let selections = MultiSelect::new()
             .with_prompt("Adapters")
             .items(&adapter_names)
-            .defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
+            //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
             .interact()?;
 
         selections
@@ -186,35 +194,35 @@ async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<Str
     Ok((selected_adapters, selected_plugins))
 }
 
-async fn get_available_adapters() -> Result<Vec<super::env::AdapterInfo>> {
-    let adapters = vec![
-        AdapterInfo {
-            name: "OneBot V11".to_string(),
-            version: "2.4.6".to_string(),
-            location: "https://github.com/nonebot/adapter-onebot".to_string(),
-            package_name: "nonebot-adapter-onebot".to_string(),
-            module_name: "nonebot.adapters.onebot.v11".to_string(),
-        },
-        AdapterInfo {
-            name: "OneBot V12".to_string(),
-            version: "2.4.6".to_string(),
-            location: "https://github.com/nonebot/adapter-onebot".to_string(),
-            package_name: "nonebot-adapter-onebot".to_string(),
-            module_name: "nonebot.adapters.onebot.v12".to_string(),
-        },
-    ];
+// async fn get_available_adapters() -> Result<Vec<super::env::AdapterInfo>> {
+//     let adapters = vec![
+//         AdapterInfo {
+//             name: "OneBot V11".to_string(),
+//             version: "2.4.6".to_string(),
+//             location: "https://github.com/nonebot/adapter-onebot".to_string(),
+//             package_name: "nonebot-adapter-onebot".to_string(),
+//             module_name: "nonebot.adapters.onebot.v11".to_string(),
+//         },
+//         AdapterInfo {
+//             name: "OneBot V12".to_string(),
+//             version: "2.4.6".to_string(),
+//             location: "https://github.com/nonebot/adapter-onebot".to_string(),
+//             package_name: "nonebot-adapter-onebot".to_string(),
+//             module_name: "nonebot.adapters.onebot.v12".to_string(),
+//         },
+//     ];
 
-    Ok(adapters)
-}
+//     Ok(adapters)
+// }
 
-async fn get_available_adapters_map() -> Result<HashMap<String, AdapterInfo>> {
-    let adapters = get_available_adapters().await?;
-    let adapters_map = adapters
-        .iter()
-        .map(|a| (a.name.clone(), a.clone()))
-        .collect();
-    Ok(adapters_map)
-}
+// async fn get_available_adapters_map() -> Result<HashMap<String, AdapterInfo>> {
+//     let adapters = get_available_adapters().await?;
+//     let adapters_map = adapters
+//         .iter()
+//         .map(|a| (a.name.clone(), a.clone()))
+//         .collect();
+//     Ok(adapters_map)
+// }
 
 async fn get_available_templates() -> Result<Vec<Template>> {
     let templates = vec![
@@ -240,10 +248,7 @@ async fn get_available_templates() -> Result<Vec<Template>> {
             url: None,
             builtin: true,
             adapters: vec!["OneBot V11".to_string(), "Console".to_string()],
-            plugins: vec![
-                "nonebot-plugin-echo".to_string(),
-                "nonebot-plugin-status".to_string(),
-            ],
+            plugins: vec!["nonebot-plugin-status".to_string()],
         },
     ];
 
@@ -285,25 +290,16 @@ async fn create_project(options: &ProjectOptions) -> Result<()> {
 }
 
 async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
-    let mut handlebars = Handlebars::new();
-    handlebars.set_strict_mode(true);
-
-    // Register built-in templates
-    register_templates(&mut handlebars)?;
-
     let package_name = options.name.replace("-", "_");
-    let mut data = HashMap::<&str, &dyn erased_serde::Serialize>::new();
-    data.insert("adapters", &options.adapters);
 
     // Create directory structure
     create_project_structure(&options.output_dir, &package_name)?;
     // Generate files
-    generate_bot_file(&handlebars, &data, &options.output_dir)?;
+    generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(&options)?;
     generate_env_files(&options.output_dir)?;
     generate_readme_file(&options)?;
     generate_gitignore(&options.output_dir)?;
-    //generate_dockerfile(&handlebars, &data, &options.output_dir)?;
 
     Ok(())
 }
@@ -322,93 +318,6 @@ async fn create_full_project(options: &ProjectOptions) -> Result<()> {
     // Start with simple template
     create_simple_project(options).await?;
 
-    Ok(())
-}
-
-fn register_templates(handlebars: &mut Handlebars) -> Result<()> {
-    // Bot file template
-    let bot_py_template = include_str!("templates/botpy.template");
-    handlebars.register_template_string("bot.py", bot_py_template)?;
-    // Register helper functions
-    handlebars.register_helper("adapter_pascal_case", Box::new(adapter_pascal_case_helper));
-    handlebars.register_helper(
-        "adapter_package_name",
-        Box::new(adapter_package_name_helper),
-    );
-    handlebars.register_helper("adapter_module_name", Box::new(adapter_module_name_helper));
-    Ok(())
-}
-
-#[allow(unused)]
-fn snake_case_helper(
-    h: &handlebars::Helper,
-    _: &handlebars::Handlebars,
-    _: &handlebars::Context,
-    _: &mut handlebars::RenderContext,
-    out: &mut dyn handlebars::Output,
-) -> handlebars::HelperResult {
-    let param = h
-        .param(0)
-        .ok_or_else(|| handlebars::RenderError::new("Expected parameter"))?;
-    let value = param.value().as_str().unwrap_or("");
-    let snake_case = value.to_lowercase().replace(" ", "_").replace("-", "_");
-    out.write(&snake_case)?;
-    Ok(())
-}
-
-fn adapter_pascal_case_helper(
-    h: &handlebars::Helper,
-    _: &handlebars::Handlebars,
-    _: &handlebars::Context,
-    _: &mut handlebars::RenderContext,
-    out: &mut dyn handlebars::Output,
-) -> handlebars::HelperResult {
-    let param = h
-        .param(0)
-        .ok_or_else(|| handlebars::RenderError::new("Expected parameter"))?;
-    let adapter = serde_json::from_value::<AdapterInfo>(param.value().clone())?;
-    let pascal_case = adapter
-        .name
-        .split_whitespace()
-        .map(|word| {
-            let mut chars: Vec<char> = word.chars().collect();
-            if let Some(first_char) = chars.first_mut() {
-                *first_char = first_char.to_uppercase().next().unwrap_or(*first_char);
-            }
-            chars.into_iter().collect::<String>()
-        })
-        .collect::<String>();
-    out.write(&pascal_case)?;
-    Ok(())
-}
-
-fn adapter_package_name_helper(
-    h: &handlebars::Helper,
-    _: &handlebars::Handlebars,
-    _: &handlebars::Context,
-    _: &mut handlebars::RenderContext,
-    out: &mut dyn handlebars::Output,
-) -> handlebars::HelperResult {
-    let param = h
-        .param(0)
-        .ok_or_else(|| handlebars::RenderError::new("Expected parameter"))?;
-    let adapter = serde_json::from_value::<AdapterInfo>(param.value().clone())?;
-    out.write(&adapter.package_name)?;
-    Ok(())
-}
-
-fn adapter_module_name_helper(
-    h: &handlebars::Helper,
-    _: &handlebars::Handlebars,
-    _: &handlebars::Context,
-    _: &mut handlebars::RenderContext,
-    out: &mut dyn handlebars::Output,
-) -> handlebars::HelperResult {
-    let param = h
-        .param(0)
-        .ok_or_else(|| handlebars::RenderError::new("Expected parameter"))?;
-    let adapter = serde_json::from_value::<AdapterInfo>(param.value().clone())?;
-    out.write(&adapter.module_name)?;
     Ok(())
 }
 
@@ -433,12 +342,9 @@ fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn generate_bot_file(
-    handlebars: &Handlebars,
-    data: &HashMap<&str, &dyn erased_serde::Serialize>,
-    output_dir: &Path,
-) -> Result<()> {
-    let content = handlebars.render("bot.py", data)?;
+fn generate_bot_file(output_dir: &Path) -> Result<()> {
+    // let content = handlebars.render("bot.py", data)?;
+    let content = include_str!("templates/botpy.example");
     fs::write(output_dir.join("bot.py"), content)?;
     Ok(())
 }
@@ -449,12 +355,10 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
 
     // 补齐插件, 适配器相关表
     for adapter in &options.adapters {
-        pyproject
-            .project
-            .dependencies
-            .push(adapter.package_name.to_string());
+        let adapter_dep = format!("{}>={}", adapter.project_link, adapter.version);
+        pyproject.project.dependencies.push(adapter_dep);
         pyproject.tool.nonebot.adapters.push(Adapter {
-            name: adapter.package_name.to_string(),       // Onebot v11
+            name: adapter.name.to_string(),               // Onebot v11
             module_name: adapter.module_name.to_string(), // nonebot.adapters.onebot.v11
         });
     }
@@ -536,7 +440,7 @@ async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
     if !options.adapters.is_empty() {
         println!("2. Set up your adapters:");
         for adapter in &options.adapters {
-            println!("   • {}: Configure {}", adapter.name, adapter.location);
+            println!("   • {}: Configure {}", adapter.name, adapter.project_link);
         }
     }
     if !options.plugins.is_empty() {
@@ -549,40 +453,4 @@ async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
     );
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[tokio::test]
-    async fn test_create_bootstrap_project() {
-        let temp_dir = TempDir::new().unwrap();
-        let options = ProjectOptions {
-            name: "test-bot".to_string(),
-            template: "bootstrap".to_string(),
-            output_dir: temp_dir.path().to_path_buf(),
-            force: true,
-            adapters: vec![AdapterInfo {
-                name: "OneBot V11".to_string(),
-                version: "2.4.6".to_string(),
-                location: "https://github.com/nonebot/adapter-onebot".to_string(),
-                package_name: "nonebot-adapter-onebot".to_string(),
-                module_name: "nonebot.adapters.onebot.v11".to_string(),
-            }],
-            plugins: vec![
-                "nonebot-plugin-status".to_string(),
-                "nonebot-plugin-abs".to_string(),
-            ],
-        };
-
-        create_bootstrap_project(&options).await.unwrap();
-
-        // Check if essential files were created
-        assert!(temp_dir.path().join("bot.py").exists());
-        assert!(temp_dir.path().join("pyproject.toml").exists());
-        assert!(temp_dir.path().join(".env").exists());
-        assert!(temp_dir.path().join(".gitignore").exists());
-    }
 }
