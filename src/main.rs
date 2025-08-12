@@ -6,6 +6,7 @@ use tracing::info;
 mod cli;
 mod config;
 mod error;
+mod pyproject;
 mod utils;
 
 use cli::*;
@@ -23,7 +24,7 @@ VP   V8P  `Y88P'  VP   V8P Y88888P Y8888P'  `Y88P'     YP
 fn build_cli() -> Command {
     Command::new("nb")
         .version(VERSION)
-        .author("NoneBot Team")
+        .author("fllesser")
         .about("CLI for NoneBot2 - Rust implementation")
         .before_help(BANNER.bright_cyan().to_string())
         .arg_required_else_help(true)
@@ -73,21 +74,6 @@ fn build_cli() -> Command {
                         .short('r')
                         .help("Enable auto-reload")
                         .action(clap::ArgAction::SetTrue),
-                )
-                .arg(
-                    Arg::new("host")
-                        .long("host")
-                        .help("Host to bind")
-                        .value_name("HOST")
-                        .default_value("127.0.0.1"),
-                )
-                .arg(
-                    Arg::new("port")
-                        .long("port")
-                        .short('p')
-                        .help("Port to bind")
-                        .value_name("PORT")
-                        .default_value("8080"),
                 ),
         )
         .subcommand(
@@ -188,7 +174,17 @@ fn build_cli() -> Command {
                             .index(1),
                     ),
                 )
-                .subcommand(Command::new("list").about("List available and installed adapters")),
+                .subcommand(
+                    Command::new("list")
+                        .about("List available and installed adapters")
+                        .arg(
+                            Arg::new("all")
+                                .long("all")
+                                .short('a')
+                                .help("List all adapters, including uninstalled ones")
+                                .action(clap::ArgAction::SetTrue),
+                        ),
+                ),
         )
         .subcommand(
             Command::new("generate")
@@ -265,16 +261,15 @@ fn setup_logging(verbose_level: u8, quiet: bool) -> Result<()> {
     }
 
     let filter = match verbose_level {
-        0 => "nb_cli=info",
-        1 => "nb_cli=debug",
-        _ => "nb_cli=trace",
+        0 => "INFO",
+        1 => "DEBUG",
+        _ => "TRACE",
     };
 
     tracing_subscriber::registry()
-        .with(fmt::layer().with_target(false))
+        .with(fmt::layer().with_target(false).without_time())
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
         .init();
-
     Ok(())
 }
 
@@ -287,7 +282,7 @@ async fn main() -> Result<()> {
 
     setup_logging(verbose, quiet)?;
 
-    info!("Starting nb-cli v{}", VERSION);
+    info!("Starting nb cli in rust v{}", VERSION);
 
     match matches.subcommand() {
         Some(("create", sub_matches)) => create::handle_create(sub_matches).await?,
@@ -310,6 +305,8 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use tracing::level_filters::LevelFilter;
+
     use super::*;
 
     #[test]
@@ -321,5 +318,16 @@ mod tests {
     #[test]
     fn test_version() {
         assert!(!VERSION.is_empty());
+    }
+
+    #[test]
+    fn test_verbose_level() {
+        let cmd = build_cli();
+        let matches = cmd.get_matches_from(vec!["nbuv", "--verbose"]);
+        let verbose_level = matches.get_count("verbose");
+
+        setup_logging(verbose_level, false).unwrap();
+
+        assert_eq!(tracing::level_filters::STATIC_MAX_LEVEL, LevelFilter::INFO);
     }
 }

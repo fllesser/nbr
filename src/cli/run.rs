@@ -7,9 +7,9 @@ use crate::config::ConfigManager;
 use crate::error::{NbCliError, Result};
 use crate::utils::process_utils;
 use clap::ArgMatches;
-use colored::*;
+use colored::Colorize;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -36,7 +36,8 @@ pub struct BotRunner {
     /// Working directory
     work_dir: PathBuf,
     /// Environment variables
-    env_vars: Vec<(String, String)>,
+    #[allow(dead_code)]
+    env_vars: HashMap<String, String>,
     /// Current running process
     current_process: Arc<Mutex<Option<Child>>>,
     /// File watcher for auto-reload
@@ -54,7 +55,7 @@ impl BotRunner {
         port: u16,
         auto_reload: bool,
         work_dir: PathBuf,
-        env_vars: Vec<(String, String)>,
+        env_vars: HashMap<String, String>,
     ) -> Result<Self> {
         let current_process = Arc::new(Mutex::new(None));
         let (watch_tx, watch_rx) = if auto_reload {
@@ -332,6 +333,25 @@ impl BotRunner {
 
     /// Start the bot process
     fn start_bot_process(&self) -> Result<Child> {
+        // python -c import nonebot; nonebot.init(); nonebot.run()
+        // let mut cmd = Command::new(&self.python_path);
+        // cmd.arg("-c");
+        // cmd.arg("import nonebot; nonebot.init();");
+        // cmd.arg("driver = nonebot.get_driver();");
+        // for adapter in &self.adapters {
+        //     cmd.arg(format!(
+        //         "from {} import Adapter as {};",
+        //         adapter.module_name, adapter.name
+        //     ));
+        //     cmd.arg(format!("driver.register_adapter({});", adapter.module_name));
+        // }
+        // cmd.arg("nonebot.load_from_toml('nb.toml');");
+        // cmd.arg("nonebot.run();");
+        // cmd.current_dir(&self.work_dir)
+        //     .stdin(Stdio::null())
+        //     .stdout(Stdio::inherit())
+        //     .stderr(Stdio::inherit());
+
         let mut cmd = Command::new(&self.python_path);
         cmd.arg(&self.bot_file)
             .current_dir(&self.work_dir)
@@ -340,13 +360,13 @@ impl BotRunner {
             .stderr(Stdio::inherit());
 
         // Set environment variables
-        for (key, value) in &self.env_vars {
-            cmd.env(key, value);
-        }
+        // for (key, value) in &self.env_vars {
+        //     cmd.env(key, value);
+        // }
 
         // Set NoneBot specific environment variables
-        cmd.env("HOST", &self.host);
-        cmd.env("PORT", self.port.to_string());
+        // cmd.env("HOST", &self.host);
+        // cmd.env("PORT", self.port.to_string());
 
         let process = cmd
             .spawn()
@@ -394,15 +414,6 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
         .unwrap_or("bot.py");
 
     let reload = matches.get_flag("reload");
-    let host = matches
-        .get_one::<String>("host")
-        .map(|s| s.as_str())
-        .unwrap_or("127.0.0.1");
-    let port: u16 = matches
-        .get_one::<String>("port")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(8080);
-
     // Load configuration
     let mut config_manager = ConfigManager::new()?;
     config_manager.load().await?;
@@ -423,12 +434,20 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
 
     // Load environment variables
     let env_vars = load_environment_variables(&work_dir)?;
+    let host = env_vars
+        .get("HOST")
+        .map(|s| s.to_string())
+        .unwrap_or("127.0.0.1".to_string());
+    let port = env_vars
+        .get("PORT")
+        .map(|s| s.parse::<u16>().unwrap_or(8080))
+        .unwrap_or(8080);
 
     // Create and run bot
     let mut runner = BotRunner::new(
         bot_file_path,
         python_path,
-        host.to_string(),
+        host,
         port,
         reload,
         work_dir,
@@ -442,7 +461,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
         runner.bot_file.display()
     );
     println!("{} {}", "Python:".bright_blue(), runner.python_path);
-    println!("{} {}:{}", "Address:".bright_blue(), host, port);
+    println!("{} {}:{}", "Address:".bright_blue(), runner.host, runner.port);
 
     if reload {
         println!(
@@ -512,7 +531,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
         NbCliError::not_found(
-            "Python executable not found. Please install Python 3.8+ or set python_path in config",
+            "Python executable not found. Please install Python 3.10+ or set python_path in config",
         )
     })
 }
@@ -525,10 +544,10 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
     let version = process_utils::get_python_version(python_path).await?;
     debug!("Python version: {}", version);
 
-    // Verify it's Python 3.8+
-    if !version.contains("Python 3.") {
+    // Verify it's Python 3.10+
+    if !version.contains("Python 3.1") {
         return Err(NbCliError::environment(format!(
-            "Python 3.8+ required, found: {}",
+            "Python 3.10+ required, found: {}",
             version
         )));
     }
@@ -562,10 +581,10 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 }
 
 /// Load environment variables from .env files
-fn load_environment_variables(work_dir: &Path) -> Result<Vec<(String, String)>> {
-    let mut env_vars = Vec::new();
+fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>> {
+    let mut env_vars = HashMap::new();
 
-    let env_files = [".env", ".env.local", ".env.dev"];
+    let env_files = [".env", ".env.dev", ".env.prod"];
 
     for env_file in &env_files {
         let env_path = work_dir.join(env_file);
@@ -594,7 +613,7 @@ fn load_environment_variables(work_dir: &Path) -> Result<Vec<(String, String)>> 
                         value
                     };
 
-                    env_vars.push((key, value.to_string()));
+                    env_vars.insert(key, value.to_string());
                 }
             }
         }
@@ -648,7 +667,7 @@ mod tests {
 
         let env_vars = result.unwrap();
         assert_eq!(env_vars.len(), 2);
-        assert!(env_vars.contains(&("TEST_VAR".to_string(), "test_value".to_string())));
-        assert!(env_vars.contains(&("ANOTHER_VAR".to_string(), "quoted value".to_string())));
+        assert!(env_vars.contains_key("TEST_VAR"));
+        assert!(env_vars.contains_key("ANOTHER_VAR"));
     }
 }

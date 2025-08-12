@@ -1,0 +1,49 @@
+name: test suite
+on: 
+  push:
+    branches:
+      - master
+
+jobs:
+  release:
+    name: Test - ${{ matrix.platform.os-name }}
+    strategy:
+      matrix:
+        platform:
+          # - os-name: FreeBSD-x86_64
+          #   runs-on: ubuntu-24.04
+          #   target: x86_64-unknown-freebsd
+
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+
+          - os-name: Linux-aarch64
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+
+          # - os-name: Linux-riscv64
+          #   runs-on: ubuntu-24.04
+          #   target: riscv64gc-unknown-linux-gnu
+
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+
+          - os-name: macOS-x86_64
+            runs-on: macOS-latest
+            target: x86_64-apple-darwin
+
+          # more targets here ...
+
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Cargo Test
+        uses: houseabsolute/actions-rust-cross@v1
+        with:
+          command: test
+          target: ${{ matrix.platform.target }}
+          args: "--locked"
+          strip: true
