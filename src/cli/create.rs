@@ -1,21 +1,15 @@
 use anyhow::Context;
 use clap::ArgMatches;
 use colored::*;
-use core::fmt;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 use handlebars::Handlebars;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use crate::cli::plugin::RegistryPlugin;
-use crate::cli::{
-    adapter::{AdapterManager, RegistryAdapter},
-    plugin::PluginManager,
-};
+use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::config::NbConfig;
 use crate::error::{NbCliError, Result};
@@ -41,44 +35,30 @@ pub struct ProjectOptions {
     pub output_dir: PathBuf,
     pub force: bool,
     pub adapters: Vec<RegistryAdapter>,
-    pub plugins: Vec<RegistryPlugin>,
+    pub plugins: Vec<String>,
 }
 
-impl Display for ProjectOptions {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let adapters = self
-            .adapters
-            .iter()
-            .map(|a| a.project_link.clone())
-            .collect::<Vec<_>>();
-
-        let plugins = self
-            .plugins
-            .iter()
-            .map(|p| p.project_link.clone())
-            .collect::<Vec<_>>();
-
-        write!(
-            f,
-            "name: {}, template: {}, output_dir: {:?}, force: {}, adapters: [{}], plugins: [{}]",
-            self.name,
-            self.template,
-            self.output_dir,
-            self.force,
-            adapters.join(", "),
-            plugins.join(", ")
-        )
-    }
+pub fn display_project_options(options: &ProjectOptions) {
+    println!("\n{}", "Nonebot project options:".bright_green());
+    println!("  name: {}", options.name.bright_blue());
+    println!("  template: {}", options.template.bright_blue());
+    println!("  output_dir: {}", options.output_dir.display().to_string().bright_blue());
+    let adapters = options
+        .adapters
+        .iter()
+        .map(|a| a.name.clone())
+        .collect::<Vec<_>>();
+    println!("  adapters: {}", adapters.join(", ").bright_blue());
+    println!("  plugins: {}", options.plugins.join(", ").bright_blue());
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("{}", "🎉 Creating NoneBot project...".bright_green());
 
     let adapter_manager = AdapterManager::new().await?;
-    let plugin_manager = PluginManager::new().await?;
 
-    let options = gather_project_options(matches, &adapter_manager, &plugin_manager).await?;
-    info!("Creating project with options: {}", options);
+    let options = gather_project_options(matches, &adapter_manager).await?;
+    display_project_options(&options);
 
     // Check if directory already exists
     if options.output_dir.exists() && !options.force {
@@ -107,7 +87,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("  nbuv run");
 
     // Show additional setup instructions
-    show_setup_instructions(&options).await?;
+    // show_setup_instructions(&options).await?;
 
     Ok(())
 }
@@ -115,7 +95,6 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
 async fn gather_project_options(
     matches: &ArgMatches,
     adapter_manager: &AdapterManager,
-    plugin_manager: &PluginManager,
 ) -> Result<ProjectOptions> {
     let project_name = if let Some(name) = matches.get_one::<String>("name") {
         name.clone()
@@ -158,20 +137,12 @@ async fn gather_project_options(
 
     // Get template info and let user select adapters/plugins
     let template = get_template_info(&template_name).await?;
-    let (adapters, plugins) = select_components(&template, adapter_manager, plugin_manager).await?;
-    let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
+    let (adapters, plugins) = select_components(&template, adapter_manager).await?;
 
+    let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
     let adapters = adapters
         .iter()
         .map(|a| registry_adapters.get(a).unwrap().clone())
-        .collect();
-
-    let registry_plugins = plugin_manager.package_plugins_map().await?;
-
-    let plugins = plugins
-        .iter()
-        .map(|p| *registry_plugins.get(p.as_str()).unwrap())
-        .cloned()
         .collect();
 
     Ok(ProjectOptions {
@@ -210,14 +181,12 @@ async fn select_template() -> Result<String> {
 async fn select_components(
     _template: &Template,
     adapter_manager: &AdapterManager,
-    plugin_manager: &PluginManager,
 ) -> Result<(Vec<String>, Vec<String>)> {
     // Select adapters
     let spinner = terminal_utils::create_spinner(&format!("Fetching adapters from registry..."));
     let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
     spinner.finish_and_clear();
 
-    // 将 keys 按名称排序生成 vec
     let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
     adapter_names.sort();
 
@@ -238,31 +207,21 @@ async fn select_components(
         vec!["OneBot V11".to_string()] // Default adapter
     };
 
-    let spinner = terminal_utils::create_spinner(&format!("Featching plugins from registry..."));
-    let registry_plugins = plugin_manager.package_plugins_map().await?;
-    spinner.finish_and_clear();
-    let mut recommended_plugins = registry_plugins
-        .iter()
-        .filter(|(_, p)| p.valid && p.is_official)
-        .map(|(pn, _)| pn)
-        .collect::<Vec<_>>();
-    recommended_plugins.sort();
-
-    // Select plugins
+    let builtin_plugins = vec!["echo", "single_session"];
 
     println!(
         "\n{}\n",
-        "📦 Select official plugins to install:".bright_cyan()
+        "📦 Select builtin plugins to install:".bright_cyan()
     );
 
     let selected_plugins = MultiSelect::new()
         .with_prompt("Plugins (recommended)")
-        .items(&recommended_plugins)
-        .defaults(&vec![false; recommended_plugins.len()])
+        .items(&builtin_plugins)
+        .defaults(&vec![true; adapter_names.len().min(1)])
         .interact()
         .map_err(|e| NbCliError::io(e.to_string()))?
         .into_iter()
-        .map(|i| recommended_plugins[i].to_string())
+        .map(|i| builtin_plugins[i].to_string())
         .collect();
 
     Ok((selected_adapters, selected_plugins))
@@ -364,13 +323,9 @@ fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
                         module_name: a.module_name.clone(),
                     })
                     .collect(),
-                plugins: options
-                    .plugins
-                    .iter()
-                    .map(|p| p.module_name.clone())
-                    .collect(),
+                plugins: vec![],
                 plugin_dirs: vec![format!("src/{}/plugins", options.name.replace("-", "_"))],
-                builtin_plugins: vec!["echo".to_string()],
+                builtin_plugins: options.plugins.clone(),
             },
         },
     };
@@ -436,11 +391,10 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         let adapter_dep = format!("{}>={}", adapter.project_link, adapter.version);
         dependencies.insert(adapter_dep);
     }
-    for plugin in &options.plugins {
-        let plugin_dep = format!("{}>={}", plugin.project_link, plugin.version);
-        dependencies.insert(plugin_dep);
-    }
-
+    // for plugin in &options.plugins {
+    //     let plugin_dep = format!("{}>={}", plugin.project_link, plugin.version);
+    //     dependencies.insert(plugin_dep);
+    // }
     pyproject.project.dependencies.extend(dependencies);
 
     let content = toml::to_string_pretty(&pyproject)?;
@@ -506,6 +460,7 @@ fn create_example_plugin(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+#[allow(unused)]
 async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
     println!("\n{}", "📋 Setup Instructions:".bright_yellow());
     println!("1. Configure your bot in the .env file");

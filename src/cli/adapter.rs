@@ -151,11 +151,11 @@ impl AdapterManager {
     }
 
     /// Install an adapter
-    pub async fn install_adapter(&mut self, name: &str) -> Result<()> {
-        info!("Installing adapter: {}", name);
+    pub async fn install_adapter(&mut self, package_name: &str) -> Result<()> {
+        info!("Installing adapter: {}", package_name);
 
         // Check if it's a built-in adapter
-        let registry_adapter = self.get_registry_adapter(name).await?;
+        let registry_adapter = self.get_registry_adapter(package_name).await?;
 
         // Validate package name
         // string_utils::validate_package_name(&registry_adapter.project_link)?;
@@ -218,11 +218,11 @@ impl AdapterManager {
     }
 
     /// Uninstall an adapter
-    pub async fn uninstall_adapter(&mut self, name: &str) -> Result<()> {
-        info!("Uninstalling adapter: {}", name);
+    pub async fn uninstall_adapter(&mut self, package_name: &str) -> Result<()> {
+        info!("Uninstalling adapter: {}", package_name);
 
         // Find the adapter in configuration
-        let registry_adapter = self.get_registry_adapter(name).await?;
+        let registry_adapter = self.get_registry_adapter(package_name).await?;
 
         // Confirm uninstallation
         if !Confirm::new()
@@ -296,7 +296,7 @@ impl AdapterManager {
 
         let adapter = adapters_map
             .values()
-            .find(|a| a.name == package_name)
+            .find(|a| a.project_link == package_name)
             .ok_or_else(|| {
                 NbCliError::not_found(format!("Adapter '{}' not found in registry", package_name))
             })?;
