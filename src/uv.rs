@@ -73,6 +73,11 @@ impl Uv {
         output.map(|_| ())
     }
 
+    pub async fn reinstall(package: &str, working_dir: Option<&Path>) -> Result<()> {
+        Self::remove(package, working_dir).await?;
+        Self::add(package, false, None, working_dir).await
+    }
+
     pub async fn remove(package: &str, working_dir: Option<&Path>) -> Result<()> {
         let args = vec!["remove"];
         let spinner = terminal_utils::create_spinner(&format!("Removing {}...", package));
