@@ -253,7 +253,7 @@ pub mod process_utils {
         let candidates = if cfg!(windows) {
             vec!["python", "python3", "py"]
         } else {
-            vec!["python3", "python", "python3.11", "python3.10", "python3.9"]
+            vec!["python3", "python", "python3.11", "python3.10"]
         };
 
         for candidate in candidates {

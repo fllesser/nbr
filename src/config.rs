@@ -20,7 +20,7 @@ pub struct Config {
     /// Global user configuration
     pub user: UserConfig,
     /// Project-specific configuration
-    pub nb_config: Option<NbConfig>,
+    pub nb_config: NbConfig,
     /// Template registry configuration
     pub templates: TemplateConfig,
     /// Cache configuration
@@ -69,8 +69,9 @@ pub struct AuthorInfo {
 }
 
 /// Project-specific configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct NbConfig {
+    /// table tool.nonebot
     pub tool: Tool,
 }
 
@@ -280,7 +281,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             user: UserConfig::default(),
-            nb_config: None,
+            nb_config: NbConfig::default(),
             templates: TemplateConfig::default(),
             cache: CacheConfig::default(),
             registry: RegistryConfig::default(),
@@ -388,7 +389,7 @@ impl ConfigManager {
     pub async fn load(&mut self) -> Result<()> {
         // Load project config if in a project directory
         if let Some(nb_config) = self.load_nb_config().await? {
-            self.current_config.nb_config = Some(nb_config);
+            self.current_config.nb_config = nb_config;
             info!("Loaded nb configuration");
         }
 
@@ -400,9 +401,7 @@ impl ConfigManager {
         debug!("Saving configuration to {:?}", self.config_dir);
 
         // Save project config if it exists
-        if let Some(ref nb_config) = self.current_config.nb_config {
-            self.save_nb_config(nb_config).await?;
-        }
+        self.save_nb_config(&self.current_config.nb_config).await?;
 
         info!("Configuration saved successfully");
         Ok(())
@@ -470,7 +469,7 @@ impl ConfigManager {
     /// Update project configuration
     pub fn update_nb_config<F>(&mut self, f: F) -> Result<()>
     where
-        F: FnOnce(&mut Option<NbConfig>),
+        F: FnOnce(&mut NbConfig),
     {
         f(&mut self.current_config.nb_config);
         Ok(())

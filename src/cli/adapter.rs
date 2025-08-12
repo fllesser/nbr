@@ -264,11 +264,7 @@ impl AdapterManager {
 
         println!();
         let config = self.config_manager.config();
-        let installed_adapters = if let Some(ref nb_config) = config.nb_config {
-            nb_config.tool.nonebot.adapters.clone()
-        } else {
-            Vec::new()
-        };
+        let installed_adapters = &config.nb_config.tool.nonebot.adapters;
 
         let adapters_map = self.fetch_regsitry_adapters().await?;
         if show_all {
@@ -429,14 +425,12 @@ impl AdapterManager {
     fn find_installed_adapter(&self, name: &str) -> Result<Adapter> {
         let config = self.config_manager.config();
 
-        if let Some(ref nb_config) = config.nb_config {
-            for adapter in &nb_config.tool.nonebot.adapters {
-                if adapter.name == name
-                    || adapter.name.to_lowercase().contains(&name.to_lowercase())
-                    || name.to_lowercase().contains(&adapter.name.to_lowercase())
-                {
-                    return Ok(adapter.clone());
-                }
+        for adapter in &config.nb_config.tool.nonebot.adapters {
+            if adapter.name == name
+                || adapter.name.to_lowercase().contains(&name.to_lowercase())
+                || name.to_lowercase().contains(&adapter.name.to_lowercase())
+            {
+                return Ok(adapter.clone());
             }
         }
 
@@ -449,16 +443,14 @@ impl AdapterManager {
     /// Add adapter to configuration
     async fn add_adapter_to_config(&mut self, adapter: Adapter) -> Result<()> {
         self.config_manager.update_nb_config(|nb_config| {
-            if let Some(config) = nb_config {
-                // Remove existing adapter with same name
-                config
-                    .tool
-                    .nonebot
-                    .adapters
-                    .retain(|a| a.name != adapter.name);
-                // Add new adapter info
-                config.tool.nonebot.adapters.push(adapter);
-            }
+            // Remove existing adapter with same name
+            nb_config
+                .tool
+                .nonebot
+                .adapters
+                .retain(|a| a.name != adapter.name);
+            // Add new adapter info
+            nb_config.tool.nonebot.adapters.push(adapter);
         })?;
 
         self.config_manager.save().await
@@ -467,9 +459,7 @@ impl AdapterManager {
     /// Remove adapter from configuration
     async fn remove_adapter_from_config(&mut self, name: String) -> Result<()> {
         self.config_manager.update_nb_config(|nb_config| {
-            if let Some(config) = nb_config {
-                config.tool.nonebot.adapters.retain(|a| a.name != name);
-            }
+            nb_config.tool.nonebot.adapters.retain(|a| a.name != name);
         })?;
 
         self.config_manager.save().await

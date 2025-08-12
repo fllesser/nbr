@@ -30,7 +30,6 @@ pub struct BotRunner {
     /// Host to bind
     host: String,
     /// Port to bind
-    #[allow(dead_code)]
     port: u16,
     /// Enable auto-reload
     auto_reload: bool,
@@ -435,11 +434,6 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
 
     // Load environment variables
     let env_vars = load_environment_variables(&work_dir)?;
-    info!("Loaded {} environment variables", env_vars.len());
-    for (key, value) in &env_vars {
-        info!("{}: {}", key, value);
-    }
-
     let host = env_vars
         .get("HOST")
         .map(|s| s.to_string())
@@ -467,7 +461,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
         runner.bot_file.display()
     );
     println!("{} {}", "Python:".bright_blue(), runner.python_path);
-    println!("{} {}:{}", "Address:".bright_blue(), runner.host, port);
+    println!("{} {}:{}", "Address:".bright_blue(), runner.host, runner.port);
 
     if reload {
         println!(
@@ -537,7 +531,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
         NbCliError::not_found(
-            "Python executable not found. Please install Python 3.8+ or set python_path in config",
+            "Python executable not found. Please install Python 3.10+ or set python_path in config",
         )
     })
 }
