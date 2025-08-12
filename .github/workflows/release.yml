@@ -10,9 +10,9 @@ jobs:
     strategy:
       matrix:
         platform:
-          - os-name: FreeBSD-x86_64
-            runs-on: ubuntu-24.04
-            target: x86_64-unknown-freebsd
+          # - os-name: FreeBSD-x86_64
+          #   runs-on: ubuntu-24.04
+          #   target: x86_64-unknown-freebsd
 
           - os-name: Linux-x86_64
             runs-on: ubuntu-24.04
@@ -22,9 +22,9 @@ jobs:
             runs-on: ubuntu-24.04
             target: aarch64-unknown-linux-musl
 
-          - os-name: Linux-riscv64
-            runs-on: ubuntu-24.04
-            target: riscv64gc-unknown-linux-gnu
+          # - os-name: Linux-riscv64
+          #   runs-on: ubuntu-24.04
+          #   target: riscv64gc-unknown-linux-gnu
 
           - os-name: Windows-x86_64
             runs-on: windows-latest

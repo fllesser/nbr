@@ -12,7 +12,8 @@ driver = nonebot.get_driver()
 # 读取 pyproject.toml 中的 adapter 列表
 with open("nb.toml", "rb") as f:
     pyproject = tomllib.load(f)
-    adapters = pyproject["tool"]["nonebot"]["adapters"]
+    tool_nonebot = pyproject["tool"]["nonebot"]
+    adapters = tool_nonebot["adapters"]
     for adapter in adapters:
         try:
             adapter_module = importlib.import_module(adapter["module_name"])
@@ -20,9 +21,9 @@ with open("nb.toml", "rb") as f:
         except Exception as e:
             logger.error(f"Failed to register adapter {adapter['name']}: {e}")
             continue
+    nonebot.load_builtin_plugins(*tool_nonebot["builtin_plugins"])
 
 nonebot.load_from_toml("nb.toml")
-
 
 if __name__ == "__main__":
     nonebot.run(app="__mp_main__:app")
