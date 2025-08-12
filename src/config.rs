@@ -5,13 +5,14 @@
 #![allow(dead_code)]
 
 use crate::error::{NbCliError, Result};
+use crate::pyproject::Adapter;
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +20,7 @@ pub struct Config {
     /// Global user configuration
     pub user: UserConfig,
     /// Project-specific configuration
-    pub project: Option<ProjectConfig>,
+    pub nb_config: Option<NbConfig>,
     /// Template registry configuration
     pub templates: TemplateConfig,
     /// Cache configuration
@@ -69,33 +70,20 @@ pub struct AuthorInfo {
 
 /// Project-specific configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProjectConfig {
-    /// Project name
-    pub name: String,
-    /// Project version
-    pub version: String,
-    /// Project description
-    pub description: Option<String>,
-    /// Bot entry file
-    pub bot_file: String,
-    /// Environment file
-    pub env_file: String,
-    /// Installed adapters
-    pub adapters: Vec<AdapterInfo>,
+pub struct NbConfig {
+    #[serde(rename = "tool.nonebot")]
+    pub tool_nonebot: ToolNonebot,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolNonebot {
+    pub adapters: Vec<Adapter>,
     /// Installed plugins
-    pub plugins: Vec<PluginInfo>,
-    /// Custom scripts
-    pub scripts: HashMap<String, String>,
-    /// Development dependencies
-    pub dev_dependencies: Vec<String>,
-    /// Project-specific Python path
-    pub python_path: Option<String>,
-    /// Virtual environment path
-    pub venv_path: Option<String>,
-    /// Project creation timestamp
-    pub created_at: DateTime<Utc>,
-    /// Last modified timestamp
-    pub modified_at: DateTime<Utc>,
+    pub plugins: Vec<String>,
+    /// Plugin dirs
+    pub plugin_dirs: Vec<String>,
+    /// Builtin plugins
+    pub builtin_plugins: Vec<String>,
 }
 
 /// Template configuration and registry
@@ -218,33 +206,27 @@ pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
     /// Installed version
-    pub version: String,
-    /// Installation method (uv, git, local)
-    pub install_method: String,
-    /// Installation source
-    pub source: String,
-    /// Installation timestamp
-    pub installed_at: DateTime<Utc>,
+    pub module_name: String,
 }
 
 /// Plugin information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PluginInfo {
-    /// Plugin name
-    pub name: String,
-    /// Package name
-    pub package_name: String,
-    /// Module name
-    pub module_name: String,
-    /// Installed version
-    pub version: String,
-    /// Installation method (uv, git, local)
-    pub install_method: String,
-    /// Installation source
-    pub source: String,
-    /// Plugin type (builtin, external)
-    pub plugin_type: String,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct PluginInfo {
+//     /// Plugin name
+//     pub name: String,
+//     /// Package name
+//     pub package_name: String,
+//     /// Module name
+//     pub module_name: String,
+//     /// Installed version
+//     pub version: String,
+//     /// Installation method (uv, git, local)
+//     pub install_method: String,
+//     /// Installation source
+//     pub source: String,
+//     /// Plugin type (builtin, external)
+//     pub plugin_type: String,
+// }
 
 impl Default for UserConfig {
     fn default() -> Self {
@@ -310,7 +292,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             user: UserConfig::default(),
-            project: None,
+            nb_config: None,
             templates: TemplateConfig::default(),
             cache: CacheConfig::default(),
             registry: RegistryConfig::default(),
@@ -318,7 +300,7 @@ impl Default for Config {
     }
 }
 
-impl TryFrom<&toml::Value> for ProjectConfig {
+impl TryFrom<&toml::Value> for NbConfig {
     type Error = NbCliError;
 
     fn try_from(value: &toml::Value) -> Result<Self> {
@@ -326,49 +308,15 @@ impl TryFrom<&toml::Value> for ProjectConfig {
             .as_table()
             .ok_or_else(|| NbCliError::config("Expected table for project config"))?;
 
-        let name = table
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("unnamed")
-            .to_string();
-
-        let version = table
-            .get("version")
-            .and_then(|v| v.as_str())
-            .unwrap_or("0.1.0")
-            .to_string();
-
-        let description = table
-            .get("description")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let bot_file = table
-            .get("bot_file")
-            .or_else(|| table.get("bot-file"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("bot.py")
-            .to_string();
-
-        let env_file = table
-            .get("env_file")
-            .or_else(|| table.get("env-file"))
-            .and_then(|v| v.as_str())
-            .unwrap_or(".env")
-            .to_string();
-
         let adapters = table
             .get("adapters")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
-                    .map(|name| AdapterInfo {
-                        name: name.to_string(),
-                        version: "latest".to_string(),
-                        install_method: "pip".to_string(),
-                        source: format!("nonebot-adapter-{}", name),
-                        installed_at: Utc::now(),
+                    .map(|v| {
+                        let adapter: Adapter = toml::from_str(v).unwrap();
+                        adapter
                     })
                     .collect()
             })
@@ -380,85 +328,40 @@ impl TryFrom<&toml::Value> for ProjectConfig {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
-                    .map(|name| PluginInfo {
-                        name: name.to_string(),
-                        package_name: name.to_string(),
-                        module_name: name.replace("-", "_"),
-                        version: "latest".to_string(),
-                        install_method: "pip".to_string(),
-                        source: name.to_string(),
-                        plugin_type: "plugin".to_string(),
-                    })
+                    .map(|name| name.to_string())
                     .collect()
             })
             .unwrap_or_default();
 
-        let scripts = table
-            .get("scripts")
-            .and_then(|v| v.as_table())
-            .map(|scripts_table| {
-                scripts_table
-                    .iter()
-                    .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let dev_dependencies = table
-            .get("dev_dependencies")
-            .or_else(|| table.get("dev-dependencies"))
+        let plugin_dirs = table
+            .get("plugin_dirs")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
-                    .map(|s| s.to_string())
+                    .map(|name| name.to_string())
                     .collect()
             })
             .unwrap_or_default();
 
-        let python_path = table
-            .get("python_path")
-            .or_else(|| table.get("python-path"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+        let builtin_plugins = table
+            .get("builtin_plugins")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|name| name.to_string())
+                    .collect()
+            })
+            .unwrap_or_default();
 
-        let venv_path = table
-            .get("venv_path")
-            .or_else(|| table.get("venv-path"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
-
-        let now = Utc::now();
-        let created_at = table
-            .get("created_at")
-            .or_else(|| table.get("created-at"))
-            .and_then(|v| v.as_str())
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or(now);
-
-        let modified_at = table
-            .get("modified_at")
-            .or_else(|| table.get("modified-at"))
-            .and_then(|v| v.as_str())
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&Utc))
-            .unwrap_or(now);
-
-        Ok(ProjectConfig {
-            name,
-            version,
-            description,
-            bot_file,
-            env_file,
-            adapters,
-            plugins,
-            scripts,
-            dev_dependencies,
-            python_path,
-            venv_path,
-            created_at,
-            modified_at,
+        Ok(NbConfig {
+            tool_nonebot: ToolNonebot {
+                adapters,
+                plugins,
+                plugin_dirs,
+                builtin_plugins,
+            },
         })
     }
 }
@@ -497,6 +400,7 @@ impl ConfigManager {
 
         // Load global user config
         let user_config_path = self.config_dir.join("config.toml");
+
         if user_config_path.exists() {
             let content = fs::read_to_string(&user_config_path)
                 .map_err(|e| NbCliError::config(format!("Failed to read user config: {}", e)))?;
@@ -510,8 +414,8 @@ impl ConfigManager {
         }
 
         // Load project config if in a project directory
-        if let Some(project_config) = self.load_project_config().await? {
-            self.current_config.project = Some(project_config);
+        if let Some(nb_config) = self.load_nb_config().await? {
+            self.current_config.nb_config = Some(nb_config);
             info!("Loaded project configuration");
         }
 
@@ -531,8 +435,8 @@ impl ConfigManager {
             .map_err(|e| NbCliError::config(format!("Failed to write user config: {}", e)))?;
 
         // Save project config if it exists
-        if let Some(ref project_config) = self.current_config.project {
-            self.save_project_config(project_config).await?;
+        if let Some(ref nb_config) = self.current_config.nb_config {
+            self.save_nb_config(nb_config).await?;
         }
 
         info!("Configuration saved successfully");
@@ -540,20 +444,21 @@ impl ConfigManager {
     }
 
     /// Load project configuration from current directory
-    async fn load_project_config(&self) -> Result<Option<ProjectConfig>> {
+    async fn load_nb_config(&self) -> Result<Option<NbConfig>> {
         let current_dir = std::env::current_dir()
             .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
 
         let config_path = current_dir.join("nb.toml");
         if config_path.exists() {
-            self.parse_project_config(&config_path).await.map(Some)
+            self.parse_nb_config(&config_path).await.map(Some)
         } else {
+            // init nb.toml
             Ok(None)
         }
     }
 
     /// Parse project configuration from file
-    async fn parse_project_config(&self, config_path: &Path) -> Result<ProjectConfig> {
+    async fn parse_nb_config(&self, config_path: &Path) -> Result<NbConfig> {
         let content = fs::read_to_string(config_path)
             .map_err(|e| NbCliError::config(format!("Failed to read project config: {}", e)))?;
 
@@ -588,12 +493,12 @@ impl ConfigManager {
     }
 
     /// Save project configuration
-    async fn save_project_config(&self, project_config: &ProjectConfig) -> Result<()> {
+    async fn save_nb_config(&self, nb_config: &NbConfig) -> Result<()> {
         let current_dir = std::env::current_dir()
             .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
 
         let config_path = current_dir.join("nb.toml");
-        let config_content = toml::to_string_pretty(project_config).map_err(|e| {
+        let config_content = toml::to_string_pretty(nb_config).map_err(|e| {
             NbCliError::config(format!("Failed to serialize project config: {}", e))
         })?;
 
@@ -623,11 +528,11 @@ impl ConfigManager {
     }
 
     /// Update project configuration
-    pub fn update_project_config<F>(&mut self, f: F) -> Result<()>
+    pub fn update_nb_config<F>(&mut self, f: F) -> Result<()>
     where
-        F: FnOnce(&mut Option<ProjectConfig>),
+        F: FnOnce(&mut Option<NbConfig>),
     {
-        f(&mut self.current_config.project);
+        f(&mut self.current_config.nb_config);
         Ok(())
     }
 
@@ -644,31 +549,11 @@ impl ConfigManager {
     /// Validate current configuration
     pub fn validate(&self) -> Result<()> {
         // Validate user config
-        if let Some(ref python_path) = self.current_config.user.python_path {
-            if !Path::new(python_path).exists() {
-                warn!("Python path does not exist: {}", python_path);
-            }
-        }
-
-        // Validate project config
-        if let Some(ref project_config) = self.current_config.project {
-            let current_dir = std::env::current_dir().map_err(|e| {
-                NbCliError::config(format!("Failed to get current directory: {}", e))
-            })?;
-
-            let bot_file_path = current_dir.join(&project_config.bot_file);
-            if !bot_file_path.exists() {
-                warn!("Bot file does not exist: {}", project_config.bot_file);
-            }
-
-            let env_file_path = current_dir.join(&project_config.env_file);
-            if !env_file_path.exists() {
-                debug!(
-                    "Environment file does not exist: {}",
-                    project_config.env_file
-                );
-            }
-        }
+        // if let Some(ref python_path) = self.current_config.user.python_path {
+        //     if !Path::new(python_path).exists() {
+        //         warn!("Python path does not exist: {}", python_path);
+        //     }
+        // }
 
         info!("Configuration validation completed");
         Ok(())

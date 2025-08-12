@@ -268,22 +268,22 @@ fn build_cli() -> Command {
         )
 }
 
-fn setup_logging(verbose_level: u8, quiet: bool) -> Result<()> {
-    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+fn setup_logging(_verbose_level: u8, quiet: bool) -> Result<()> {
+    use tracing_subscriber::{fmt, prelude::*};
 
     if quiet {
         return Ok(());
     }
 
-    let filter = match verbose_level {
-        0 => "nb_cli=info",
-        1 => "nb_cli=debug",
-        _ => "nb_cli=trace",
-    };
+    // let filter = match verbose_level {
+    //     0 => "nb_cli=info",
+    //     1 => "nb_cli=debug",
+    //     _ => "nb_cli=trace",
+    // };
 
     tracing_subscriber::registry()
         .with(fmt::layer().with_target(false))
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
+        //.with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
         .init();
 
     Ok(())

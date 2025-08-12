@@ -3,10 +3,9 @@
 //! This module handles initializing NoneBot projects in the current directory,
 //! creating necessary files and directory structure.
 
-use crate::config::{ConfigManager, ProjectConfig};
+use crate::config::{ConfigManager, NbConfig, ToolNonebot};
 use crate::error::{NbCliError, Result};
 use crate::utils::{fs_utils, git_utils, string_utils, template_utils};
-use chrono::Utc;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Input, MultiSelect};
@@ -1242,27 +1241,16 @@ networks:
 
     /// Save project configuration
     async fn save_project_config(&mut self) -> Result<()> {
-        let project_config = ProjectConfig {
-            name: self.options.name.clone(),
-            version: "0.1.0".to_string(),
-            description: self.options.description.clone(),
-            bot_file: "bot.py".to_string(),
-            env_file: ".env".to_string(),
-            adapters: vec![], // Will be populated when adapters are actually installed
-            plugins: vec![],  // Will be populated when plugins are actually installed
-            scripts: HashMap::new(),
-            dev_dependencies: vec![],
-            python_path: None,
-            venv_path: if self.options.create_venv {
-                Some("venv".to_string())
-            } else {
-                None
+        let project_config = NbConfig {
+            tool_nonebot: ToolNonebot {
+                adapters: vec![],
+                plugins: vec![],
+                builtin_plugins: vec![],
+                plugin_dirs: vec![],
             },
-            created_at: Utc::now(),
-            modified_at: Utc::now(),
         };
 
-        self.config_manager.update_project_config(|config| {
+        self.config_manager.update_nb_config(|config| {
             *config = Some(project_config);
         })?;
 

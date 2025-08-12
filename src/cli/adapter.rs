@@ -4,9 +4,9 @@
 //! and listing adapters for NoneBot applications.
 #![allow(dead_code)]
 
-use crate::config::{AdapterInfo, ConfigManager};
+use crate::config::ConfigManager;
 use crate::error::{NbCliError, Result};
-use crate::pyproject::PyProjectConfig;
+use crate::pyproject::{Adapter, PyProjectConfig};
 use crate::utils::{process_utils, string_utils, terminal_utils};
 use clap::ArgMatches;
 use colored::*;
@@ -416,11 +416,11 @@ impl AdapterManager {
     }
 
     /// Find installed adapter by name
-    fn find_installed_adapter(&self, name: &str) -> Result<AdapterInfo> {
+    fn find_installed_adapter(&self, name: &str) -> Result<Adapter> {
         let config = self.config_manager.config();
 
-        if let Some(ref project_config) = config.project {
-            for adapter in &project_config.adapters {
+        if let Some(ref nb_config) = config.nb_config {
+            for adapter in &nb_config.tool_nonebot.adapters {
                 if adapter.name == name
                     || adapter.name.to_lowercase().contains(&name.to_lowercase())
                     || name.to_lowercase().contains(&adapter.name.to_lowercase())
@@ -437,28 +437,29 @@ impl AdapterManager {
     }
 
     /// Add adapter to configuration
-    async fn add_adapter_to_config(&mut self, adapter: AdapterInfo) -> Result<()> {
-        self.config_manager
-            .update_project_config(|project_config| {
-                if let Some(config) = project_config {
-                    // Remove existing adapter with same name
-                    config.adapters.retain(|a| a.name != adapter.name);
-                    // Add new adapter info
-                    config.adapters.push(adapter);
-                }
-            })?;
+    async fn add_adapter_to_config(&mut self, adapter: Adapter) -> Result<()> {
+        self.config_manager.update_nb_config(|nb_config| {
+            if let Some(config) = nb_config {
+                // Remove existing adapter with same name
+                config
+                    .tool_nonebot
+                    .adapters
+                    .retain(|a| a.name != adapter.name);
+                // Add new adapter info
+                config.tool_nonebot.adapters.push(adapter);
+            }
+        })?;
 
         self.config_manager.save().await
     }
 
     /// Remove adapter from configuration
     async fn remove_adapter_from_config(&mut self, name: &str) -> Result<()> {
-        self.config_manager
-            .update_project_config(|project_config| {
-                if let Some(config) = project_config {
-                    config.adapters.retain(|a| a.name != name);
-                }
-            })?;
+        self.config_manager.update_nb_config(|nb_config| {
+            if let Some(config) = nb_config {
+                config.tool_nonebot.adapters.retain(|a| a.name != name);
+            }
+        })?;
 
         self.config_manager.save().await
     }

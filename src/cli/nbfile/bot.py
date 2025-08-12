@@ -21,7 +21,7 @@ with open("pyproject.toml", "rb") as f:
             logger.error(f"Failed to register adapter {adapter['name']}: {e}")
             continue
 
-nonebot.load_from_toml("pyproject.toml")
+nonebot.load_from_toml("nb.toml")
 
 
 if __name__ == "__main__":

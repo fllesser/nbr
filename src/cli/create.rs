@@ -11,7 +11,7 @@ use tracing::{debug, info, warn};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
-use crate::config::ConfigManager;
+use crate::config::{ConfigManager, NbConfig, ToolNonebot};
 use crate::error::{NbCliError, Result};
 use crate::pyproject::{Adapter, PyProjectConfig};
 use crate::utils::{process_utils, terminal_utils};
@@ -276,6 +276,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     // Generate files
     generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(&options)?;
+    generate_nb_config_file(&options)?;
     generate_env_files(&options.output_dir)?;
     generate_readme_file(&options)?;
     generate_gitignore(&options.output_dir)?;
@@ -299,6 +300,33 @@ async fn uv_sync(output_dir: &Path) -> Result<()> {
     spinner.finish_and_clear();
 
     output.map(|_| ())
+}
+
+fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
+    let nb_config = NbConfig {
+        tool_nonebot: ToolNonebot {
+            adapters: options
+                .adapters
+                .iter()
+                .map(|a| Adapter {
+                    name: a.name.clone(),
+                    module_name: a.module_name.clone(),
+                })
+                .collect(),
+            plugins: options
+                .plugins
+                .iter()
+                .map(|p| p.replace("-", "_"))
+                .collect(),
+            plugin_dirs: vec![format!("src/{}", options.name.replace("-", "_"))],
+            builtin_plugins: vec![],
+        },
+    };
+    fs::write(
+        options.output_dir.join("nb.toml"),
+        toml::to_string_pretty(&nb_config)?,
+    )?;
+    Ok(())
 }
 
 async fn create_simple_project(options: &ProjectOptions) -> Result<()> {

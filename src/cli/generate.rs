@@ -128,27 +128,12 @@ impl GenerateHandler {
         context.insert("template_type".to_string(), template.to_string());
 
         // Project information
-        if let Some(ref project_config) = config.project {
-            context.insert("project_name".to_string(), project_config.name.clone());
-            context.insert(
-                "project_version".to_string(),
-                project_config.version.clone(),
-            );
-
-            if let Some(ref description) = project_config.description {
-                context.insert("project_description".to_string(), description.clone());
-            }
-        } else {
-            // Try to infer project name from directory
-            let dir_name = self
-                .work_dir
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("nonebot_project");
-
-            context.insert("project_name".to_string(), dir_name.to_string());
-            context.insert("project_version".to_string(), "0.1.0".to_string());
-        }
+        context.insert("project_name".to_string(), "awsome-bot".to_string());
+        context.insert("project_version".to_string(), "0.1.0".to_string());
+        context.insert(
+            "project_description".to_string(),
+            "A NoneBot2 application".to_string(),
+        );
 
         // Author information
         if let Some(ref author) = config.user.author {
