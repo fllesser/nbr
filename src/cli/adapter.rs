@@ -263,8 +263,6 @@ impl AdapterManager {
         } else {
             println!("{}", "Installed Adapters:".bright_green().bold());
         }
-
-        println!();
         let config = self.config_manager.config();
         let installed_adapters = &config.nb_config.tool.nonebot.adapters;
 
@@ -284,10 +282,13 @@ impl AdapterManager {
     }
 
     pub fn display_adapter(&self, adapter: &RegistryAdapter) {
-        println!(" {}", adapter.name.bright_blue().bold());
-        println!("   Package: {}", adapter.project_link);
-        println!("   Module: {}", adapter.module_name);
-        println!("   Desc: {}", adapter.desc);
+        println!(
+            " {} {} ({} {})",
+            "•".bright_blue(),
+            adapter.name.bright_blue().bold(),
+            adapter.project_link.bright_black(),
+            format!("v{}", adapter.version).bright_green(),
+        );
     }
 
     /// Get adapter from registry

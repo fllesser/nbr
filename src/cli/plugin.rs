@@ -186,7 +186,7 @@ impl PluginManager {
 
     /// Uninstall a plugin
     pub async fn uninstall_plugin(&mut self, name: &str) -> Result<()> {
-        info!("Uninstalling plugin: {}", name);
+        debug!("Uninstalling plugin: {}", name);
 
         let registry_plugin = self.get_registry_plugin(name).await?;
         let package_name = registry_plugin.project_link.clone();
@@ -244,10 +244,10 @@ impl PluginManager {
                 .get_installed_package_version(&plugin.project_link)
                 .await?;
             let mut plugin_display = format!(
-                "  {} {} v{}",
+                "  {} {} {}",
                 "•".bright_blue(),
                 plugin.project_link.bright_white(),
-                installed_version.bright_green(),
+                format!("v{}", installed_version).bright_green(),
             );
             if installed_version != plugin.version {
                 plugin_display += format!(" (available: {})", plugin.version)
