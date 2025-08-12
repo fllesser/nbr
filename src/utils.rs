@@ -781,6 +781,13 @@ pub mod terminal_utils {
         pb.enable_steady_tick(Duration::from_millis(100));
         pb
     }
+
+    pub fn spinner_with_message<T>(message: &str, f: impl FnOnce() -> T) -> T {
+        let pb = create_spinner(message);
+        let result = f();
+        pb.finish_and_clear();
+        result
+    }
 }
 
 /// Path utilities

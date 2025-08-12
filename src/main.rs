@@ -8,6 +8,7 @@ mod config;
 mod error;
 mod pyproject;
 mod utils;
+mod uv;
 
 use cli::*;
 
