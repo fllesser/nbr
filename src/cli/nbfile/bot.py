@@ -26,4 +26,4 @@ with open("nb.toml", "rb") as f:
 nonebot.load_from_toml("nb.toml")
 
 if __name__ == "__main__":
-    nonebot.run(app="__mp_main__:app")
+    nonebot.run()
