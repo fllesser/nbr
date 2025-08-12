@@ -59,11 +59,10 @@ impl Uv {
 
     pub async fn add_from_github(repo_url: &str, working_dir: Option<&Path>) -> Result<()> {
         let git_url = format!("git+{}", repo_url);
-        let args = vec!["add", &git_url];
         let spinner = terminal_utils::create_spinner(&format!("Installing {}...", repo_url));
         let output = process_utils::execute_command_with_output(
             "uv",
-            &args,
+            &["add", &git_url],
             working_dir,
             300, // 5 minutes timeout
         )
@@ -79,11 +78,10 @@ impl Uv {
     }
 
     pub async fn remove(package: &str, working_dir: Option<&Path>) -> Result<()> {
-        let args = vec!["remove"];
         let spinner = terminal_utils::create_spinner(&format!("Removing {}...", package));
         let output = process_utils::execute_command_with_output(
             "uv",
-            &args,
+            &["remove", package],
             working_dir,
             300, // 5 minutes timeout
         )
