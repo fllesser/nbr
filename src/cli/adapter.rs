@@ -7,7 +7,7 @@
 use crate::config::ConfigManager;
 use crate::error::{NbCliError, Result};
 use crate::pyproject::Adapter;
-use crate::utils::{process_utils, string_utils};
+use crate::utils::process_utils;
 use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
@@ -158,7 +158,7 @@ impl AdapterManager {
         let registry_adapter = self.get_registry_adapter(name).await?;
 
         // Validate package name
-        string_utils::validate_package_name(&registry_adapter.project_link)?;
+        // string_utils::validate_package_name(&registry_adapter.project_link)?;
 
         // Check if already installed
         if Uv::is_installed(&registry_adapter.project_link, Some(&self.work_dir)).await? {
@@ -241,9 +241,6 @@ impl AdapterManager {
         // Uninstall the package
         Uv::remove(&registry_adapter.project_link, Some(&self.work_dir)).await?;
 
-        // Remove from configuration
-        // PyProjectConfig::remove_adapter(&registry_adapter.name).await?;
-
         println!(
             "{} Successfully uninstalled adapter: {} ({} v{})",
             "✓".bright_green(),
@@ -252,7 +249,8 @@ impl AdapterManager {
             registry_adapter.version.bright_white()
         );
 
-        self.remove_adapter_from_config(registry_adapter.name.to_string())
+        // Remove from configuration
+        self.remove_adapter_from_config(registry_adapter.name.clone())
             .await?;
 
         Ok(())
