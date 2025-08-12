@@ -116,7 +116,7 @@ impl AdapterManager {
         })
     }
 
-    pub async fn get_regsitry_adapters(&self) -> Result<&HashMap<String, RegistryAdapter>> {
+    pub async fn fetch_regsitry_adapters(&self) -> Result<&HashMap<String, RegistryAdapter>> {
         if let Some(adapters) = self.registry_adapters.get() {
             return Ok(adapters);
         }
@@ -260,28 +260,31 @@ impl AdapterManager {
             Vec::new()
         };
 
-        let adapters_map = self.get_regsitry_adapters().await?;
-        let show_adapters = if show_all {
-            adapters_map.clone()
+        let adapters_map = self.fetch_regsitry_adapters().await?;
+        if show_all {
+            adapters_map.iter().for_each(|(_, adapter)| {
+                self.display_adapter(adapter);
+            });
         } else {
-            adapters_map
-                .iter()
-                .filter(|(name, _)| installed_adapters.iter().any(|a| a.name == name.as_str()))
-                .map(|(name, adapter)| (name.clone(), adapter.clone()))
-                .collect()
-        };
-        for (name, adapter) in show_adapters {
-            println!(" {}", name.bright_blue().bold());
-            println!("   Package: {}", adapter.project_link);
-            println!("   Module: {}", adapter.module_name);
-            println!("   Desc: {}", adapter.desc);
+            installed_adapters.iter().for_each(|ia| {
+                let adapter = adapters_map.get(ia.name.as_str()).unwrap();
+                self.display_adapter(adapter);
+            });
         }
+
         Ok(())
     }
 
+    pub fn display_adapter(&self, adapter: &RegistryAdapter) {
+        println!(" {}", adapter.name.bright_blue().bold());
+        println!("   Package: {}", adapter.project_link);
+        println!("   Module: {}", adapter.module_name);
+        println!("   Desc: {}", adapter.desc);
+    }
+
     /// Get adapter from registry
-    async fn get_registry_adapter(&self, package_name: &str) -> Result<RegistryAdapter> {
-        let adapters_map = self.get_regsitry_adapters().await?;
+    async fn get_registry_adapter(&self, package_name: &str) -> Result<&RegistryAdapter> {
+        let adapters_map = self.fetch_regsitry_adapters().await?;
 
         let adapter = adapters_map
             .values()
@@ -289,7 +292,7 @@ impl AdapterManager {
             .ok_or_else(|| {
                 NbCliError::not_found(format!("Adapter '{}' not found in registry", package_name))
             })?;
-        Ok(adapter.clone())
+        Ok(adapter)
     }
 
     /// Get adapter configuration template
@@ -571,11 +574,11 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_get_regsitry_adapters_map() {
+    async fn test_fetch_regsitry_adapters() {
         let manager = AdapterManager::new(ConfigManager::new().unwrap())
             .await
             .unwrap();
-        let adapters_map = manager.get_regsitry_adapters().await.unwrap();
+        let adapters_map = manager.fetch_regsitry_adapters().await.unwrap();
         assert!(adapters_map.len() > 0);
         for adapter in adapters_map.values() {
             println!(

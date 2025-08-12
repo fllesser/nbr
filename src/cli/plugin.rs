@@ -84,8 +84,8 @@ pub struct PluginManager {
     python_path: String,
     /// Working directory
     work_dir: PathBuf,
-    /// Registry plugins
-    registry_plugins: OnceLock<HashMap<String, RegistryPlugin>>,
+    /// Registry plugins, key is package name
+    registry_plugins: OnceLock<Vec<RegistryPlugin>>,
 }
 
 impl PluginManager {
@@ -213,21 +213,23 @@ impl PluginManager {
             return Ok(());
         }
         let pyproject = pyproject.unwrap();
-        let plugins = pyproject
-            .tool
-            .nonebot
-            .plugins
-            .iter()
-            .map(|p| p.replace("_", "-"))
-            .collect::<Vec<String>>();
+        let plugin_modules = pyproject.tool.nonebot.plugins;
 
-        for package_name in plugins {
-            let plugin = self.get_registry_plugin(&package_name).await?;
-            let installed_version = self.get_installed_package_version(&package_name).await?;
+        let registry_plugins = self.module_plugins_map().await?;
+
+        let plugins: Vec<&RegistryPlugin> = plugin_modules
+            .iter()
+            .filter_map(|module| registry_plugins.get(module.as_str()).cloned())
+            .collect();
+
+        for plugin in plugins {
+            let installed_version = self
+                .get_installed_package_version(&plugin.project_link)
+                .await?;
             let mut plugin_display = format!(
                 "  {} {} v{}",
                 "•".bright_blue(),
-                package_name.bright_white(),
+                plugin.project_link.bright_white(),
                 installed_version.bright_green(),
             );
             if installed_version != plugin.version {
@@ -433,13 +435,12 @@ impl PluginManager {
         // Add plugin to tool.nonnebot.plugins
         PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
 
-        self.refresh_plugin_info().await?;
-
         println!(
             "{} Successfully updated plugin: {}",
             "✓".bright_green(),
             registry_plugin.project_link.bright_blue()
         );
+        self.refresh_plugin_info().await?;
 
         Ok(())
     }
@@ -555,7 +556,7 @@ impl PluginManager {
         }
     }
 
-    async fn get_regsitry_plugins_map(&self) -> Result<&HashMap<String, RegistryPlugin>> {
+    async fn fetch_registry_plugins(&self) -> Result<&Vec<RegistryPlugin>> {
         if let Some(plugins) = self.registry_plugins.get() {
             return Ok(plugins);
         }
@@ -578,23 +579,39 @@ impl PluginManager {
             .await
             .map_err(|e| NbCliError::plugin(format!("Failed to parse plugin info: {}", e)))?;
 
-        let mut plugins_map = HashMap::new();
-        for plugin in plugins {
-            plugins_map.insert(plugin.project_link.clone(), plugin);
-        }
-
-        self.registry_plugins.set(plugins_map).unwrap();
+        self.registry_plugins.set(plugins).unwrap();
 
         Ok(self.registry_plugins.get().unwrap())
     }
 
+    async fn package_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
+        let plugins = self.fetch_registry_plugins().await?;
+
+        let mut plugins_map = HashMap::new();
+        for plugin in plugins {
+            plugins_map.insert(plugin.project_link.as_str(), plugin);
+        }
+
+        Ok(plugins_map)
+    }
+
+    async fn module_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
+        let plugins = self.fetch_registry_plugins().await?;
+        let mut plugins_map = HashMap::new();
+        for plugin in plugins {
+            plugins_map.insert(plugin.module_name.as_str(), plugin);
+        }
+
+        Ok(plugins_map)
+    }
+
     /// Get plugin from registry
-    async fn get_registry_plugin(&self, package_name: &str) -> Result<RegistryPlugin> {
-        let plugins = self.get_regsitry_plugins_map().await?;
+    async fn get_registry_plugin(&self, package_name: &str) -> Result<&RegistryPlugin> {
+        let plugins = self.package_plugins_map().await?;
         let plugin = plugins
             .get(package_name)
             .ok_or_else(|| NbCliError::not_found(format!("Plugin '{}' not found", package_name)))?;
-        Ok(plugin.clone())
+        Ok(plugin)
     }
 
     /// Search plugins in registry
@@ -602,10 +619,10 @@ impl PluginManager {
         &self,
         query: &str,
         limit: usize,
-    ) -> Result<Vec<RegistryPlugin>> {
-        let plugins_map = self.get_regsitry_plugins_map().await?;
+    ) -> Result<Vec<&RegistryPlugin>> {
+        let plugins_map = self.package_plugins_map().await?;
 
-        let results: Vec<RegistryPlugin> = plugins_map
+        let results: Vec<&RegistryPlugin> = plugins_map
             .values()
             .filter(|plugin| {
                 plugin.project_link.contains(query)
@@ -886,7 +903,7 @@ mod tests {
         let plugin_manager = PluginManager::new(ConfigManager::new().unwrap())
             .await
             .unwrap();
-        let plugins = plugin_manager.get_regsitry_plugins_map().await.unwrap();
+        let plugins = plugin_manager.package_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
             println!(
                 "{} {} ({})",

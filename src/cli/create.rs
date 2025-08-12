@@ -119,7 +119,7 @@ async fn gather_project_options(matches: &ArgMatches) -> Result<ProjectOptions> 
     // Get template info and let user select adapters/plugins
     let template = get_template_info(&template_name).await?;
     let (adapters, plugins) = select_components(&template).await?;
-    let registry_adapters = adapter_manager.get_regsitry_adapters().await?;
+    let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
 
     let adapters = adapters
         .iter()
@@ -162,7 +162,7 @@ async fn select_template() -> Result<String> {
 async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<String>)> {
     let adapter_manager = AdapterManager::new(ConfigManager::new().unwrap()).await?;
     // Select adapters
-    let registry_adapters = adapter_manager.get_regsitry_adapters().await?;
+    let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
 
     // 将 keys 按名称排序生成 vec
     let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
@@ -173,7 +173,7 @@ async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<Str
         let selections = MultiSelect::new()
             .with_prompt("Adapters")
             .items(&adapter_names)
-            .defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
+            //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
             .interact()
             .map_err(|e| NbCliError::io(e.to_string()))?;
 
@@ -440,10 +440,7 @@ async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
             println!("   • {}: Configure {}", adapter.name, adapter.project_link);
         }
     }
-    if !options.plugins.is_empty() {
-        println!("3. Installed plugins: {}", options.plugins.join(", "));
-    }
-    println!("4. Run 'nb run' to start your bot");
+    println!("3. Run 'nb run' to start your bot");
     println!(
         "\n{}",
         "💡 Need help? Check the README.md file for more information.".bright_blue()
