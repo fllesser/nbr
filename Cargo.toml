@@ -19,7 +19,7 @@ path = "src/main.rs"
 clap = { version = "4.4", features = ["derive", "color", "suggestions"] }
 
 # Async runtime
-tokio = { version = "=1.45.0", features = [
+tokio = { version = "=1.47.1", features = [
     "signal",
     "process",
     "rt-multi-thread",
