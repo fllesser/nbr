@@ -74,21 +74,6 @@ fn build_cli() -> Command {
                         .short('r')
                         .help("Enable auto-reload")
                         .action(clap::ArgAction::SetTrue),
-                )
-                .arg(
-                    Arg::new("host")
-                        .long("host")
-                        .help("Host to bind")
-                        .value_name("HOST")
-                        .default_value("127.0.0.1"),
-                )
-                .arg(
-                    Arg::new("port")
-                        .long("port")
-                        .short('p')
-                        .help("Port to bind")
-                        .value_name("PORT")
-                        .default_value("8080"),
                 ),
         )
         .subcommand(
@@ -280,7 +265,7 @@ fn setup_logging(verbose_level: u8, quiet: bool) -> Result<()> {
         1 => "DEBUG",
         _ => "TRACE",
     };
-    // 去掉时间
+
     tracing_subscriber::registry()
         .with(fmt::layer().with_target(false).without_time())
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
