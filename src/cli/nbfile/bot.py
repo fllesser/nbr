@@ -9,7 +9,7 @@ from nonebot import logger
 nonebot.init()
 
 driver = nonebot.get_driver()
-# 读取 pyproject.toml 中的 adapter 列表
+
 with open("nb.toml", "rb") as f:
     pyproject = tomllib.load(f)
     tool_nonebot = pyproject["tool"]["nonebot"]
