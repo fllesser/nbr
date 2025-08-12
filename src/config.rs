@@ -398,10 +398,8 @@ impl ConfigManager {
 
     /// Save configuration to files
     pub async fn save(&self) -> Result<()> {
-        debug!("Saving configuration to {:?}", self.config_dir);
-
         // Save project config if it exists
-        self.save_nb_config(&self.current_config.nb_config).await?;
+        self.save_nb_config(&self.config().nb_config).await?;
 
         info!("Configuration saved successfully");
         Ok(())
@@ -462,7 +460,7 @@ impl ConfigManager {
     where
         F: FnOnce(&mut UserConfig),
     {
-        f(&mut self.current_config.user);
+        f(&mut self.config_mut().user);
         Ok(())
     }
 
@@ -471,7 +469,7 @@ impl ConfigManager {
     where
         F: FnOnce(&mut NbConfig),
     {
-        f(&mut self.current_config.nb_config);
+        f(&mut self.config_mut().nb_config);
         Ok(())
     }
 
@@ -494,7 +492,7 @@ impl ConfigManager {
         //     }
         // }
 
-        info!("Configuration validation completed");
+        debug!("Configuration validation completed");
         Ok(())
     }
 
