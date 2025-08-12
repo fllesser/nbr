@@ -10,7 +10,7 @@ nonebot.init()
 
 driver = nonebot.get_driver()
 # 读取 pyproject.toml 中的 adapter 列表
-with open("pyproject.toml", "rb") as f:
+with open("nb.toml", "rb") as f:
     pyproject = tomllib.load(f)
     adapters = pyproject["tool"]["nonebot"]["adapters"]
     for adapter in adapters:

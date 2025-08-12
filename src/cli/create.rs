@@ -1,10 +1,12 @@
 use anyhow::Context;
 use clap::ArgMatches;
 use colored::*;
+use core::fmt;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 use handlebars::Handlebars;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
@@ -41,6 +43,33 @@ pub struct ProjectOptions {
     pub plugins: Vec<RegistryPlugin>,
 }
 
+impl Display for ProjectOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let adapters = self
+            .adapters
+            .iter()
+            .map(|a| a.project_link.clone())
+            .collect::<Vec<_>>();
+
+        let plugins = self
+            .plugins
+            .iter()
+            .map(|p| p.project_link.clone())
+            .collect::<Vec<_>>();
+
+        write!(
+            f,
+            "name: {}, template: {}, output_dir: {:?}, force: {}, adapters: [{}], plugins: [{}]",
+            self.name,
+            self.template,
+            self.output_dir,
+            self.force,
+            adapters.join(", "),
+            plugins.join(", ")
+        )
+    }
+}
+
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("{}", "🎉 Creating NoneBot project...".bright_green());
 
@@ -48,7 +77,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     let plugin_manager = PluginManager::new().await?;
 
     let options = gather_project_options(matches, &adapter_manager, &plugin_manager).await?;
-    info!("Creating project with options: {:?}", options);
+    info!("Creating project with options: {}", options);
 
     // Check if directory already exists
     if options.output_dir.exists() && !options.force {
@@ -109,6 +138,8 @@ async fn gather_project_options(
             .interact_text()
             .context("Failed to get project name")?
     };
+
+    println!();
 
     let template_name = if let Some(template) = matches.get_one::<String>("template") {
         template.clone()
@@ -181,14 +212,16 @@ async fn select_components(
     plugin_manager: &PluginManager,
 ) -> Result<(Vec<String>, Vec<String>)> {
     // Select adapters
+    let spinner = terminal_utils::create_spinner(&format!("Fetching adapters from registry..."));
     let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
+    spinner.finish_and_clear();
 
     // 将 keys 按名称排序生成 vec
     let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
     adapter_names.sort();
 
     let selected_adapters = if !adapter_names.is_empty() {
-        println!("\n{}", "🔌 Select adapters to install:".bright_cyan());
+        println!("\n{}\n", "🔌 Select adapters to install:".bright_cyan());
         let selections = MultiSelect::new()
             .with_prompt("Adapters")
             .items(&adapter_names)
@@ -204,7 +237,9 @@ async fn select_components(
         vec!["OneBot V11".to_string()] // Default adapter
     };
 
+    let spinner = terminal_utils::create_spinner(&format!("Featching plugins from registry..."));
     let registry_plugins = plugin_manager.package_plugins_map().await?;
+    spinner.finish_and_clear();
     let mut recommended_plugins = registry_plugins
         .iter()
         .filter(|(_, p)| p.valid && p.is_official)
@@ -215,42 +250,9 @@ async fn select_components(
     // Select plugins
 
     println!(
-        "\n{}",
+        "\n{}\n",
         "📦 Select official plugins to install:".bright_cyan()
     );
-    // println!("{}", "You can search plugins by keywords, and then select the plugins you want to install");
-    //println!("{}", "If you want to install no plugins, just input y");
-
-    // let mut selected_plugins = vec![];
-    // let mut complete = false;
-    // while !complete {
-    //     // 搜索插件
-    //     let query = Input::<String>::new()
-    //         .with_prompt("Search plugins")
-    //         .interact_text()
-    //         .map_err(|e| NbCliError::io(e.to_string()))?;
-
-    //     let query_plugins = recommended_plugins
-    //         .iter()
-    //         .filter(|p| p.contains(&query))
-    //         .cloned()
-    //         .collect::<Vec<_>>();
-
-    //     if query_plugins.is_empty() {
-    //         println!("No plugins found, please try other keywords");
-    //         continue;
-    //     }
-
-    //     // 选择插件
-    //     let selected_plugins = MultiSelect::new()
-    //         .with_prompt("Plugins (recommended)")
-    //         .items(&query_plugins)
-    //         .defaults(&vec![false; query_plugins.len()])
-    //         .interact()
-    //         .map_err(|e| NbCliError::io(e.to_string()))?
-    //         .into_iter()
-    //         .collect::<Vec<_>>();
-    // }
 
     let selected_plugins = MultiSelect::new()
         .with_prompt("Plugins (recommended)")

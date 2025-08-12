@@ -268,24 +268,23 @@ fn build_cli() -> Command {
         )
 }
 
-fn setup_logging(_verbose_level: u8, quiet: bool) -> Result<()> {
-    use tracing_subscriber::{fmt, prelude::*};
+fn setup_logging(verbose_level: u8, quiet: bool) -> Result<()> {
+    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
     if quiet {
         return Ok(());
     }
 
-    // let filter = match verbose_level {
-    //     0 => "nb_cli=info",
-    //     1 => "nb_cli=debug",
-    //     _ => "nb_cli=trace",
-    // };
-
+    let filter = match verbose_level {
+        0 => "INFO",
+        1 => "DEBUG",
+        _ => "TRACE",
+    };
+    // 去掉时间
     tracing_subscriber::registry()
-        .with(fmt::layer().with_target(false))
-        //.with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
+        .with(fmt::layer().with_target(false).without_time())
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
         .init();
-
     Ok(())
 }
 
@@ -298,7 +297,7 @@ async fn main() -> Result<()> {
 
     setup_logging(verbose, quiet)?;
 
-    info!("Starting nb-cli v{}", VERSION);
+    info!("Starting nb cli in rust v{}", VERSION);
 
     match matches.subcommand() {
         Some(("create", sub_matches)) => create::handle_create(sub_matches).await?,
@@ -321,6 +320,8 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use tracing::level_filters::LevelFilter;
+
     use super::*;
 
     #[test]
@@ -332,5 +333,16 @@ mod tests {
     #[test]
     fn test_version() {
         assert!(!VERSION.is_empty());
+    }
+
+    #[test]
+    fn test_verbose_level() {
+        let cmd = build_cli();
+        let matches = cmd.get_matches_from(vec!["nbuv", "--verbose"]);
+        let verbose_level = matches.get_count("verbose");
+
+        setup_logging(verbose_level, false).unwrap();
+
+        assert_eq!(tracing::level_filters::STATIC_MAX_LEVEL, LevelFilter::INFO);
     }
 }
