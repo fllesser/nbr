@@ -267,8 +267,8 @@ impl Default for CacheConfig {
 impl Default for RegistryConfig {
     fn default() -> Self {
         Self {
-            plugin_registry: "https://registry.nonebot.dev/plugins".to_string(),
-            adapter_registry: "https://registry.nonebot.dev/adapters".to_string(),
+            plugin_registry: "https://registry.nonebot.dev/plugins.json".to_string(),
+            adapter_registry: "https://registry.nonebot.dev/adapters.json".to_string(),
             mirrors: vec![],
             cache_enabled: true,
             timeout: 30,

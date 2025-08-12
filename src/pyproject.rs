@@ -106,6 +106,7 @@ impl PyProjectConfig {
             .map_err(|e| NbCliError::config(format!("Failed to write pyproject config: {}", e)))
     }
 
+    #[allow(dead_code)]
     pub async fn add_plugin(plugin_module_name: &str) -> Result<()> {
         let mut pyproject = PyProjectConfig::load().await?.unwrap();
         pyproject
@@ -116,6 +117,7 @@ impl PyProjectConfig {
         pyproject.save().await
     }
 
+    #[allow(dead_code)]
     pub async fn add_adapter(adapter_name: &str, adapter_module_name: &str) -> Result<()> {
         let mut pyproject = PyProjectConfig::load().await?.unwrap();
         pyproject.tool.nonebot.adapters.push(Adapter {
@@ -125,6 +127,7 @@ impl PyProjectConfig {
         pyproject.save().await
     }
 
+    #[allow(dead_code)]
     pub async fn remove_plugin(plugin_module_name: &str) -> Result<()> {
         let mut pyproject = PyProjectConfig::load().await?.unwrap();
         pyproject
@@ -135,6 +138,7 @@ impl PyProjectConfig {
         pyproject.save().await
     }
 
+    #[allow(dead_code)]
     pub async fn remove_adapter(adapter_name: &str) -> Result<()> {
         let mut pyproject = PyProjectConfig::load().await?.unwrap();
         pyproject

@@ -6,7 +6,7 @@
 
 use crate::config::ConfigManager;
 use crate::error::{NbCliError, Result};
-use crate::pyproject::{Adapter, PyProjectConfig};
+use crate::pyproject::Adapter;
 use crate::utils::{process_utils, string_utils, terminal_utils};
 use clap::ArgMatches;
 use colored::*;
@@ -93,7 +93,8 @@ pub struct AdapterManager {
 
 impl AdapterManager {
     /// Create a new adapter manager
-    pub async fn new(mut config_manager: ConfigManager) -> Result<Self> {
+    pub async fn new() -> Result<Self> {
+        let mut config_manager = ConfigManager::new()?;
         config_manager.load().await?;
         let config = config_manager.config();
 
@@ -186,7 +187,7 @@ impl AdapterManager {
         // Install the adapter
         self.uv_install(&registry_adapter.project_link).await?;
 
-        PyProjectConfig::add_adapter(&registry_adapter.name, &registry_adapter.module_name).await?;
+        // PyProjectConfig::add_adapter(&registry_adapter.name, &registry_adapter.module_name).await?;
 
         println!(
             "{} Successfully installed adapter: {} ({} v{})",
@@ -195,6 +196,12 @@ impl AdapterManager {
             registry_adapter.project_link.bright_black(),
             registry_adapter.version.bright_white()
         );
+
+        self.add_adapter_to_config(Adapter {
+            name: registry_adapter.name.clone(),
+            module_name: registry_adapter.module_name.clone(),
+        })
+        .await?;
 
         // Show configuration instructions
         // if let Some(ref adapter) = adapter_info {
@@ -231,7 +238,7 @@ impl AdapterManager {
         self.uv_uninstall(&registry_adapter.project_link).await?;
 
         // Remove from configuration
-        PyProjectConfig::remove_adapter(&registry_adapter.name).await?;
+        // PyProjectConfig::remove_adapter(&registry_adapter.name).await?;
 
         println!(
             "{} Successfully uninstalled adapter: {} ({} v{})",
@@ -240,6 +247,9 @@ impl AdapterManager {
             registry_adapter.project_link.bright_black(),
             registry_adapter.version.bright_white()
         );
+
+        self.remove_adapter_from_config(registry_adapter.name.to_string())
+            .await?;
 
         Ok(())
     }
@@ -253,9 +263,9 @@ impl AdapterManager {
         }
 
         println!();
-        let pyproject = PyProjectConfig::load().await?;
-        let installed_adapters = if let Some(project) = pyproject {
-            project.tool.nonebot.adapters
+        let config = self.config_manager.config();
+        let installed_adapters = if let Some(ref nb_config) = config.nb_config {
+            nb_config.tool.nonebot.adapters.clone()
         } else {
             Vec::new()
         };
@@ -455,7 +465,7 @@ impl AdapterManager {
     }
 
     /// Remove adapter from configuration
-    async fn remove_adapter_from_config(&mut self, name: &str) -> Result<()> {
+    async fn remove_adapter_from_config(&mut self, name: String) -> Result<()> {
         self.config_manager.update_nb_config(|nb_config| {
             if let Some(config) = nb_config {
                 config.tool.nonebot.adapters.retain(|a| a.name != name);
@@ -516,8 +526,7 @@ impl AdapterManager {
 
 /// Handle the adapter command
 pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
-    let config_manager = ConfigManager::new()?;
-    let mut adapter_manager = AdapterManager::new(config_manager).await?;
+    let mut adapter_manager = AdapterManager::new().await?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -577,9 +586,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_regsitry_adapters() {
-        let manager = AdapterManager::new(ConfigManager::new().unwrap())
-            .await
-            .unwrap();
+        let manager = AdapterManager::new().await.unwrap();
         let adapters_map = manager.fetch_regsitry_adapters().await.unwrap();
         assert!(adapters_map.len() > 0);
         for adapter in adapters_map.values() {

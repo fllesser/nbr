@@ -4,14 +4,18 @@ use colored::*;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 use handlebars::Handlebars;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
-use crate::cli::adapter::{AdapterManager, RegistryAdapter};
+use crate::cli::plugin::RegistryPlugin;
+use crate::cli::{
+    adapter::{AdapterManager, RegistryAdapter},
+    plugin::PluginManager,
+};
 
-use crate::config::{ConfigManager, NbConfig};
+use crate::config::NbConfig;
 use crate::error::{NbCliError, Result};
 use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool};
 use crate::utils::{process_utils, terminal_utils};
@@ -34,14 +38,16 @@ pub struct ProjectOptions {
     pub output_dir: PathBuf,
     pub force: bool,
     pub adapters: Vec<RegistryAdapter>,
-    pub plugins: Vec<String>,
+    pub plugins: Vec<RegistryPlugin>,
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("{}", "🎉 Creating NoneBot project...".bright_green());
 
-    let options = gather_project_options(matches).await?;
+    let adapter_manager = AdapterManager::new().await?;
+    let plugin_manager = PluginManager::new().await?;
 
+    let options = gather_project_options(matches, &adapter_manager, &plugin_manager).await?;
     info!("Creating project with options: {:?}", options);
 
     // Check if directory already exists
@@ -76,7 +82,11 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-async fn gather_project_options(matches: &ArgMatches) -> Result<ProjectOptions> {
+async fn gather_project_options(
+    matches: &ArgMatches,
+    adapter_manager: &AdapterManager,
+    plugin_manager: &PluginManager,
+) -> Result<ProjectOptions> {
     let project_name = if let Some(name) = matches.get_one::<String>("name") {
         name.clone()
     } else {
@@ -114,16 +124,22 @@ async fn gather_project_options(matches: &ArgMatches) -> Result<ProjectOptions> 
 
     let force = matches.get_flag("force");
 
-    let adapter_manager = AdapterManager::new(ConfigManager::new().unwrap()).await?;
-
     // Get template info and let user select adapters/plugins
     let template = get_template_info(&template_name).await?;
-    let (adapters, plugins) = select_components(&template).await?;
+    let (adapters, plugins) = select_components(&template, adapter_manager, plugin_manager).await?;
     let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
 
     let adapters = adapters
         .iter()
         .map(|a| registry_adapters.get(a).unwrap().clone())
+        .collect();
+
+    let registry_plugins = plugin_manager.package_plugins_map().await?;
+
+    let plugins = plugins
+        .iter()
+        .map(|p| *registry_plugins.get(p.as_str()).unwrap())
+        .cloned()
         .collect();
 
     Ok(ProjectOptions {
@@ -159,8 +175,11 @@ async fn select_template() -> Result<String> {
     Ok(templates[selection].name.clone())
 }
 
-async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<String>)> {
-    let adapter_manager = AdapterManager::new(ConfigManager::new().unwrap()).await?;
+async fn select_components(
+    _template: &Template,
+    adapter_manager: &AdapterManager,
+    plugin_manager: &PluginManager,
+) -> Result<(Vec<String>, Vec<String>)> {
     // Select adapters
     let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
 
@@ -185,10 +204,54 @@ async fn select_components(_template: &Template) -> Result<(Vec<String>, Vec<Str
         vec!["OneBot V11".to_string()] // Default adapter
     };
 
-    // Select plugins
-    let recommended_plugins = vec!["nonebot-plugin-status", "nonebot-plugin-emojilike"];
+    let registry_plugins = plugin_manager.package_plugins_map().await?;
+    let mut recommended_plugins = registry_plugins
+        .iter()
+        .filter(|(_, p)| p.valid && p.is_official)
+        .map(|(pn, _)| pn)
+        .collect::<Vec<_>>();
+    recommended_plugins.sort();
 
-    println!("\n{}", "📦 Select plugins to install:".bright_cyan());
+    // Select plugins
+
+    println!(
+        "\n{}",
+        "📦 Select official plugins to install:".bright_cyan()
+    );
+    // println!("{}", "You can search plugins by keywords, and then select the plugins you want to install");
+    //println!("{}", "If you want to install no plugins, just input y");
+
+    // let mut selected_plugins = vec![];
+    // let mut complete = false;
+    // while !complete {
+    //     // 搜索插件
+    //     let query = Input::<String>::new()
+    //         .with_prompt("Search plugins")
+    //         .interact_text()
+    //         .map_err(|e| NbCliError::io(e.to_string()))?;
+
+    //     let query_plugins = recommended_plugins
+    //         .iter()
+    //         .filter(|p| p.contains(&query))
+    //         .cloned()
+    //         .collect::<Vec<_>>();
+
+    //     if query_plugins.is_empty() {
+    //         println!("No plugins found, please try other keywords");
+    //         continue;
+    //     }
+
+    //     // 选择插件
+    //     let selected_plugins = MultiSelect::new()
+    //         .with_prompt("Plugins (recommended)")
+    //         .items(&query_plugins)
+    //         .defaults(&vec![false; query_plugins.len()])
+    //         .interact()
+    //         .map_err(|e| NbCliError::io(e.to_string()))?
+    //         .into_iter()
+    //         .collect::<Vec<_>>();
+    // }
+
     let selected_plugins = MultiSelect::new()
         .with_prompt("Plugins (recommended)")
         .items(&recommended_plugins)
@@ -269,7 +332,6 @@ async fn create_project(options: &ProjectOptions) -> Result<()> {
 
 async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     let package_name = options.name.replace("-", "_");
-
     // Create directory structure
     create_project_structure(&options.output_dir, &package_name)?;
 
@@ -317,10 +379,10 @@ fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
                 plugins: options
                     .plugins
                     .iter()
-                    .map(|p| p.replace("-", "_"))
+                    .map(|p| p.module_name.clone())
                     .collect(),
                 plugin_dirs: vec![format!("src/{}/plugins", options.name.replace("-", "_"))],
-                builtin_plugins: vec![],
+                builtin_plugins: vec!["echo".to_string()],
             },
         },
     };
@@ -380,23 +442,18 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     let mut pyproject = PyProjectConfig::default();
     pyproject.project.name = options.name.to_string();
 
+    let mut dependencies = HashSet::new();
     // 补齐插件, 适配器相关表
     for adapter in &options.adapters {
         let adapter_dep = format!("{}>={}", adapter.project_link, adapter.version);
-        pyproject.project.dependencies.push(adapter_dep);
-        pyproject.tool.nonebot.adapters.push(Adapter {
-            name: adapter.name.to_string(),               // Onebot v11
-            module_name: adapter.module_name.to_string(), // nonebot.adapters.onebot.v11
-        });
+        dependencies.insert(adapter_dep);
     }
     for plugin in &options.plugins {
-        pyproject.project.dependencies.push(plugin.to_string());
-        pyproject
-            .tool
-            .nonebot
-            .plugins
-            .push(plugin.replace("-", "_"));
+        let plugin_dep = format!("{}>={}", plugin.project_link, plugin.version);
+        dependencies.insert(plugin_dep);
     }
+
+    pyproject.project.dependencies.extend(dependencies);
 
     let content = toml::to_string_pretty(&pyproject)?;
     fs::write(options.output_dir.join("pyproject.toml"), content)?;

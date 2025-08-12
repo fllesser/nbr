@@ -6,7 +6,6 @@
 
 use crate::config::ConfigManager;
 use crate::error::{NbCliError, Result};
-use crate::pyproject::PyProjectConfig;
 use crate::utils::{process_utils, terminal_utils};
 use clap::ArgMatches;
 use colored::*;
@@ -81,7 +80,8 @@ pub struct PluginManager {
 
 impl PluginManager {
     /// Create a new plugin manager
-    pub async fn new(mut config_manager: ConfigManager) -> Result<Self> {
+    pub async fn new() -> Result<Self> {
+        let mut config_manager = ConfigManager::new()?;
         config_manager.load().await?;
         let config = config_manager.config();
 
@@ -139,7 +139,7 @@ impl PluginManager {
         // Install the plugin
         self.uv_install(&package_name, index_url, upgrade).await?;
 
-        PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
+        //PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
         self.add_plugin_to_config(registry_plugin.module_name.clone())
             .await?;
         println!(
@@ -157,7 +157,6 @@ impl PluginManager {
 
         let registry_plugin = self.get_registry_plugin(name).await?;
         let package_name = registry_plugin.project_link.clone();
-        let module_name = registry_plugin.module_name.clone();
         // Check if already installed
         if !self.is_plugin_installed(&package_name).await? {
             return Err(NbCliError::not_found(format!(
@@ -184,8 +183,9 @@ impl PluginManager {
 
         // Remove from configuration
 
-        PyProjectConfig::remove_plugin(&module_name).await?;
-        self.remove_plugin_from_config(&module_name).await?;
+        // PyProjectConfig::remove_plugin(&module_name).await?;
+        self.remove_plugin_from_config(&registry_plugin.module_name.to_string())
+            .await?;
 
         println!(
             "{} Successfully uninstalled plugin: {}",
@@ -198,17 +198,13 @@ impl PluginManager {
 
     /// List installed plugins
     pub async fn list_plugins(&self, _show_outdated: bool) -> Result<()> {
-        // let config = self.config_manager.config();
-        let pyproject = PyProjectConfig::load().await?;
-        if pyproject.is_none() {
-            println!(
-                "{}",
-                "can't found pyproject.toml configuration found.".bright_yellow()
-            );
+        let config = self.config_manager.config();
+        let plugin_modules = if let Some(ref nb_config) = config.nb_config {
+            nb_config.tool.nonebot.plugins.clone()
+        } else {
+            println!("{}", "No project configuration found.".bright_yellow());
             return Ok(());
-        }
-        let pyproject = pyproject.unwrap();
-        let plugin_modules = pyproject.tool.nonebot.plugins;
+        };
 
         let registry_plugins = self.module_plugins_map().await?;
 
@@ -437,9 +433,6 @@ impl PluginManager {
         );
         self.uv_install(&plugin_deps_str, None, true).await?;
 
-        // Add plugin to tool.nonnebot.plugins
-        PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
-
         println!(
             "{} Successfully updated plugin: {}",
             "✓".bright_green(),
@@ -561,7 +554,7 @@ impl PluginManager {
         }
     }
 
-    async fn fetch_registry_plugins(&self) -> Result<&Vec<RegistryPlugin>> {
+    pub async fn fetch_registry_plugins(&self) -> Result<&Vec<RegistryPlugin>> {
         if let Some(plugins) = self.registry_plugins.get() {
             return Ok(plugins);
         }
@@ -589,7 +582,7 @@ impl PluginManager {
         Ok(self.registry_plugins.get().unwrap())
     }
 
-    async fn package_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
+    pub async fn package_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
         let plugins = self.fetch_registry_plugins().await?;
 
         let mut plugins_map = HashMap::new();
@@ -600,7 +593,7 @@ impl PluginManager {
         Ok(plugins_map)
     }
 
-    async fn module_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
+    pub async fn module_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
         let plugins = self.fetch_registry_plugins().await?;
         let mut plugins_map = HashMap::new();
         for plugin in plugins {
@@ -778,8 +771,7 @@ impl PluginManager {
 
 /// Handle the plugin command
 pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
-    let config_manager = ConfigManager::new()?;
-    let mut plugin_manager = PluginManager::new(config_manager).await?;
+    let mut plugin_manager = PluginManager::new().await?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -885,9 +877,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
-        let plugin_manager = PluginManager::new(ConfigManager::new().unwrap())
-            .await
-            .unwrap();
+        let plugin_manager = PluginManager::new().await.unwrap();
         let plugins = plugin_manager.package_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
             println!(
@@ -901,9 +891,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_registry_plugin() {
-        let plugin_manager = PluginManager::new(ConfigManager::new().unwrap())
-            .await
-            .unwrap();
+        let plugin_manager = PluginManager::new().await.unwrap();
         let plugin = plugin_manager
             .get_registry_plugin("nonebot-plugin-status")
             .await
