@@ -3,8 +3,9 @@
 //! This module handles initializing NoneBot projects in the current directory,
 //! creating necessary files and directory structure.
 
-use crate::config::{ConfigManager, NbConfig, ToolNonebot};
+use crate::config::{ConfigManager, NbConfig};
 use crate::error::{NbCliError, Result};
+use crate::pyproject::{Nonebot, Tool};
 use crate::utils::{fs_utils, git_utils, string_utils, template_utils};
 use clap::ArgMatches;
 use colored::*;
@@ -1242,11 +1243,13 @@ networks:
     /// Save project configuration
     async fn save_project_config(&mut self) -> Result<()> {
         let project_config = NbConfig {
-            tool_nonebot: ToolNonebot {
-                adapters: vec![],
-                plugins: vec![],
-                builtin_plugins: vec![],
-                plugin_dirs: vec![],
+            tool: Tool {
+                nonebot: Nonebot {
+                    adapters: vec![],
+                    plugins: vec![],
+                    builtin_plugins: vec![],
+                    plugin_dirs: vec![],
+                },
             },
         };
 

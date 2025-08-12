@@ -300,7 +300,7 @@ impl PluginManager {
         let config = self.config_manager.config();
 
         let plugin_modules = if let Some(ref nb_config) = config.nb_config {
-            nb_config.tool_nonebot.plugins.clone()
+            nb_config.tool.nonebot.plugins.clone()
         } else {
             println!("{}", "No project configuration found.".bright_yellow());
             return Ok(());
@@ -647,7 +647,7 @@ impl PluginManager {
         let config = self.config_manager.config();
 
         if let Some(ref nb_config) = config.nb_config {
-            for plugin in &nb_config.tool_nonebot.plugins {
+            for plugin in &nb_config.tool.nonebot.plugins {
                 if plugin == name || plugin.contains(name) {
                     return Ok(plugin.clone());
                 }
@@ -665,9 +665,9 @@ impl PluginManager {
         self.config_manager.update_nb_config(|nb_config| {
             if let Some(config) = nb_config {
                 // Remove existing plugin with same name
-                config.tool_nonebot.plugins.retain(|p| p != &plugin_module);
+                config.tool.nonebot.plugins.retain(|p| p != &plugin_module);
                 // Add new plugin info
-                config.tool_nonebot.plugins.push(plugin_module);
+                config.tool.nonebot.plugins.push(plugin_module);
             }
         })?;
 
@@ -678,7 +678,7 @@ impl PluginManager {
     async fn remove_plugin_from_config(&mut self, name: &str) -> Result<()> {
         self.config_manager.update_nb_config(|nb_config| {
             if let Some(config) = nb_config {
-                config.tool_nonebot.plugins.retain(|p| p != name);
+                config.tool.nonebot.plugins.retain(|p| p != name);
             }
         })?;
 
@@ -692,13 +692,13 @@ impl PluginManager {
         if let Some(ref nb_config) = config.nb_config {
             let mut updated_plugins = Vec::new();
 
-            for plugin in &nb_config.tool_nonebot.plugins {
+            for plugin in &nb_config.tool.nonebot.plugins {
                 updated_plugins.push(plugin.clone());
             }
 
             self.config_manager.update_nb_config(|nb_config| {
                 if let Some(config) = nb_config {
-                    config.tool_nonebot.plugins = updated_plugins;
+                    config.tool.nonebot.plugins = updated_plugins;
                 }
             })?;
 

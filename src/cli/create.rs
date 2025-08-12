@@ -11,9 +11,9 @@ use tracing::{debug, info, warn};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
-use crate::config::{ConfigManager, NbConfig, ToolNonebot};
+use crate::config::{ConfigManager, NbConfig};
 use crate::error::{NbCliError, Result};
-use crate::pyproject::{Adapter, PyProjectConfig};
+use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool};
 use crate::utils::{process_utils, terminal_utils};
 
 #[allow(unused)]
@@ -304,22 +304,24 @@ async fn uv_sync(output_dir: &Path) -> Result<()> {
 
 fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
     let nb_config = NbConfig {
-        tool_nonebot: ToolNonebot {
-            adapters: options
-                .adapters
-                .iter()
-                .map(|a| Adapter {
-                    name: a.name.clone(),
-                    module_name: a.module_name.clone(),
-                })
-                .collect(),
-            plugins: options
-                .plugins
-                .iter()
-                .map(|p| p.replace("-", "_"))
-                .collect(),
-            plugin_dirs: vec![format!("src/{}", options.name.replace("-", "_"))],
-            builtin_plugins: vec![],
+        tool: Tool {
+            nonebot: Nonebot {
+                adapters: options
+                    .adapters
+                    .iter()
+                    .map(|a| Adapter {
+                        name: a.name.clone(),
+                        module_name: a.module_name.clone(),
+                    })
+                    .collect(),
+                plugins: options
+                    .plugins
+                    .iter()
+                    .map(|p| p.replace("-", "_"))
+                    .collect(),
+                plugin_dirs: vec![format!("src/{}/plugins", options.name.replace("-", "_"))],
+                builtin_plugins: vec![],
+            },
         },
     };
     fs::write(

@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 
 use crate::error::{NbCliError, Result};
-use crate::pyproject::Adapter;
+use crate::pyproject::{Adapter, Nonebot, Tool};
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -71,19 +71,7 @@ pub struct AuthorInfo {
 /// Project-specific configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NbConfig {
-    #[serde(rename = "tool.nonebot")]
-    pub tool_nonebot: ToolNonebot,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolNonebot {
-    pub adapters: Vec<Adapter>,
-    /// Installed plugins
-    pub plugins: Vec<String>,
-    /// Plugin dirs
-    pub plugin_dirs: Vec<String>,
-    /// Builtin plugins
-    pub builtin_plugins: Vec<String>,
+    pub tool: Tool,
 }
 
 /// Template configuration and registry
@@ -356,11 +344,13 @@ impl TryFrom<&toml::Value> for NbConfig {
             .unwrap_or_default();
 
         Ok(NbConfig {
-            tool_nonebot: ToolNonebot {
-                adapters,
-                plugins,
-                plugin_dirs,
-                builtin_plugins,
+            tool: Tool {
+                nonebot: Nonebot {
+                    adapters,
+                    plugins,
+                    plugin_dirs,
+                    builtin_plugins,
+                },
             },
         })
     }
@@ -396,27 +386,10 @@ impl ConfigManager {
 
     /// Load configuration from files
     pub async fn load(&mut self) -> Result<()> {
-        debug!("Loading configuration from {:?}", self.config_dir);
-
-        // Load global user config
-        let user_config_path = self.config_dir.join("config.toml");
-
-        if user_config_path.exists() {
-            let content = fs::read_to_string(&user_config_path)
-                .map_err(|e| NbCliError::config(format!("Failed to read user config: {}", e)))?;
-
-            self.current_config.user = toml::from_str(&content)
-                .map_err(|e| NbCliError::config(format!("Failed to parse user config: {}", e)))?;
-
-            info!("Loaded user configuration");
-        } else {
-            debug!("No user config found, using defaults");
-        }
-
         // Load project config if in a project directory
         if let Some(nb_config) = self.load_nb_config().await? {
             self.current_config.nb_config = Some(nb_config);
-            info!("Loaded project configuration");
+            info!("Loaded nb configuration");
         }
 
         Ok(())
@@ -425,14 +398,6 @@ impl ConfigManager {
     /// Save configuration to files
     pub async fn save(&self) -> Result<()> {
         debug!("Saving configuration to {:?}", self.config_dir);
-
-        // Save user config
-        let user_config_path = self.config_dir.join("config.toml");
-        let user_config_content = toml::to_string_pretty(&self.current_config.user)
-            .map_err(|e| NbCliError::config(format!("Failed to serialize user config: {}", e)))?;
-
-        fs::write(&user_config_path, user_config_content)
-            .map_err(|e| NbCliError::config(format!("Failed to write user config: {}", e)))?;
 
         // Save project config if it exists
         if let Some(ref nb_config) = self.current_config.nb_config {
@@ -460,34 +425,10 @@ impl ConfigManager {
     /// Parse project configuration from file
     async fn parse_nb_config(&self, config_path: &Path) -> Result<NbConfig> {
         let content = fs::read_to_string(config_path)
-            .map_err(|e| NbCliError::config(format!("Failed to read project config: {}", e)))?;
+            .map_err(|e| NbCliError::config(format!("Failed to read nb config: {}", e)))?;
 
-        // Try to parse as different formats based on extension
-        let config = if config_path.extension().and_then(|ext| ext.to_str()) == Some("toml") {
-            // For pyproject.toml, look for [tool.nonebot] section
-            if config_path.file_name().and_then(|name| name.to_str()) == Some("pyproject.toml") {
-                let parsed: toml::Value = toml::from_str(&content)
-                    .map_err(|e| NbCliError::config(format!("Failed to parse TOML: {}", e)))?;
-
-                if let Some(nonebot_section) =
-                    parsed.get("tool").and_then(|tool| tool.get("nonebot"))
-                {
-                    nonebot_section.try_into().map_err(|e| {
-                        NbCliError::config(format!("Failed to parse nonebot section: {}", e))
-                    })?
-                } else {
-                    return Err(NbCliError::config(
-                        "No [tool.nonebot] section found in pyproject.toml",
-                    ));
-                }
-            } else {
-                toml::from_str(&content).map_err(|e| {
-                    NbCliError::config(format!("Failed to parse TOML config: {}", e))
-                })?
-            }
-        } else {
-            return Err(NbCliError::config("Unsupported config file format"));
-        };
+        let config: NbConfig = toml::from_str(&content)
+            .map_err(|e| NbCliError::config(format!("Failed to parse nb config: {}", e)))?;
 
         Ok(config)
     }
@@ -498,12 +439,11 @@ impl ConfigManager {
             .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
 
         let config_path = current_dir.join("nb.toml");
-        let config_content = toml::to_string_pretty(nb_config).map_err(|e| {
-            NbCliError::config(format!("Failed to serialize project config: {}", e))
-        })?;
+        let config_content = toml::to_string_pretty(nb_config)
+            .map_err(|e| NbCliError::config(format!("Failed to serialize nb config: {}", e)))?;
 
         fs::write(&config_path, config_content)
-            .map_err(|e| NbCliError::config(format!("Failed to write project config: {}", e)))?;
+            .map_err(|e| NbCliError::config(format!("Failed to write nb config: {}", e)))?;
 
         Ok(())
     }
@@ -614,5 +554,22 @@ mod tests {
     async fn test_config_manager_creation() {
         let manager = ConfigManager::new();
         assert!(manager.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_save_nb_config() {
+        let manager = ConfigManager::new().unwrap();
+        let nb_config = NbConfig {
+            tool: Tool {
+                nonebot: Nonebot {
+                    adapters: vec![],
+                    plugins: vec![],
+                    plugin_dirs: vec![],
+                    builtin_plugins: vec![],
+                },
+            },
+        };
+        manager.save_nb_config(&nb_config).await.unwrap();
+        manager.load_nb_config().await.unwrap().unwrap();
     }
 }

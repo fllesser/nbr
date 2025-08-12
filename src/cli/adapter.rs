@@ -420,7 +420,7 @@ impl AdapterManager {
         let config = self.config_manager.config();
 
         if let Some(ref nb_config) = config.nb_config {
-            for adapter in &nb_config.tool_nonebot.adapters {
+            for adapter in &nb_config.tool.nonebot.adapters {
                 if adapter.name == name
                     || adapter.name.to_lowercase().contains(&name.to_lowercase())
                     || name.to_lowercase().contains(&adapter.name.to_lowercase())
@@ -442,11 +442,12 @@ impl AdapterManager {
             if let Some(config) = nb_config {
                 // Remove existing adapter with same name
                 config
-                    .tool_nonebot
+                    .tool
+                    .nonebot
                     .adapters
                     .retain(|a| a.name != adapter.name);
                 // Add new adapter info
-                config.tool_nonebot.adapters.push(adapter);
+                config.tool.nonebot.adapters.push(adapter);
             }
         })?;
 
@@ -457,7 +458,7 @@ impl AdapterManager {
     async fn remove_adapter_from_config(&mut self, name: &str) -> Result<()> {
         self.config_manager.update_nb_config(|nb_config| {
             if let Some(config) = nb_config {
-                config.tool_nonebot.adapters.retain(|a| a.name != name);
+                config.tool.nonebot.adapters.retain(|a| a.name != name);
             }
         })?;
 
