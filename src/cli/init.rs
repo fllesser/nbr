@@ -1221,7 +1221,7 @@ networks:
         // Install dependencies if requirements.txt exists
         let requirements_file = self.work_dir.join("requirements.txt");
         if requirements_file.exists() {
-            info!("Installing dependencies in virtual environment...");
+            debug!("Installing dependencies in virtual environment...");
 
             let uv_cmd = "uv";
 

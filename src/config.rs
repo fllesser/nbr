@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info};
+use tracing::debug;
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -390,7 +390,7 @@ impl ConfigManager {
         // Load project config if in a project directory
         if let Some(nb_config) = self.load_nb_config().await? {
             self.current_config.nb_config = nb_config;
-            info!("Loaded nb configuration");
+            debug!("Loaded nb configuration");
         }
 
         Ok(())
@@ -401,7 +401,7 @@ impl ConfigManager {
         // Save project config if it exists
         self.save_nb_config(&self.config().nb_config).await?;
 
-        info!("Configuration saved successfully");
+        debug!("Configuration saved successfully");
         Ok(())
     }
 

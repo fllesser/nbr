@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{debug, info};
 
 // "module_name": "nonebot_plugin_status",
 // "project_link": "nonebot-plugin-status",
@@ -106,7 +106,7 @@ impl PluginManager {
     }
 
     pub async fn install_plugin_from_github(&mut self, repo_url: &str) -> Result<()> {
-        info!("Installing plugin from github: {}", repo_url);
+        debug!("Installing plugin from github: {}", repo_url);
 
         Uv::add_from_github(repo_url, Some(&self.work_dir)).await?;
 
@@ -124,7 +124,7 @@ impl PluginManager {
     }
 
     pub async fn install_unofficial_plugin(&mut self, package_name: &str) -> Result<()> {
-        info!("Installing unofficial plugin: {}", package_name);
+        debug!("Installing unofficial plugin: {}", package_name);
 
         Uv::add(package_name, false, None, Some(&self.work_dir)).await?;
         let module_name = package_name.replace("-", "_");
@@ -144,7 +144,7 @@ impl PluginManager {
         index_url: Option<&str>,
         upgrade: bool,
     ) -> Result<()> {
-        info!("Installing plugin: {}", name);
+        debug!("Installing plugin: {}", name);
 
         // Check if it's a registry plugin or PyPI package
         let registry_plugin = self.get_registry_plugin(name).await?;
@@ -166,7 +166,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Installation cancelled by user");
+            println!("Installation cancelled by user");
             return Ok(());
         }
         // Install the plugin
@@ -207,7 +207,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Uninstallation cancelled by user");
+            println!("Uninstallation cancelled by user");
             return Ok(());
         }
 
@@ -217,7 +217,7 @@ impl PluginManager {
         // PyProjectConfig::remove_plugin(&module_name).await?;
         self.remove_plugin_from_config(&registry_plugin.module_name.to_string())
             .await?;
-
+        
         println!(
             "{} Successfully uninstalled plugin: {}",
             "✓".bright_green(),

@@ -111,8 +111,6 @@ impl BotRunner {
 
     /// Start the bot process
     pub async fn run(&mut self) -> Result<()> {
-        info!("Starting NoneBot application...");
-
         // Validate bot file exists
         if !self.bot_file.exists() {
             return Err(NbCliError::not_found(format!(
@@ -430,7 +428,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     let python_path = find_python_executable(config)?;
 
     // Verify Python environment
-    verify_python_environment(&python_path).await?;
+    // verify_python_environment(&python_path).await?;
 
     // Load environment variables
     let env_vars = load_environment_variables(&work_dir)?;
@@ -461,7 +459,12 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
         runner.bot_file.display()
     );
     println!("{} {}", "Python:".bright_blue(), runner.python_path);
-    println!("{} {}:{}", "Address:".bright_blue(), runner.host, runner.port);
+    println!(
+        "{} {}:{}",
+        "Address:".bright_blue(),
+        runner.host,
+        runner.port
+    );
 
     if reload {
         println!(
@@ -523,7 +526,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     for venv_path in &venv_paths {
         if venv_path.exists() {
-            info!("Using virtual environment Python: {}", venv_path.display());
+            debug!("Using virtual environment Python: {}", venv_path.display());
             return Ok(venv_path.to_string_lossy().to_string());
         }
     }
@@ -537,6 +540,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 }
 
 /// Verify Python environment
+#[allow(dead_code)]
 async fn verify_python_environment(python_path: &str) -> Result<()> {
     info!("Verifying Python environment...");
 
@@ -619,7 +623,7 @@ fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>
         }
     }
 
-    info!("Loaded {} environment variables", env_vars.len());
+    debug!("Loaded {} environment variables", env_vars.len());
     Ok(env_vars)
 }
 

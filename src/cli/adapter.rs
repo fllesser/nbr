@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::debug;
 
 // {
 // "module_name": "nonebot.adapters.onebot.v11",
@@ -152,7 +152,7 @@ impl AdapterManager {
 
     /// Install an adapter
     pub async fn install_adapter(&mut self, package_name: &str) -> Result<()> {
-        info!("Installing adapter: {}", package_name);
+        debug!("Installing adapter: {}", package_name);
 
         // Check if it's a built-in adapter
         let registry_adapter = self.get_registry_adapter(package_name).await?;
@@ -178,7 +178,7 @@ impl AdapterManager {
             .interact()
             .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Installation cancelled by user");
+            println!("Installation cancelled by user");
             return Ok(());
         }
 
@@ -219,7 +219,7 @@ impl AdapterManager {
 
     /// Uninstall an adapter
     pub async fn uninstall_adapter(&mut self, package_name: &str) -> Result<()> {
-        info!("Uninstalling adapter: {}", package_name);
+        debug!("Uninstalling adapter: {}", package_name);
 
         // Find the adapter in configuration
         let registry_adapter = self.get_registry_adapter(package_name).await?;
@@ -234,7 +234,7 @@ impl AdapterManager {
             .interact()
             .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Uninstallation cancelled by user");
+            println!("Uninstallation cancelled by user");
             return Ok(());
         }
 

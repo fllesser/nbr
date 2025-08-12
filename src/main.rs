@@ -1,7 +1,6 @@
 use anyhow::Result;
 use clap::{Arg, Command};
 use colored::*;
-use tracing::info;
 
 mod cli;
 mod config;
@@ -282,8 +281,6 @@ async fn main() -> Result<()> {
     let quiet = matches.get_flag("quiet");
 
     setup_logging(verbose, quiet)?;
-
-    info!("Starting nb cli in rust v{}", VERSION);
 
     match matches.subcommand() {
         Some(("create", sub_matches)) => create::handle_create(sub_matches).await?,
