@@ -7,6 +7,7 @@
 use crate::config::ConfigManager;
 use crate::error::{NbCliError, Result};
 use crate::utils::{process_utils, terminal_utils};
+use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
@@ -23,7 +24,7 @@ use std::time::Duration;
 use tokio::time::timeout;
 use tracing::info;
 
-//  "module_name": "nonebot_plugin_status",
+// "module_name": "nonebot_plugin_status",
 // "project_link": "nonebot-plugin-status",
 // "name": "服务器状态查看",
 // "desc": "通过戳一戳获取服务器状态",
@@ -104,6 +105,38 @@ impl PluginManager {
         })
     }
 
+    pub async fn install_plugin_from_github(&mut self, repo_url: &str) -> Result<()> {
+        info!("Installing plugin from github: {}", repo_url);
+
+        Uv::add_from_github(repo_url, Some(&self.work_dir)).await?;
+
+        // 获取 module_name
+        let repo_name = repo_url.split("/").last().unwrap();
+        let module_name = repo_name.replace("-", "_");
+
+        self.add_plugin_to_config(module_name).await?;
+        println!(
+            "{} Successfully installed plugin: {}",
+            "✓".bright_green(),
+            repo_name.bright_blue()
+        );
+        Ok(())
+    }
+
+    pub async fn install_unofficial_plugin(&mut self, package_name: &str) -> Result<()> {
+        info!("Installing unofficial plugin: {}", package_name);
+
+        Uv::add(package_name, false, None, Some(&self.work_dir)).await?;
+        let module_name = package_name.replace("-", "_");
+        self.add_plugin_to_config(module_name).await?;
+        println!(
+            "{} Successfully installed plugin: {}",
+            "✓".bright_green(),
+            package_name.bright_blue()
+        );
+        Ok(())
+    }
+
     /// Install a plugin
     pub async fn install_plugin(
         &mut self,
@@ -137,7 +170,7 @@ impl PluginManager {
             return Ok(());
         }
         // Install the plugin
-        self.uv_install(&package_name, index_url, upgrade).await?;
+        Uv::add(&package_name, upgrade, index_url, Some(&self.work_dir)).await?;
 
         //PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
         self.add_plugin_to_config(registry_plugin.module_name.clone())
@@ -179,9 +212,7 @@ impl PluginManager {
         }
 
         // Uninstall the package
-        self.uv_uninstall(&package_name).await?;
-
-        // Remove from configuration
+        Uv::remove(&package_name, Some(&self.work_dir)).await?;
 
         // PyProjectConfig::remove_plugin(&module_name).await?;
         self.remove_plugin_from_config(&registry_plugin.module_name.to_string())
@@ -363,7 +394,7 @@ impl PluginManager {
 
         // Update plugins
         for (plugin, _) in &outdated_plugins {
-            match self.uv_install(&plugin.project_link, None, true).await {
+            match Uv::add(&plugin.project_link, true, None, Some(&self.work_dir)).await {
                 Ok(_) => {
                     println!(
                         "{} Updated {}",
@@ -385,6 +416,12 @@ impl PluginManager {
         // Refresh plugin information
         // self.refresh_plugin_info().await?;
 
+        Ok(())
+    }
+
+    async fn update_installed_github_plugin(&mut self) -> Result<()> {
+        // uv sync
+        Uv::sync(Some(&self.work_dir)).await?;
         Ok(())
     }
 
@@ -421,7 +458,7 @@ impl PluginManager {
             "{} >= {}",
             registry_plugin.project_link, registry_plugin.version
         );
-        self.uv_install(&plugin_deps_str, None, true).await?;
+        Uv::add(&plugin_deps_str, true, None, Some(&self.work_dir)).await?;
 
         println!(
             "{} Successfully updated plugin: {}",
@@ -431,60 +468,6 @@ impl PluginManager {
         // self.refresh_plugin_info().await?;
 
         Ok(())
-    }
-
-    /// Install package via uv
-    async fn uv_install(
-        &self,
-        package: &str,
-        index_url: Option<&str>,
-        upgrade: bool,
-    ) -> Result<()> {
-        let mut args = vec!["add"];
-
-        if upgrade {
-            args.push("--upgrade");
-        }
-
-        if let Some(index) = index_url {
-            args.push("--index-url");
-            args.push(index);
-        }
-
-        args.push(package);
-
-        let spinner = terminal_utils::create_spinner(&format!("Installing {}...", package));
-
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &args,
-            Some(&self.work_dir),
-            300, // 5 minutes timeout
-        )
-        .await;
-
-        spinner.finish_and_clear();
-
-        output.map(|_| ())
-    }
-
-    /// Uninstall package via uv
-    async fn uv_uninstall(&self, package: &str) -> Result<()> {
-        let args = vec!["remove", package];
-
-        let spinner = terminal_utils::create_spinner(&format!("Uninstalling {}...", package));
-
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &args,
-            Some(&self.work_dir),
-            60, // 1 minute timeout
-        )
-        .await;
-
-        spinner.finish_and_clear();
-
-        output.map(|_| ())
     }
 
     /// Get installed package version

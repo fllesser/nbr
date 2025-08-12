@@ -7,7 +7,8 @@
 use crate::config::ConfigManager;
 use crate::error::{NbCliError, Result};
 use crate::pyproject::Adapter;
-use crate::utils::{process_utils, string_utils, terminal_utils};
+use crate::utils::{process_utils, string_utils};
+use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
@@ -104,7 +105,7 @@ impl AdapterManager {
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("nb-cli-rust")
+            .user_agent("nb-cli-in-rust")
             .build()
             .map_err(|e| NbCliError::Network(e))?;
 
@@ -160,10 +161,7 @@ impl AdapterManager {
         string_utils::validate_package_name(&registry_adapter.project_link)?;
 
         // Check if already installed
-        if self
-            .is_adapter_installed(&registry_adapter.project_link)
-            .await?
-        {
+        if Uv::is_installed(&registry_adapter.project_link, Some(&self.work_dir)).await? {
             return Err(NbCliError::already_exists(format!(
                 "Adapter '{}' is already installed",
                 registry_adapter.project_link
@@ -185,7 +183,13 @@ impl AdapterManager {
         }
 
         // Install the adapter
-        self.uv_install(&registry_adapter.project_link).await?;
+        Uv::add(
+            &registry_adapter.project_link,
+            false,
+            None,
+            Some(&self.work_dir),
+        )
+        .await?;
 
         // PyProjectConfig::add_adapter(&registry_adapter.name, &registry_adapter.module_name).await?;
 
@@ -235,7 +239,7 @@ impl AdapterManager {
         }
 
         // Uninstall the package
-        self.uv_uninstall(&registry_adapter.project_link).await?;
+        Uv::remove(&registry_adapter.project_link, Some(&self.work_dir)).await?;
 
         // Remove from configuration
         // PyProjectConfig::remove_adapter(&registry_adapter.name).await?;
@@ -349,76 +353,6 @@ impl AdapterManager {
         }
 
         Some(template)
-    }
-
-    /// Install package via uv
-    async fn uv_install(&self, package: &str) -> Result<()> {
-        let args = vec!["add", package];
-
-        let spinner = terminal_utils::create_spinner(&format!("Installing {}...", package));
-
-        let result = process_utils::execute_command_with_output(
-            "uv",
-            &args,
-            Some(&self.work_dir),
-            300, // 5 minutes timeout
-        )
-        .await;
-
-        spinner.finish_and_clear();
-
-        result.map(|_| ())
-    }
-
-    /// Uninstall package via uv
-    async fn uv_uninstall(&self, package: &str) -> Result<()> {
-        let args = vec!["remove", package];
-
-        let spinner = terminal_utils::create_spinner(&format!("Uninstalling {}...", package));
-
-        let result = process_utils::execute_command_with_output(
-            "uv",
-            &args,
-            Some(&self.work_dir),
-            60, // 1 minute timeout
-        )
-        .await;
-
-        spinner.finish_and_clear();
-
-        result.map(|_| ())
-    }
-
-    /// Get installed package version
-    async fn get_installed_package_version(&self, package: &str) -> Result<String> {
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &["pip", "show", package],
-            Some(&self.work_dir),
-            30,
-        )
-        .await?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        for line in stdout.lines() {
-            if line.starts_with("Version:") {
-                return Ok(line.replace("Version:", "").trim().to_string());
-            }
-        }
-
-        Err(NbCliError::not_found(format!(
-            "Version not found for package: {}",
-            package
-        )))
-    }
-
-    /// Check if adapter is installed
-    async fn is_adapter_installed(&self, package: &str) -> Result<bool> {
-        match self.get_installed_package_version(package).await {
-            Ok(_) => Ok(true),
-            Err(_) => Ok(false),
-        }
     }
 
     /// Find installed adapter by name

@@ -20,7 +20,8 @@ use crate::cli::{
 use crate::config::NbConfig;
 use crate::error::{NbCliError, Result};
 use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool};
-use crate::utils::{process_utils, terminal_utils};
+use crate::utils::terminal_utils;
+use crate::uv::Uv;
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
@@ -346,24 +347,9 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_gitignore(&options.output_dir)?;
 
     // Install dependencies
-    uv_sync(&options.output_dir).await?;
+    Uv::sync(Some(&options.output_dir)).await?;
 
     Ok(())
-}
-
-async fn uv_sync(output_dir: &Path) -> Result<()> {
-    let args = vec!["sync"];
-    let spinner = terminal_utils::create_spinner(&format!("Installing dependencies..."));
-    let output = process_utils::execute_command_with_output(
-        "uv",
-        &args,
-        Some(output_dir),
-        300, // 5 minutes timeout
-    )
-    .await;
-    spinner.finish_and_clear();
-
-    output.map(|_| ())
 }
 
 fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
