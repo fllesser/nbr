@@ -201,7 +201,7 @@ impl AdapterManager {
         Uv::remove(&registry_adapter.project_link, Some(&self.work_dir)).await?;
 
         // Remove from configuration
-        ToolNonebot::parse(None)?.remove_adapters(vec![registry_adapter.name.clone()])?;
+        ToolNonebot::parse(None)?.remove_adapters(vec![registry_adapter.module_name.clone()])?;
 
         println!(
             "{} Successfully uninstalled adapter: {} ({} v{})",

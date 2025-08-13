@@ -663,19 +663,24 @@ impl PluginManager {
             println!("   Homepage: {}", homepage.bright_cyan());
         }
 
-        if !plugin.tags.is_empty() {
-            println!(
-                "   {} {}",
-                "Tags:".bright_black(),
-                plugin
-                    .tags
-                    .iter()
-                    .take(3)
-                    .map(|t| t.get("label").unwrap().bright_yellow().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-        }
+        // if !plugin.tags.is_empty() {
+        //     println!(
+        //         "   {} {}",
+        //         "Tags:".bright_black(),
+        //         plugin
+        //             .tags
+        //             .iter()
+        //             .take(3)
+        //             .map(|t| t.get("label").unwrap().bright_yellow().to_string())
+        //             .collect::<Vec<_>>()
+        //             .join(", ")
+        //     );
+        // }
+
+        println!(
+            "   Install Command: {}",
+            format!("nbr plugin install {}", plugin.project_link).bright_yellow()
+        );
     }
 }
 
