@@ -110,7 +110,7 @@ impl AdapterManager {
 
     pub async fn select_adapter(&self) -> Result<Vec<RegistryAdapter>> {
         let spinner =
-            terminal_utils::create_spinner(&"Fetching adapters from registry...".to_string());
+            terminal_utils::create_spinner("Fetching adapters from registry...");
         let registry_adapters = self.fetch_regsitry_adapters().await?;
         spinner.finish_and_clear();
 
@@ -275,9 +275,7 @@ impl AdapterManager {
         println!(
             "{} Successfully uninstalled adapters: {}",
             "✓".bright_green(),
-            selected_adapters
-                .iter().cloned()
-                .collect::<Vec<String>>()
+            selected_adapters.to_vec()
                 .join(", ")
         );
 
