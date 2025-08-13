@@ -12,6 +12,7 @@ use colored::*;
 use dialoguer::{Confirm, MultiSelect};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use std::collections::{HashMap, HashSet};
 
 use std::path::PathBuf;
@@ -152,7 +153,7 @@ impl AdapterManager {
 
         if !Confirm::new()
             .with_prompt(&format!(
-                "Do you want to install the following adapters:\n{}",
+                "Do you want to install the following adapters: {}",
                 registry_adapters
                     .iter()
                     .map(|a| a.name.clone())
@@ -214,6 +215,7 @@ impl AdapterManager {
             .filter(|a| a.contains("nonebot-adapter-"))
             .map(|a| a.split(" ").next().unwrap().to_owned())
             .collect::<HashSet<String>>();
+        debug!("Installed adapters: {:?}", installed_adapters_set);
         Ok(installed_adapters_set)
     }
 
@@ -444,15 +446,11 @@ pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
     let adapter_manager = AdapterManager::new()?;
 
     match matches.subcommand() {
-        Some(("install", _sub_matches)) => {
-            // let name = sub_matches.get_one::<String>("name").unwrap();
+        Some(("install", _)) => {
             let selected_adapters = adapter_manager.select_adapter().await?;
             adapter_manager.install_adapter(selected_adapters).await
         }
-        Some(("uninstall", _sub_matches)) => {
-            // let name = sub_matches.get_one::<String>("name").unwrap();
-            adapter_manager.uninstall_adapter().await
-        }
+        Some(("uninstall", _)) => adapter_manager.uninstall_adapter().await,
         Some(("list", sub_matches)) => {
             let show_all = sub_matches.get_flag("all");
             adapter_manager.list_adapters(show_all).await

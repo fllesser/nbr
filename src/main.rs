@@ -160,22 +160,8 @@ fn build_cli() -> Command {
                 .about("Manage bot adapters")
                 .subcommand_required(true)
                 .arg_required_else_help(true)
-                .subcommand(
-                    Command::new("install").about("Install an adapter").arg(
-                        Arg::new("name")
-                            .help("Adapter name")
-                            .required(true)
-                            .index(1),
-                    ),
-                )
-                .subcommand(
-                    Command::new("uninstall").about("Uninstall an adapter").arg(
-                        Arg::new("name")
-                            .help("Adapter name")
-                            .required(true)
-                            .index(1),
-                    ),
-                )
+                .subcommand(Command::new("install").about("Install an adapter"))
+                .subcommand(Command::new("uninstall").about("Uninstall an adapter"))
                 .subcommand(
                     Command::new("list")
                         .about("List available and installed adapters")

@@ -50,7 +50,7 @@ impl Uv {
         }
 
         args.extend(packages.clone());
-
+        
         let spinner =
             terminal_utils::create_spinner(&format!("Installing {}...", packages.join(", ")));
 
