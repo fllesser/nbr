@@ -29,6 +29,33 @@ pip install uv
 
 ## 🛠 Installation
 
+### Install from cargo
+```bash
+cargo install nbr
+
+```
+
+### Install from release
+
+```bash
+# Linux
+# Download the latest release from GitHub
+curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.0/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
+
+# Move the binary to your PATH
+sudo mv nbr /usr/local/bin/
+
+# MacOS
+# Download the latest release from GitHub
+curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.0/nbr-macOS-arm64.tar.gz | tar -xzf -
+
+# Move the binary to your PATH
+sudo mv nbr /Users/{username}/.local/bin/
+
+```
+
+
+### Install with repository
 ```bash
 # Clone the repository
 git clone https://github.com/fllesser/nbr.git
@@ -40,6 +67,8 @@ cargo build --release
 # Install globally (optional)
 cargo install --path .
 ```
+
+
 
 ## 📖 Usage
 
