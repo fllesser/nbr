@@ -12,8 +12,8 @@ use colored::*;
 use dialoguer::{Confirm, MultiSelect};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 use std::collections::{HashMap, HashSet};
+use tracing::debug;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -151,15 +151,17 @@ impl AdapterManager {
             .filter(|a| !installed_adapters_set.contains(&a.project_link))
             .collect();
 
+        let prompt = format!(
+            "Do you want to install the selected uninstalled adapters: [{}]",
+            registry_adapters
+                .iter()
+                .map(|a| a.name.clone().bright_blue().bold().to_string())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+
         if !Confirm::new()
-            .with_prompt(&format!(
-                "Do you want to install the following adapters: {}",
-                registry_adapters
-                    .iter()
-                    .map(|a| a.name.clone())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ))
+            .with_prompt(&prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
