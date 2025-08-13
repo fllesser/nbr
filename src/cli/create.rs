@@ -394,8 +394,12 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         let adapter_dep = format!("{}>={}", adapter.project_link, adapter.version);
         dependencies.insert(adapter_dep);
     }
+    // 补齐依赖
     pyproject.project.dependencies.extend(dependencies);
+    // 补齐内置插件
+    pyproject.tool.nonebot.builtin_plugins = options.plugins.clone();
 
+    // 写入文件
     let content = toml::to_string(&pyproject)?;
     fs::write(options.output_dir.join("pyproject.toml"), content)?;
 
