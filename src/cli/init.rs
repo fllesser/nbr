@@ -55,11 +55,11 @@ pub struct InitOptions {
 impl Default for InitOptions {
     fn default() -> Self {
         Self {
-            name: "nonebot-project".to_string(),
+            name: "awesome-bot".to_string(),
             description: None,
             author_name: None,
             author_email: None,
-            python_version: ">=3.8".to_string(),
+            python_version: ">=3.10".to_string(),
             adapters: vec!["console".to_string()],
             plugins: vec![],
             init_git: true,
@@ -68,16 +68,17 @@ impl Default for InitOptions {
             force: false,
         }
     }
+
 }
 
 impl InitHandler {
     /// Create a new init handler
-    pub async fn new(force: bool) -> Result<Self> {
+    pub async fn new(_force: bool) -> Result<Self> {
         let config_manager = ConfigManager::new()?;
         let work_dir = config_manager.current_dir().to_path_buf();
 
         let mut options = InitOptions::default();
-        options.force = force;
+        // options.force = force;
 
         // Use directory name as default project name
         if let Some(dir_name) = work_dir.file_name().and_then(|n| n.to_str()) {
@@ -168,9 +169,10 @@ impl InitHandler {
 
             // Ignore hidden files and common directories
             if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && (name.starts_with('.') || name == "__pycache__") {
-                    continue;
-                }
+                && (name.starts_with('.') || name == "__pycache__")
+            {
+                continue;
+            }
 
             file_count += 1;
         }
@@ -265,14 +267,16 @@ impl InitHandler {
 
     /// Select adapters to install
     fn select_adapters(&mut self) -> Result<()> {
-        let available_adapters = ["console",
+        let available_adapters = [
+            "console",
             "onebot-v11",
             "onebot-v12",
             "telegram",
             "discord",
             "dingtalk",
             "feishu",
-            "kaiheila"];
+            "kaiheila",
+        ];
 
         let descriptions = vec![
             "Console adapter for testing",
@@ -913,34 +917,28 @@ This project is licensed under the MIT License.
 
     /// Generate configuration documentation
     fn generate_config_documentation(&self) -> String {
-        let mut docs = Vec::new();
-
-        docs.push("| Variable | Description | Example |".to_string());
-        docs.push("| --- | --- | --- |".to_string());
-        docs.push("| `ENVIRONMENT` | Runtime environment | `dev`, `prod` |".to_string());
-        docs.push("| `HOST` | Server host | `127.0.0.1` |".to_string());
-        docs.push("| `PORT` | Server port | `8080` |".to_string());
-        docs.push("| `LOG_LEVEL` | Logging level | `INFO`, `DEBUG` |".to_string());
+        let mut docs = vec![
+            "| Variable | Description | Example |",
+            "| --- | --- | --- |",
+            "| `ENVIRONMENT` | Runtime environment | `dev`, `prod` |",
+            "| `HOST` | Server host | `127.0.0.1` |",
+            "| `PORT` | Server port | `8080` |",
+            "| `LOG_LEVEL` | Logging level | `INFO`, `DEBUG` |",
+        ];
 
         for adapter in &self.options.adapters {
             match adapter.as_str() {
                 "onebot-v11" => {
-                    docs.push(
-                        "| `ONEBOT_ACCESS_TOKEN` | OneBot access token | `your_token` |"
-                            .to_string(),
-                    );
-                    docs.push("| `ONEBOT_SECRET` | OneBot secret | `your_secret` |".to_string());
+                    docs.push("| `ONEBOT_ACCESS_TOKEN` | OneBot access token | `your_token` |");
+                    docs.push("| `ONEBOT_SECRET` | OneBot secret | `your_secret` |");
                 }
                 "telegram" => {
                     docs.push(
-                        "| `TELEGRAM_BOT_TOKEN` | Telegram bot token | `123456:ABC-DEF...` |"
-                            .to_string(),
+                        "| `TELEGRAM_BOT_TOKEN` | Telegram bot token | `123456:ABC-DEF...` |",
                     );
                 }
                 "discord" => {
-                    docs.push(
-                        "| `DISCORD_BOT_TOKEN` | Discord bot token | `your_token` |".to_string(),
-                    );
+                    docs.push("| `DISCORD_BOT_TOKEN` | Discord bot token | `your_token` |");
                 }
                 _ => {}
             }
