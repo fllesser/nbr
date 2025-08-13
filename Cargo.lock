@@ -1402,7 +1402,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "nb-cli"
+name = "nbr"
 version = "0.1.0"
 dependencies = [
  "anyhow",

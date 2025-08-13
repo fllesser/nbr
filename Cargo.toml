@@ -1,13 +1,13 @@
 [package]
-name = "nb-cli"
+name = "nbr"
 version = "0.1.0"
 edition = "2024"
-authors = ["NoneBot Team"]
+authors = ["fllesser <fllessive@gmail.com>"]
 description = "CLI for NoneBot2 - A Rust implementation"
 license = "MIT"
-repository = "https://github.com/nonebot/nb-cli-rust"
+repository = "https://github.com/nonebot/nbr"
 readme = "README.md"
-keywords = ["nonebot", "cli", "chatbot", "bot"]
+keywords = ["nonebot", "cli", "chatbot", "bot", "nbr"]
 categories = ["command-line-utilities"]
 
 [[bin]]
