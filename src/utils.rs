@@ -131,11 +131,10 @@ pub mod fs_utils {
             let path = entry.path();
 
             if path.is_file() {
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    if regex.is_match(filename) {
+                if let Some(filename) = path.file_name().and_then(|n| n.to_str())
+                    && regex.is_match(filename) {
                         matches.push(path);
                     }
-                }
             } else if path.is_dir() && recursive {
                 find_files_recursive(&path, regex, recursive, matches)?;
             }
@@ -301,7 +300,7 @@ pub mod net_utils {
             .get(url)
             .send()
             .await
-            .map_err(|e| NbrError::Network(e))?;
+            .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::unknown(format!(
@@ -334,10 +333,9 @@ pub mod net_utils {
 
         use futures_util::StreamExt;
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| NbrError::Network(e))?;
+            let chunk = chunk.map_err(NbrError::Network)?;
             file.write_all(&chunk).map_err(|e| {
-                NbrError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                NbrError::Io(std::io::Error::other(
                     format!("Failed to write to file: {}", e),
                 ))
             })?;
@@ -529,13 +527,12 @@ pub mod archive_utils {
                 fs::create_dir_all(&outpath)
                     .map_err(|e| NbrError::io(format!("Failed to create directory: {}", e)))?;
             } else {
-                if let Some(p) = outpath.parent() {
-                    if !p.exists() {
+                if let Some(p) = outpath.parent()
+                    && !p.exists() {
                         fs::create_dir_all(p).map_err(|e| {
                             NbrError::io(format!("Failed to create directory: {}", e))
                         })?;
                     }
-                }
 
                 let mut outfile = fs::File::create(&outpath)
                     .map_err(|e| NbrError::io(format!("Failed to create file: {}", e)))?;
@@ -618,7 +615,7 @@ pub mod git_utils {
             builder.branch(branch);
         }
 
-        builder.clone(url, path).map_err(|e| NbrError::git(e))?;
+        builder.clone(url, path).map_err(NbrError::git)?;
 
         info!("Repository cloned successfully");
         Ok(())
@@ -629,7 +626,7 @@ pub mod git_utils {
         let mut opts = RepositoryInitOptions::new();
         opts.bare(bare);
 
-        Repository::init_opts(path, &opts).map_err(|e| NbrError::git(e))?;
+        Repository::init_opts(path, &opts).map_err(NbrError::git)?;
 
         info!("Initialized Git repository at {:?}", path);
         Ok(())
@@ -642,9 +639,9 @@ pub mod git_utils {
 
     /// Get the current Git branch
     pub fn get_current_branch(repo_path: &Path) -> Result<String> {
-        let repo = Repository::open(repo_path).map_err(|e| NbrError::git(e))?;
+        let repo = Repository::open(repo_path).map_err(NbrError::git)?;
 
-        let head = repo.head().map_err(|e| NbrError::git(e))?;
+        let head = repo.head().map_err(NbrError::git)?;
 
         let branch_name = head
             .shorthand()

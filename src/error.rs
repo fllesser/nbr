@@ -111,8 +111,7 @@ impl NbrError {
 
     /// Create a new IO error
     pub fn io<S: Into<String>>(message: S) -> Self {
-        Self::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        Self::Io(std::io::Error::other(
             message.into(),
         ))
     }

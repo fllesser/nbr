@@ -336,8 +336,8 @@ impl EnvironmentChecker {
         let mut adapters = Vec::new();
 
         for package in packages {
-            if package.starts_with("nonebot-adapter-") {
-                if let Some((name, version)) = package.split_once("==") {
+            if package.starts_with("nonebot-adapter-")
+                && let Some((name, version)) = package.split_once("==") {
                     adapters.push(AdapterInfo {
                         name: name.to_string(),
                         version: version.to_string(),
@@ -346,7 +346,6 @@ impl EnvironmentChecker {
                         module_name: name.to_string(),
                     });
                 }
-            }
         }
 
         adapters
@@ -357,15 +356,14 @@ impl EnvironmentChecker {
         let mut plugins = Vec::new();
 
         for package in packages {
-            if package.starts_with("nonebot-plugin-") || package.starts_with("nonebot_plugin_") {
-                if let Some((name, version)) = package.split_once("==") {
+            if (package.starts_with("nonebot-plugin-") || package.starts_with("nonebot_plugin_"))
+                && let Some((name, version)) = package.split_once("==") {
                     plugins.push(PluginInfo {
                         name: name.to_string(),
                         version: version.to_string(),
                         location: "".to_string(), // Could be enhanced to show actual location
                     });
                 }
-            }
         }
 
         plugins
@@ -803,18 +801,15 @@ impl EnvironmentChecker {
             issues.push("Python 3.8+ is required for NoneBot2".to_string());
         } else {
             // Extract version number for more detailed check
-            if let Some(version_str) = env_info.python_info.version.split_whitespace().nth(1) {
-                if let Some(version_parts) = version_str.split('.').collect::<Vec<_>>().get(0..2) {
-                    if let (Ok(major), Ok(minor)) = (
+            if let Some(version_str) = env_info.python_info.version.split_whitespace().nth(1)
+                && let Some(version_parts) = version_str.split('.').collect::<Vec<_>>().get(0..2)
+                    && let (Ok(major), Ok(minor)) = (
                         version_parts[0].parse::<u32>(),
                         version_parts[1].parse::<u32>(),
-                    ) {
-                        if major < 3 || (major == 3 && minor < 8) {
+                    )
+                        && (major < 3 || (major == 3 && minor < 8)) {
                             issues.push("Python 3.8+ is recommended for NoneBot2".to_string());
                         }
-                    }
-                }
-            }
         }
 
         // Check if NoneBot is installed

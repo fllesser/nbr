@@ -89,10 +89,10 @@ impl BotRunner {
     fn setup_file_watcher(&mut self, tx: Sender<Event>) -> Result<()> {
         let mut watcher = RecommendedWatcher::new(
             move |res: notify::Result<Event>| {
-                if let Ok(event) = res {
-                    if let Err(e) = tx.send(event) {
-                        error!("Failed to send file watch event: {}", e);
-                    }
+                if let Ok(event) = res
+                    && let Err(e) = tx.send(event)
+                {
+                    error!("Failed to send file watch event: {}", e);
                 }
             },
             Config::default(),
@@ -124,11 +124,11 @@ impl BotRunner {
         tokio::spawn(async move {
             let _ = signal::ctrl_c().await;
             info!("Received interrupt signal, shutting down...");
-            if let Ok(mut process) = process_handle.lock() {
-                if let Some(mut child) = process.take() {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                }
+            if let Ok(mut process) = process_handle.lock()
+                && let Some(mut child) = process.take()
+            {
+                let _ = child.kill();
+                let _ = child.wait();
             }
             // sleep 2 second
             sleep(Duration::from_secs(2)).await;
@@ -273,21 +273,23 @@ impl BotRunner {
 
         // If no watch receiver, just wait for process to exit
         loop {
-            let mut process_guard = self.current_process.lock().unwrap();
-            if let Some(process) = process_guard.as_mut() {
-                match process.try_wait() {
-                    Ok(Some(_)) => return Ok(false),
-                    Ok(None) => {
-                        drop(process_guard);
-                        sleep(Duration::from_millis(100)).await;
-                    }
-                    Err(e) => {
-                        error!("Error checking process status: {}", e);
-                        return Ok(false);
-                    }
+            let should_sleep = {
+                let mut process_guard = self.current_process.lock().unwrap();
+                match process_guard.as_mut() {
+                    Some(process) => match process.try_wait() {
+                        Ok(Some(_)) => return Ok(false),
+                        Ok(None) => true, // 需要 sleep
+                        Err(e) => {
+                            error!("Error checking process status: {}", e);
+                            return Ok(false);
+                        }
+                    },
+                    None => return Ok(false),
                 }
-            } else {
-                return Ok(false);
+            };
+
+            if should_sleep {
+                sleep(Duration::from_millis(100)).await;
             }
         }
     }
@@ -298,31 +300,31 @@ impl BotRunner {
             EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
                 for path in &event.paths {
                     // Skip hidden files and directories
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if name.starts_with('.') {
-                            continue;
-                        }
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                        && name.starts_with('.')
+                    {
+                        continue;
                     }
 
                     // Skip ignored extensions
-                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                        if ignored_extensions.contains(extension) {
-                            continue;
-                        }
+                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str())
+                        && ignored_extensions.contains(extension)
+                    {
+                        continue;
                     }
 
                     // Skip ignored directories
-                    if let Some(path_str) = path.to_str() {
-                        if ignored_extensions.iter().any(|&ext| path_str.contains(ext)) {
-                            continue;
-                        }
+                    if let Some(path_str) = path.to_str()
+                        && ignored_extensions.iter().any(|&ext| path_str.contains(ext))
+                    {
+                        continue;
                     }
 
                     // Only reload for Python files or config files
-                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                        if matches!(extension, "py" | "toml" | "yaml" | "yml" | "json" | "env") {
-                            return true;
-                        }
+                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str())
+                        && matches!(extension, "py" | "toml" | "yaml" | "yml" | "json" | "env")
+                    {
+                        return true;
                     }
                 }
                 false

@@ -48,9 +48,9 @@ impl GenerateHandler {
         let bot_path = self.work_dir.join(filename);
 
         // Check if file already exists
-        if bot_path.exists() && !force {
-            if !Confirm::new()
-                .with_prompt(&format!("File '{}' already exists. Overwrite?", filename))
+        if bot_path.exists() && !force
+            && !Confirm::new()
+                .with_prompt(format!("File '{}' already exists. Overwrite?", filename))
                 .default(false)
                 .interact()
                 .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -58,7 +58,6 @@ impl GenerateHandler {
                 info!("File generation cancelled");
                 return Ok(());
             }
-        }
 
         // Select template
         let template = if let Some(template_name) = template_type {

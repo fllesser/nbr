@@ -142,18 +142,13 @@ impl ToolNonebot {
         self.save()
     }
 
-    pub fn remove_adapters(&mut self, module_names: Vec<String>) -> NbrResult<()> {
-        let module_names = module_names.into_iter().collect::<HashSet<String>>();
+    pub fn remove_adapters(&mut self, names: Vec<&str>) -> NbrResult<()> {
         let nonebot = self.nonebot_table_mut()?;
         let adapters_array = nonebot.get_mut("adapters").unwrap();
         let adapters_arr_mut = adapters_array.as_array_mut().unwrap();
-        for module_name in module_names {
-            adapters_arr_mut.retain(|a| {
-                a.as_inline_table().unwrap()["module_name"]
-                    .as_str()
-                    .unwrap()
-                    != module_name
-            });
+        for name in names {
+            adapters_arr_mut
+                .retain(|a| a.as_inline_table().unwrap()["name"].as_str().unwrap() != name);
         }
         self.save()
     }
