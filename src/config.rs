@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// Main configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// Global user configuration
     pub user: UserConfig,
@@ -189,34 +189,6 @@ pub struct AuthConfig {
     pub ssh_key: Option<PathBuf>,
 }
 
-/// Adapter information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AdapterInfo {
-    /// Adapter name
-    pub name: String,
-    /// Installed version
-    pub module_name: String,
-}
-
-/// Plugin information
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct PluginInfo {
-//     /// Plugin name
-//     pub name: String,
-//     /// Package name
-//     pub package_name: String,
-//     /// Module name
-//     pub module_name: String,
-//     /// Installed version
-//     pub version: String,
-//     /// Installation method (uv, git, local)
-//     pub install_method: String,
-//     /// Installation source
-//     pub source: String,
-//     /// Plugin type (builtin, external)
-//     pub plugin_type: String,
-// }
-
 impl Default for UserConfig {
     fn default() -> Self {
         Self {
@@ -288,74 +260,6 @@ impl Default for Config {
         }
     }
 }
-
-// impl TryFrom<&toml::Value> for NbConfig {
-//     type Error = NbrError;
-
-//     fn try_from(value: &toml::Value) -> Result<Self> {
-//         let table = value
-//             .as_table()
-//             .ok_or_else(|| NbrError::config("Expected table for project config"))?;
-
-//         let adapters = table
-//             .get("adapters")
-//             .and_then(|v| v.as_array())
-//             .map(|arr| {
-//                 arr.iter()
-//                     .filter_map(|v| v.as_str())
-//                     .map(|v| {
-//                         let adapter: Adapter = toml::from_str(v).unwrap();
-//                         adapter
-//                     })
-//                     .collect()
-//             })
-//             .unwrap_or_default();
-
-//         let plugins = table
-//             .get("plugins")
-//             .and_then(|v| v.as_array())
-//             .map(|arr| {
-//                 arr.iter()
-//                     .filter_map(|v| v.as_str())
-//                     .map(|name| name.to_string())
-//                     .collect()
-//             })
-//             .unwrap_or_default();
-
-//         let plugin_dirs = table
-//             .get("plugin_dirs")
-//             .and_then(|v| v.as_array())
-//             .map(|arr| {
-//                 arr.iter()
-//                     .filter_map(|v| v.as_str())
-//                     .map(|name| name.to_string())
-//                     .collect()
-//             })
-//             .unwrap_or_default();
-
-//         let builtin_plugins = table
-//             .get("builtin_plugins")
-//             .and_then(|v| v.as_array())
-//             .map(|arr| {
-//                 arr.iter()
-//                     .filter_map(|v| v.as_str())
-//                     .map(|name| name.to_string())
-//                     .collect()
-//             })
-//             .unwrap_or_default();
-
-//         Ok(NbConfig {
-//             tool: Tool {
-//                 nonebot: Nonebot {
-//                     adapters,
-//                     plugins,
-//                     plugin_dirs,
-//                     builtin_plugins,
-//                 },
-//             },
-//         })
-//     }
-// }
 
 /// Configuration manager
 pub struct ConfigManager {

@@ -13,7 +13,7 @@ use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::config::NbConfig;
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool};
+use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool, ToolNonebot};
 use crate::utils::terminal_utils;
 use crate::uv::Uv;
 
@@ -302,7 +302,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     // Generate files
     generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(&options)?;
-    generate_nb_config_file(&options)?;
+    // generate_nb_config_file(&options)?;
     generate_env_files(&options.output_dir)?;
     generate_readme_file(&options)?;
     generate_gitignore(&options.output_dir)?;
@@ -313,6 +313,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
+#[allow(unused)]
 fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
     let nb_config = NbConfig {
         tool: Tool {
@@ -393,14 +394,26 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         let adapter_dep = format!("{}>={}", adapter.project_link, adapter.version);
         dependencies.insert(adapter_dep);
     }
-    // for plugin in &options.plugins {
-    //     let plugin_dep = format!("{}>={}", plugin.project_link, plugin.version);
-    //     dependencies.insert(plugin_dep);
-    // }
+    // 补齐依赖
     pyproject.project.dependencies.extend(dependencies);
+    // 补齐内置插件
+    pyproject.tool.nonebot.builtin_plugins = options.plugins.clone();
 
-    let content = toml::to_string_pretty(&pyproject)?;
+    // 写入文件
+    let content = toml::to_string(&pyproject)?;
     fs::write(options.output_dir.join("pyproject.toml"), content)?;
+
+    let adapters = options
+        .adapters
+        .iter()
+        .map(|a| Adapter {
+            name: a.name.clone(),
+            module_name: a.module_name.clone(),
+        })
+        .collect();
+
+    ToolNonebot::parse(Some(options.output_dir.clone().join("pyproject.toml")))?
+        .add_adapters(adapters)?;
     Ok(())
 }
 
