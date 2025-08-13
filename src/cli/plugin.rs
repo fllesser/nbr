@@ -65,6 +65,26 @@ pub struct RegistryPlugin {
     pub skip_test: bool,
 }
 
+pub struct PyPIPlugin {
+    pub package_name: String,
+    pub module_name: String,
+    pub version: String,
+    
+    pub author: String,
+    pub homepage: Option<String>,
+    pub description: String,
+}
+
+pub struct GitRepoPlugin {
+    pub repo_url: String,
+    pub package_name: String,
+    pub module_name: String,
+
+    pub version: String,
+    pub author: String,
+    pub description: String,
+}
+
 /// Plugin manager
 pub struct PluginManager {
     /// Configuration manager
@@ -134,7 +154,6 @@ impl PluginManager {
         );
         Ok(())
     }
-
     /// Install a plugin
     pub async fn install_plugin(
         &mut self,
@@ -213,7 +232,7 @@ impl PluginManager {
         Uv::remove(&package_name, Some(&self.work_dir)).await?;
 
         // PyProjectConfig::remove_plugin(&module_name).await?;
-        self.remove_plugin_from_config(&registry_plugin.module_name.to_string())
+        self.remove_plugin_in_config(&registry_plugin.module_name.to_string())
             .await?;
 
         println!(
@@ -640,7 +659,7 @@ impl PluginManager {
     }
 
     /// Remove plugin from configuration
-    async fn remove_plugin_from_config(&mut self, name: &str) -> Result<()> {
+    async fn remove_plugin_in_config(&mut self, name: &str) -> Result<()> {
         self.config_manager.update_nb_config(|nb_config| {
             nb_config.tool.nonebot.plugins.retain(|p| p != name);
         })?;
