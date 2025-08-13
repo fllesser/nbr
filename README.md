@@ -31,7 +31,7 @@ pip install uv
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/nbr.git
+git clone https://github.com/fllesser/nbr.git
 cd nbr
 
 # Build the project
@@ -46,57 +46,54 @@ cargo install --path .
 ### Project Management
 
 ```bash
-# Initialize a new NoneBot2 project
-nbrinit my-bot
+# # Initialize a new NoneBot2 project 暂不可用
+# nbr init my-bot 
 
 # Create project files
-nbrcreate
+nbr create
 
 # Run the bot
-nbrrun
+nbr run
 ```
 
 ### Plugin Management
 
 ```bash
 # Install a plugin
-nbrplugin install nonebot-plugin-echo
+nbr plugin install nonebot-plugin-emojilike
 
 # Install with specific index
-nbrplugin install nonebot-plugin-echo --index https://pypi.org/simple/
+nbr plugin install nonebot-plugin-emojilike --index https://pypi.org/simple/
 
 # Uninstall a plugin
-nbrplugin uninstall nonebot-plugin-echo
+nbr plugin uninstall nonebot-plugin-emojilike
 
 # List installed plugins
-nbrplugin list
+nbr plugin list
 
 # Update plugins
-nbrplugin update
+nbr plugin update <plugin> or --all
 ```
 
 ### Adapter Management
 
 ```bash
 # Install an adapter
-nbradapter install nonebot2[fastapi]
+nbr adapter install nonebot-adapter-onebot
 
 # Uninstall an adapter
-nbradapter uninstall fastapi
+nbr adapter uninstall fastapi
 
 # List available adapters
-nbradapter list
+nbr adapter list
 ```
 
 ### Environment Management
 
 ```bash
 # Check environment status
-nbrenv
+nbr env
 
-# Generate code templates
-nbrgenerate plugin my-plugin
-nbrgenerate adapter my-adapter
 ```
 
 ## 🔄 Migration from pip
@@ -123,7 +120,7 @@ See [Migration Documentation](docs/pip-to-uv-migration.md) for detailed informat
 
 ```bash
 # Clone and enter directory
-git clone https://github.com/your-org/nbr.git
+git clone https://github.com/fllesser/nbr.git
 cd nbr
 
 # Install development dependencies
@@ -185,7 +182,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/nbr/issues)
+- **Issues**: [GitHub Issues](https://github.com/fllesser/nbr/issues)
 - **Documentation**: [docs/](docs/)
 - **NoneBot Community**: [NoneBot Documentation](https://v2.nonebot.dev/)
 
