@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
@@ -38,27 +38,33 @@ pub struct ProjectOptions {
     pub plugins: Vec<String>,
 }
 
-pub fn display_project_options(options: &ProjectOptions) {
-    println!("\n{}", "Nonebot project options:".bright_green());
-    println!("  name: {}", options.name.bright_blue());
-    println!("  template: {}", options.template.bright_blue());
-    println!("  output_dir: {}", options.output_dir.display().to_string().bright_blue());
-    let adapters = options
-        .adapters
-        .iter()
-        .map(|a| a.name.clone())
-        .collect::<Vec<_>>();
-    println!("  adapters: {}", adapters.join(", ").bright_blue());
-    println!("  plugins: {}", options.plugins.join(", ").bright_blue());
+impl ProjectOptions {
+    pub fn display(&self) {
+        println!("\n{}", "Nonebot project options:".bright_green());
+        println!("  name: {}", self.name.bright_blue());
+        println!("  template: {}", self.template.bright_blue());
+        println!(
+            "  output_dir: {}",
+            self.output_dir.display().to_string().bright_blue()
+        );
+        let adapters = self
+            .adapters
+            .iter()
+            .map(|a| a.name.clone())
+            .collect::<Vec<_>>();
+        println!("  adapters: {}", adapters.join(", ").bright_blue());
+        println!("  plugins: {}", self.plugins.join(", ").bright_blue());
+    }
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("{}", "🎉 Creating NoneBot project...".bright_green());
 
-    let adapter_manager = AdapterManager::new().await?;
+    let adapter_manager = AdapterManager::new()?;
 
     let options = gather_project_options(matches, &adapter_manager).await?;
-    display_project_options(&options);
+
+    options.display();
 
     // Check if directory already exists
     if options.output_dir.exists() && !options.force {
@@ -84,7 +90,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("📂 Location: {}", options.output_dir.display());
     println!("\n🚀 Next steps:");
     println!("  cd {}", options.name);
-    println!("  nbuv run");
+    println!("  nbr run");
 
     // Show additional setup instructions
     // show_setup_instructions(&options).await?;
@@ -270,10 +276,6 @@ async fn get_template_info(name: &str) -> Result<Template> {
 }
 
 async fn create_project(options: &ProjectOptions) -> Result<()> {
-    info!(
-        "Creating project directory: {}",
-        options.output_dir.display()
-    );
     fs::create_dir_all(&options.output_dir).context("Failed to create output directory")?;
 
     match options.template.as_str() {

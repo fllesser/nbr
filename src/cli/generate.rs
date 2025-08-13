@@ -10,7 +10,6 @@ use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Select};
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::path::PathBuf;
 use tracing::info;
@@ -29,11 +28,9 @@ pub struct GenerateHandler {
 impl GenerateHandler {
     /// Create a new generate handler
     pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
+        let config_manager = ConfigManager::new()?;
 
-        let work_dir = env::current_dir()
-            .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        let work_dir = config_manager.current_dir().to_path_buf();
 
         Ok(Self {
             config_manager,
@@ -183,15 +180,15 @@ impl GenerateHandler {
         match template {
             "general" => {
                 println!("  1. Install dependencies: uv sync");
-                println!("  2. Run your bot: nbuv run");
+                println!("  2. Run your bot: nbr run");
             }
             "advanced" => {
                 println!("  1. Install dependencies: uv sync");
-                println!("  2. Run your bot: nbuv run");
+                println!("  2. Run your bot: nbr run");
             }
             "production" => {
                 println!("  1. Install dependencies: uv sync");
-                println!("  2. Run your bot: nbuv run");
+                println!("  2. Run your bot: nbr run");
             }
             _ => {}
         }

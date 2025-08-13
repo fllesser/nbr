@@ -413,19 +413,15 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
 
     let reload = matches.get_flag("reload");
     // Load configuration
-    let mut config_manager = ConfigManager::new()?;
-    config_manager.load().await?;
-    let config = config_manager.config();
+    let config_manager = ConfigManager::new()?;
 
-    // Determine working directory
-    let work_dir = env::current_dir()
-        .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+    let work_dir = config_manager.current_dir().to_path_buf();
 
     // Find bot file
     let bot_file_path = find_bot_file(&work_dir, bot_file)?;
 
     // Find Python executable
-    let python_path = find_python_executable(config)?;
+    let python_path = find_python_executable(config_manager.config())?;
 
     // Verify Python environment
     // verify_python_environment(&python_path).await?;

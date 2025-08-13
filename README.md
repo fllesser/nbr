@@ -47,56 +47,56 @@ cargo install --path .
 
 ```bash
 # Initialize a new NoneBot2 project
-nb-cli init my-bot
+nbrinit my-bot
 
 # Create project files
-nb-cli create
+nbrcreate
 
 # Run the bot
-nb-cli run
+nbrrun
 ```
 
 ### Plugin Management
 
 ```bash
 # Install a plugin
-nb-cli plugin install nonebot-plugin-echo
+nbrplugin install nonebot-plugin-echo
 
 # Install with specific index
-nb-cli plugin install nonebot-plugin-echo --index https://pypi.org/simple/
+nbrplugin install nonebot-plugin-echo --index https://pypi.org/simple/
 
 # Uninstall a plugin
-nb-cli plugin uninstall nonebot-plugin-echo
+nbrplugin uninstall nonebot-plugin-echo
 
 # List installed plugins
-nb-cli plugin list
+nbrplugin list
 
 # Update plugins
-nb-cli plugin update
+nbrplugin update
 ```
 
 ### Adapter Management
 
 ```bash
 # Install an adapter
-nb-cli adapter install nonebot2[fastapi]
+nbradapter install nonebot2[fastapi]
 
 # Uninstall an adapter
-nb-cli adapter uninstall fastapi
+nbradapter uninstall fastapi
 
 # List available adapters
-nb-cli adapter list
+nbradapter list
 ```
 
 ### Environment Management
 
 ```bash
 # Check environment status
-nb-cli env
+nbrenv
 
 # Generate code templates
-nb-cli generate plugin my-plugin
-nb-cli generate adapter my-adapter
+nbrgenerate plugin my-plugin
+nbrgenerate adapter my-adapter
 ```
 
 ## 🔄 Migration from pip
@@ -181,7 +181,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [NoneBot2](https://github.com/nonebot/nonebot2) - The original NoneBot framework
 - [uv](https://github.com/astral-sh/uv) - Fast Python package installer
-- Original nb-cli Python implementation
+- Original nbrPython implementation
 
 ## 📞 Support
 

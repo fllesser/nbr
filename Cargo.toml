@@ -11,7 +11,7 @@ keywords = ["nonebot", "cli", "chatbot", "bot"]
 categories = ["command-line-utilities"]
 
 [[bin]]
-name = "nbuv"
+name = "nbr"
 path = "src/main.rs"
 
 [dependencies]
@@ -109,6 +109,7 @@ futures-util = "0.3"
 # URL encoding
 urlencoding = "2.1"
 erased-serde = "0.4.6"
+toml_edit = "0.23.3"
 
 [dev-dependencies]
 tempfile = "3.8"

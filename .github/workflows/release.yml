@@ -54,6 +54,6 @@ jobs:
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
-          executable-name: nbuv
+          executable-name: nbr
           # 添加 tag 到 target
           target: ${{ matrix.platform.target }}

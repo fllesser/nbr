@@ -81,14 +81,12 @@ pub struct PluginManager {
 
 impl PluginManager {
     /// Create a new plugin manager
-    pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
+    pub fn new() -> Result<Self> {
+        let config_manager = ConfigManager::new()?;
         let config = config_manager.config();
 
         let python_path = find_python_executable(config)?;
-        let work_dir = env::current_dir()
-            .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        let work_dir = config_manager.current_dir().to_path_buf();
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -217,7 +215,7 @@ impl PluginManager {
         // PyProjectConfig::remove_plugin(&module_name).await?;
         self.remove_plugin_from_config(&registry_plugin.module_name.to_string())
             .await?;
-        
+
         println!(
             "{} Successfully uninstalled plugin: {}",
             "✓".bright_green(),
@@ -239,16 +237,20 @@ impl PluginManager {
             .filter_map(|module| registry_plugins.get(module.as_str()).cloned())
             .collect();
 
+        println!("{}", "Installed Plugins:".bright_green().bold());
+
         for plugin in plugins {
             let installed_version = self
                 .get_installed_package_version(&plugin.project_link)
                 .await?;
+
             let mut plugin_display = format!(
                 "  {} {} {}",
                 "•".bright_blue(),
                 plugin.project_link.bright_white(),
                 format!("v{}", installed_version).bright_green(),
             );
+
             if installed_version != plugin.version {
                 plugin_display += format!(" (available: {})", plugin.version)
                     .bright_yellow()
@@ -330,11 +332,12 @@ impl PluginManager {
 
         println!("{}", "Checking for plugin updates...".bright_blue());
 
+        // registry plugins, installed plugins
         let mut outdated_plugins = Vec::new();
         let pb = ProgressBar::new(plugin_modules.len() as u64);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] Checking {pos}/{len} plugins...")
+                .template("{spinner:.green} Checking {pos}/{len} plugins...")
                 .unwrap(),
         );
 
@@ -354,7 +357,7 @@ impl PluginManager {
             let latest_version = latest_version.unwrap_or(plugin.version.clone());
 
             if installed_version != latest_version {
-                outdated_plugins.push((*plugin, latest_version.clone()));
+                outdated_plugins.push((*plugin, installed_version.clone()));
             }
 
             pb.inc(1);
@@ -372,13 +375,13 @@ impl PluginManager {
             outdated_plugins.len().to_string().bright_yellow()
         );
 
-        for (plugin, latest_version) in &outdated_plugins {
+        for (plugin, installed_version) in &outdated_plugins {
             println!(
                 "  {} {} {} → {}",
                 "•".bright_blue(),
                 plugin.project_link.bright_white(),
-                plugin.version.red(),
-                latest_version.bright_green()
+                installed_version.red(),
+                plugin.version.bright_green()
             );
         }
 
@@ -633,7 +636,7 @@ impl PluginManager {
             }
         })?;
 
-        self.config_manager.save().await
+        self.config_manager.save()
     }
 
     /// Remove plugin from configuration
@@ -642,26 +645,7 @@ impl PluginManager {
             nb_config.tool.nonebot.plugins.retain(|p| p != name);
         })?;
 
-        self.config_manager.save().await
-    }
-
-    /// Refresh plugin information
-    async fn refresh_plugin_info(&mut self) -> Result<()> {
-        let config = self.config_manager.config();
-
-        let mut updated_plugins = Vec::new();
-
-        for plugin in &config.nb_config.tool.nonebot.plugins {
-            updated_plugins.push(plugin.clone());
-        }
-
-        self.config_manager.update_nb_config(|nb_config| {
-            nb_config.tool.nonebot.plugins = updated_plugins;
-        })?;
-
-        self.config_manager.save().await?;
-
-        Ok(())
+        self.config_manager.save()
     }
 
     /// Display plugin information
@@ -734,7 +718,7 @@ impl PluginManager {
 
 /// Handle the plugin command
 pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
-    let mut plugin_manager = PluginManager::new().await?;
+    let mut plugin_manager = PluginManager::new()?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -840,7 +824,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
-        let plugin_manager = PluginManager::new().await.unwrap();
+        let plugin_manager = PluginManager::new().unwrap();
         let plugins = plugin_manager.package_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
             println!(
@@ -854,7 +838,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_registry_plugin() {
-        let plugin_manager = PluginManager::new().await.unwrap();
+        let plugin_manager = PluginManager::new().unwrap();
         let plugin = plugin_manager
             .get_registry_plugin("nonebot-plugin-status")
             .await

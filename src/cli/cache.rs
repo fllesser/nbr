@@ -94,8 +94,7 @@ pub struct CacheManager {
 impl CacheManager {
     /// Create a new cache manager
     pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
+        let config_manager = ConfigManager::new()?;
 
         let cache_dir = config_manager.cache_dir().to_path_buf();
         fs_utils::ensure_dir(&cache_dir)?;

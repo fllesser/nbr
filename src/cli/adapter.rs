@@ -94,12 +94,10 @@ pub struct AdapterManager {
 
 impl AdapterManager {
     /// Create a new adapter manager
-    pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
-        let config = config_manager.config();
+    pub fn new() -> Result<Self> {
+        let config_manager = ConfigManager::new()?;
 
-        let python_path = find_python_executable(config)?;
+        let python_path = find_python_executable(config_manager.config())?;
         let work_dir = env::current_dir()
             .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
 
@@ -258,20 +256,17 @@ impl AdapterManager {
 
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
-        if show_all {
-            println!("{}", "All Adapters:".bright_green().bold());
-        } else {
-            println!("{}", "Installed Adapters:".bright_green().bold());
-        }
         let config = self.config_manager.config();
         let installed_adapters = &config.nb_config.tool.nonebot.adapters;
 
         let adapters_map = self.fetch_regsitry_adapters().await?;
         if show_all {
+            println!("{}", "All Adapters:".bright_green().bold());
             adapters_map.iter().for_each(|(_, adapter)| {
                 self.display_adapter(adapter);
             });
         } else {
+            println!("{}", "Installed Adapters:".bright_green().bold());
             installed_adapters.iter().for_each(|ia| {
                 let adapter = adapters_map.get(ia.name.as_str()).unwrap();
                 self.display_adapter(adapter);
@@ -386,7 +381,7 @@ impl AdapterManager {
             nb_config.tool.nonebot.adapters.push(adapter);
         })?;
 
-        self.config_manager.save().await
+        self.config_manager.save()
     }
 
     /// Remove adapter from configuration
@@ -395,7 +390,7 @@ impl AdapterManager {
             nb_config.tool.nonebot.adapters.retain(|a| a.name != name);
         })?;
 
-        self.config_manager.save().await
+        self.config_manager.save()
     }
 
     /// Display adapter information
@@ -449,7 +444,7 @@ impl AdapterManager {
 
 /// Handle the adapter command
 pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
-    let mut adapter_manager = AdapterManager::new().await?;
+    let mut adapter_manager = AdapterManager::new()?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -509,7 +504,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_regsitry_adapters() {
-        let manager = AdapterManager::new().await.unwrap();
+        let manager = AdapterManager::new().unwrap();
         let adapters_map = manager.fetch_regsitry_adapters().await.unwrap();
         assert!(adapters_map.len() > 0);
         for adapter in adapters_map.values() {

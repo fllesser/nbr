@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn test_verbose_level() {
         let cmd = build_cli();
-        let matches = cmd.get_matches_from(vec!["nbuv", "--verbose"]);
+        let matches = cmd.get_matches_from(vec!["nbr", "--verbose"]);
         let verbose_level = matches.get_count("verbose");
 
         setup_logging(verbose_level, false).unwrap();

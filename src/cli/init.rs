@@ -10,7 +10,7 @@ use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Input, MultiSelect};
 use std::collections::HashMap;
-use std::env;
+
 use std::fs;
 use std::path::PathBuf;
 use tracing::{debug, info, warn};
@@ -73,11 +73,8 @@ impl Default for InitOptions {
 impl InitHandler {
     /// Create a new init handler
     pub async fn new(force: bool) -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
-
-        let work_dir = env::current_dir()
-            .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        let config_manager = ConfigManager::new()?;
+        let work_dir = config_manager.current_dir().to_path_buf();
 
         let mut options = InitOptions::default();
         options.force = force;
@@ -1244,10 +1241,7 @@ networks:
         self.config_manager
             .update_nb_config(|config| *config = NbConfig::default())?;
 
-        self.config_manager.save().await?;
-
-        info!("Project configuration saved");
-        Ok(())
+        self.config_manager.save()
     }
 
     /// Show completion message
