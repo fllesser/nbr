@@ -14,7 +14,6 @@ use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 use crate::config::NbConfig;
 use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool, ToolNonebot};
-use crate::utils::terminal_utils;
 use crate::uv::Uv;
 
 #[allow(unused)]
@@ -141,15 +140,10 @@ async fn gather_project_options(
 
     let force = matches.get_flag("force");
 
-    // Get template info and let user select adapters/plugins
-    let template = get_template_info(&template_name).await?;
-    let (adapters, plugins) = select_components(&template, adapter_manager).await?;
-
-    let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
-    let adapters = adapters
-        .iter()
-        .map(|a| registry_adapters.get(a).unwrap().clone())
-        .collect();
+    // 选择适配器
+    let adapters = adapter_manager.select_adapter().await?;
+    // 选择内置插件
+    let plugins = select_builtin_plugins()?;
 
     Ok(ProjectOptions {
         name: project_name,
@@ -184,53 +178,18 @@ async fn select_template() -> Result<String> {
     Ok(templates[selection].name.clone())
 }
 
-async fn select_components(
-    _template: &Template,
-    adapter_manager: &AdapterManager,
-) -> Result<(Vec<String>, Vec<String>)> {
-    // Select adapters
-    let spinner = terminal_utils::create_spinner(&format!("Fetching adapters from registry..."));
-    let registry_adapters = adapter_manager.fetch_regsitry_adapters().await?;
-    spinner.finish_and_clear();
-
-    let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
-    adapter_names.sort();
-
-    let selected_adapters = if !adapter_names.is_empty() {
-        println!("\n{}\n", "🔌 Select adapters to install:".bright_cyan());
-        let selections = MultiSelect::new()
-            .with_prompt("Adapters")
-            .items(&adapter_names)
-            //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
-            .interact()
-            .map_err(|e| NbrError::io(e.to_string()))?;
-
-        selections
-            .into_iter()
-            .map(|i| adapter_names[i].to_string())
-            .collect()
-    } else {
-        vec!["OneBot V11".to_string()] // Default adapter
-    };
-
+fn select_builtin_plugins() -> Result<Vec<String>> {
     let builtin_plugins = vec!["echo", "single_session"];
-
-    println!(
-        "\n{}\n",
-        "📦 Select builtin plugins to install:".bright_cyan()
-    );
-
     let selected_plugins = MultiSelect::new()
         .with_prompt("Plugins (recommended)")
         .items(&builtin_plugins)
-        .defaults(&vec![true; adapter_names.len().min(1)])
+        .defaults(&vec![true; builtin_plugins.len().min(1)])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?
         .into_iter()
         .map(|i| builtin_plugins[i].to_string())
         .collect();
-
-    Ok((selected_adapters, selected_plugins))
+    Ok(selected_plugins)
 }
 
 async fn get_available_templates() -> Result<Vec<Template>> {
@@ -265,14 +224,6 @@ async fn get_available_templates() -> Result<Vec<Template>> {
     debug!("Available templates: {:?}", templates);
 
     Ok(templates)
-}
-
-async fn get_template_info(name: &str) -> Result<Template> {
-    let templates = get_available_templates().await?;
-    templates
-        .into_iter()
-        .find(|t| t.name == name)
-        .ok_or_else(|| NbrError::not_found(format!("Template '{}' not found", name)))
 }
 
 async fn create_project(options: &ProjectOptions) -> Result<()> {

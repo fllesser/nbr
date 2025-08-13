@@ -33,7 +33,7 @@ impl Uv {
     }
 
     pub async fn add(
-        package: &str,
+        packages: Vec<&str>,
         upgrade: bool,
         index_url: Option<&str>,
         working_dir: Option<&Path>,
@@ -49,9 +49,10 @@ impl Uv {
             args.push(index);
         }
 
-        args.push(package);
+        args.extend(packages.clone());
 
-        let spinner = terminal_utils::create_spinner(&format!("Installing {}...", package));
+        let spinner =
+            terminal_utils::create_spinner(&format!("Installing {}...", packages.join(", ")));
 
         let output = process_utils::execute_command_with_output(
             "uv",
@@ -82,15 +83,20 @@ impl Uv {
     }
 
     pub async fn reinstall(package: &str, working_dir: Option<&Path>) -> Result<()> {
-        Self::remove(package, working_dir).await?;
-        Self::add(package, false, None, working_dir).await
+        Self::remove(vec![package], working_dir).await?;
+        Self::add(vec![package], false, None, working_dir).await
     }
 
-    pub async fn remove(package: &str, working_dir: Option<&Path>) -> Result<()> {
-        let spinner = terminal_utils::create_spinner(&format!("Removing {}...", package));
+    pub async fn remove(packages: Vec<&str>, working_dir: Option<&Path>) -> Result<()> {
+        let spinner =
+            terminal_utils::create_spinner(&format!("Removing {}...", packages.join(", ")));
+
+        let mut args = vec!["remove"];
+        args.extend(packages.clone());
+
         let output = process_utils::execute_command_with_output(
             "uv",
-            &["remove", package],
+            &args,
             working_dir,
             300, // 5 minutes timeout
         )
@@ -111,6 +117,14 @@ impl Uv {
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         Ok(stdout.to_string())
+    }
+
+    pub async fn list(working_dir: Option<&Path>) -> Result<Vec<String>> {
+        let output =
+            process_utils::execute_command_with_output("uv", &["pip", "list"], working_dir, 30)
+                .await?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.lines().map(|line| line.to_string()).collect())
     }
 
     pub async fn get_installed_version(

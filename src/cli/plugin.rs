@@ -137,7 +137,7 @@ impl PluginManager {
         debug!("Installing unofficial plugin: {}", package_name);
 
         // Install the plugin
-        Uv::add(package_name, false, None, Some(&self.work_dir)).await?;
+        Uv::add(vec![package_name], false, None, Some(&self.work_dir)).await?;
         let module_name = package_name.replace("-", "_");
 
         // Add to configuration
@@ -183,7 +183,13 @@ impl PluginManager {
             return Ok(());
         }
         // Install the plugin
-        Uv::add(&package_name, upgrade, index_url, Some(&self.work_dir)).await?;
+        Uv::add(
+            vec![&package_name],
+            upgrade,
+            index_url,
+            Some(&self.work_dir),
+        )
+        .await?;
 
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![registry_plugin.module_name.clone()])?;
@@ -225,7 +231,7 @@ impl PluginManager {
         }
 
         // Uninstall the package
-        Uv::remove(&package_name, Some(&self.work_dir)).await?;
+        Uv::remove(vec![&package_name], Some(&self.work_dir)).await?;
 
         ToolNonebot::parse(None)?.remove_plugins(vec![registry_plugin.module_name.clone()])?;
         // self.remove_plugin_in_config(&registry_plugin.module_name.to_string())
@@ -413,7 +419,7 @@ impl PluginManager {
 
         // Update plugins
         for (plugin, _) in &outdated_plugins {
-            match Uv::add(&plugin.project_link, true, None, Some(&self.work_dir)).await {
+            match Uv::add(vec![&plugin.project_link], true, None, Some(&self.work_dir)).await {
                 Ok(_) => {
                     println!(
                         "{} Updated {}",
@@ -478,7 +484,7 @@ impl PluginManager {
             "{} >= {}",
             registry_plugin.project_link, registry_plugin.version
         );
-        Uv::add(&plugin_deps_str, true, None, Some(&self.work_dir)).await?;
+        Uv::add(vec![&plugin_deps_str], true, None, Some(&self.work_dir)).await?;
 
         println!(
             "{} Successfully updated plugin: {}",
