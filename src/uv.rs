@@ -19,7 +19,7 @@ impl Uv {
 
     pub async fn sync(working_dir: Option<&Path>) -> Result<()> {
         let args = vec!["sync"];
-        let spinner = terminal_utils::create_spinner(&format!("Installing dependencies..."));
+        let spinner = terminal_utils::create_spinner(&"Installing dependencies...".to_string());
         let output = process_utils::execute_command_with_output(
             "uv",
             &args,

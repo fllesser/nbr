@@ -89,11 +89,10 @@ impl BotRunner {
     fn setup_file_watcher(&mut self, tx: Sender<Event>) -> Result<()> {
         let mut watcher = RecommendedWatcher::new(
             move |res: notify::Result<Event>| {
-                if let Ok(event) = res {
-                    if let Err(e) = tx.send(event) {
+                if let Ok(event) = res
+                    && let Err(e) = tx.send(event) {
                         error!("Failed to send file watch event: {}", e);
                     }
-                }
             },
             Config::default(),
         )
@@ -124,12 +123,11 @@ impl BotRunner {
         tokio::spawn(async move {
             let _ = signal::ctrl_c().await;
             info!("Received interrupt signal, shutting down...");
-            if let Ok(mut process) = process_handle.lock() {
-                if let Some(mut child) = process.take() {
+            if let Ok(mut process) = process_handle.lock()
+                && let Some(mut child) = process.take() {
                     let _ = child.kill();
                     let _ = child.wait();
                 }
-            }
             // sleep 2 second
             sleep(Duration::from_secs(2)).await;
             std::process::exit(0);
@@ -298,32 +296,28 @@ impl BotRunner {
             EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
                 for path in &event.paths {
                     // Skip hidden files and directories
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if name.starts_with('.') {
+                    if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                        && name.starts_with('.') {
                             continue;
                         }
-                    }
 
                     // Skip ignored extensions
-                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                        if ignored_extensions.contains(extension) {
+                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str())
+                        && ignored_extensions.contains(extension) {
                             continue;
                         }
-                    }
 
                     // Skip ignored directories
-                    if let Some(path_str) = path.to_str() {
-                        if ignored_extensions.iter().any(|&ext| path_str.contains(ext)) {
+                    if let Some(path_str) = path.to_str()
+                        && ignored_extensions.iter().any(|&ext| path_str.contains(ext)) {
                             continue;
                         }
-                    }
 
                     // Only reload for Python files or config files
-                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str()) {
-                        if matches!(extension, "py" | "toml" | "yaml" | "yml" | "json" | "env") {
+                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str())
+                        && matches!(extension, "py" | "toml" | "yaml" | "yml" | "json" | "env") {
                             return true;
                         }
-                    }
                 }
                 false
             }

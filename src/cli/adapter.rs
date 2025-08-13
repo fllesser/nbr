@@ -67,7 +67,7 @@ impl AdapterManager {
             .timeout(Duration::from_secs(30))
             .user_agent("nbr")
             .build()
-            .map_err(|e| NbrError::Network(e))?;
+            .map_err(NbrError::Network)?;
 
         Ok(Self {
             client,
@@ -88,7 +88,7 @@ impl AdapterManager {
         )
         .await
         .map_err(|_| NbrError::unknown("Request timeout"))?
-        .map_err(|e| NbrError::Network(e))?;
+        .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::not_found("Adapter registry not found"));
@@ -110,7 +110,7 @@ impl AdapterManager {
 
     pub async fn select_adapter(&self) -> Result<Vec<RegistryAdapter>> {
         let spinner =
-            terminal_utils::create_spinner(&format!("Fetching adapters from registry..."));
+            terminal_utils::create_spinner(&"Fetching adapters from registry...".to_string());
         let registry_adapters = self.fetch_regsitry_adapters().await?;
         spinner.finish_and_clear();
 
@@ -276,8 +276,7 @@ impl AdapterManager {
             "{} Successfully uninstalled adapters: {}",
             "✓".bright_green(),
             selected_adapters
-                .iter()
-                .map(|a| a.clone())
+                .iter().cloned()
                 .collect::<Vec<String>>()
                 .join(", ")
         );

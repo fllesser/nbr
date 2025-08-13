@@ -104,7 +104,7 @@ impl PluginManager {
             .timeout(Duration::from_secs(30))
             .user_agent("nbr")
             .build()
-            .map_err(|e| NbrError::Network(e))?;
+            .map_err(NbrError::Network)?;
 
         Ok(Self {
             client,
@@ -171,7 +171,7 @@ impl PluginManager {
         }
 
         // Show plugin information if available
-        self.display_plugin_info(&registry_plugin);
+        self.display_plugin_info(registry_plugin);
 
         if !Confirm::new()
             .with_prompt("Do you want to install this plugin?")
@@ -218,7 +218,7 @@ impl PluginManager {
         }
         // Confirm uninstallation
         if !Confirm::new()
-            .with_prompt(&format!(
+            .with_prompt(format!(
                 "Are you sure you want to uninstall '{}'?",
                 package_name
             ))
@@ -503,7 +503,7 @@ impl PluginManager {
         let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
             .await
             .map_err(|_| NbrError::unknown("Request timeout"))?
-            .map_err(|e| NbrError::Network(e))?;
+            .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::not_found(format!(
@@ -512,7 +512,7 @@ impl PluginManager {
             )));
         }
 
-        let json: serde_json::Value = response.json().await.map_err(|e| NbrError::Network(e))?;
+        let json: serde_json::Value = response.json().await.map_err(NbrError::Network)?;
 
         json.get("info")
             .and_then(|info| info.get("version"))
@@ -533,7 +533,7 @@ impl PluginManager {
         )
         .await
         .map_err(|_| NbrError::unknown("Request timeout"))?
-        .map_err(|e| NbrError::Network(e))?;
+        .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::not_found("Plugin registry not found"));
@@ -736,11 +736,10 @@ pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
 /// Find Python executable
 fn find_python_executable(config: &crate::config::Config) -> Result<String> {
     // Use configured Python path if available
-    if let Some(ref python_path) = config.user.python_path {
-        if std::path::Path::new(python_path).exists() {
+    if let Some(ref python_path) = config.user.python_path
+        && std::path::Path::new(python_path).exists() {
             return Ok(python_path.clone());
         }
-    }
 
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()

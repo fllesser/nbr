@@ -167,11 +167,10 @@ impl InitHandler {
             let path = entry.path();
 
             // Ignore hidden files and common directories
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.starts_with('.') || name == "__pycache__" {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && (name.starts_with('.') || name == "__pycache__") {
                     continue;
                 }
-            }
 
             file_count += 1;
         }
@@ -266,16 +265,14 @@ impl InitHandler {
 
     /// Select adapters to install
     fn select_adapters(&mut self) -> Result<()> {
-        let available_adapters = vec![
-            "console",
+        let available_adapters = ["console",
             "onebot-v11",
             "onebot-v12",
             "telegram",
             "discord",
             "dingtalk",
             "feishu",
-            "kaiheila",
-        ];
+            "kaiheila"];
 
         let descriptions = vec![
             "Console adapter for testing",
@@ -307,7 +304,7 @@ impl InitHandler {
 
     /// Select plugins to install
     fn select_plugins(&mut self) -> Result<()> {
-        let common_plugins = vec!["echo", "help", "manager", "status", "reload"];
+        let common_plugins = ["echo", "help", "manager", "status", "reload"];
 
         let descriptions = vec![
             "Echo plugin for testing",
@@ -779,7 +776,7 @@ line_length = 88
             dependencies = dependencies.join("\n")
         );
 
-        template_utils::render_template(&template, &context).unwrap_or_else(|_| template)
+        template_utils::render_template(&template, &context).unwrap_or(template)
     }
 
     /// Generate requirements.txt content
@@ -911,7 +908,7 @@ This project is licensed under the MIT License.
             self.generate_config_documentation()
         );
 
-        template_utils::render_template(&template, &context).unwrap_or_else(|_| template)
+        template_utils::render_template(&template, &context).unwrap_or(template)
     }
 
     /// Generate configuration documentation
