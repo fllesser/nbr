@@ -252,6 +252,11 @@ impl PluginManager {
             .filter_map(|module| registry_plugins.get(module.as_str()).cloned())
             .collect();
 
+        if plugins.is_empty() {
+            println!("{}", "No plugins installed.".bright_yellow());
+            return Ok(());
+        }
+
         println!("{}", "Installed Plugins:".bright_green().bold());
 
         for plugin in plugins {

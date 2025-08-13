@@ -302,7 +302,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     // Generate files
     generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(&options)?;
-    generate_nb_config_file(&options)?;
+    // generate_nb_config_file(&options)?;
     generate_env_files(&options.output_dir)?;
     generate_readme_file(&options)?;
     generate_gitignore(&options.output_dir)?;
@@ -313,6 +313,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
+#[allow(unused)]
 fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
     let nb_config = NbConfig {
         tool: Tool {

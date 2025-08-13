@@ -225,6 +225,11 @@ impl AdapterManager {
                 self.display_adapter(adapter);
             });
         } else {
+            if nonebot.adapters.is_empty() {
+                println!("{}", "No adapters installed.".bright_yellow());
+                return Ok(());
+            }
+
             println!("{}", "Installed Adapters:".bright_green().bold());
             nonebot.adapters.iter().for_each(|ia| {
                 let adapter = adapters_map.get(ia.name.as_str()).unwrap();
