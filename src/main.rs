@@ -11,6 +11,8 @@ mod uv;
 
 use cli::*;
 
+use crate::uv::Uv;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BANNER: &str = r#"
 d8b   db  .d88b.  d8b   db d88888b d8888b.  .d88b.  d888888b
@@ -281,6 +283,9 @@ async fn main() -> Result<()> {
     let quiet = matches.get_flag("quiet");
 
     setup_logging(verbose, quiet)?;
+
+    // Check if uv is installed
+    Uv::check_self_installed().await?;
 
     match matches.subcommand() {
         Some(("create", sub_matches)) => create::handle_create(sub_matches).await?,

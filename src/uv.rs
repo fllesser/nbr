@@ -6,8 +6,17 @@ use std::path::Path;
 
 pub struct Uv;
 
+const UV_NOT_FOUND_MESSAGE: &str = "uv not found. You can run \n  curl -LsSf https://astral.sh/uv/install.sh | sh \nto install or get more information from https://astral.sh/blog/uv";
+
 #[allow(unused)]
 impl Uv {
+    pub async fn check_self_installed() -> Result<()> {
+        let output = process_utils::execute_command_with_output("uv", &["--version"], None, 5)
+            .await
+            .map_err(|_| NbrError::environment(UV_NOT_FOUND_MESSAGE))?;
+        Ok(())
+    }
+
     pub async fn sync(working_dir: Option<&Path>) -> Result<()> {
         let args = vec!["sync"];
         let spinner = terminal_utils::create_spinner(&format!("Installing dependencies..."));
@@ -15,7 +24,7 @@ impl Uv {
             "uv",
             &args,
             working_dir,
-            300, // 5 minutes timeout
+            1800, // 30 minutes timeout
         )
         .await;
         spinner.finish_and_clear();

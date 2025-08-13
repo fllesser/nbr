@@ -3,11 +3,11 @@
 //! This module handles running NoneBot applications with various options
 //! including auto-reload, custom host/port, and environment management.
 
-use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
 use crate::utils::process_utils;
 use clap::ArgMatches;
 use colored::Colorize;
+use dialoguer::Confirm;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -36,8 +36,8 @@ pub struct BotRunner {
     /// Working directory
     work_dir: PathBuf,
     /// Environment variables
-    #[allow(dead_code)]
-    env_vars: HashMap<String, String>,
+    // #[allow(dead_code)]
+    // env_vars: HashMap<String, String>,
     /// Current running process
     current_process: Arc<Mutex<Option<Child>>>,
     /// File watcher for auto-reload
@@ -55,7 +55,7 @@ impl BotRunner {
         port: u16,
         auto_reload: bool,
         work_dir: PathBuf,
-        env_vars: HashMap<String, String>,
+        //env_vars: HashMap<String, String>,
     ) -> Result<Self> {
         let current_process = Arc::new(Mutex::new(None));
         let (watch_tx, watch_rx) = if auto_reload {
@@ -72,7 +72,7 @@ impl BotRunner {
             port,
             auto_reload,
             work_dir,
-            env_vars,
+            //env_vars,
             current_process,
             _watcher: None,
             watch_rx,
@@ -130,6 +130,8 @@ impl BotRunner {
                     let _ = child.wait();
                 }
             }
+            // sleep 2 second
+            sleep(Duration::from_secs(2)).await;
             std::process::exit(0);
         });
 
@@ -331,40 +333,13 @@ impl BotRunner {
 
     /// Start the bot process
     fn start_bot_process(&self) -> Result<Child> {
-        // python -c import nonebot; nonebot.init(); nonebot.run()
-        // let mut cmd = Command::new(&self.python_path);
-        // cmd.arg("-c");
-        // cmd.arg("import nonebot; nonebot.init();");
-        // cmd.arg("driver = nonebot.get_driver();");
-        // for adapter in &self.adapters {
-        //     cmd.arg(format!(
-        //         "from {} import Adapter as {};",
-        //         adapter.module_name, adapter.name
-        //     ));
-        //     cmd.arg(format!("driver.register_adapter({});", adapter.module_name));
-        // }
-        // cmd.arg("nonebot.load_from_toml('nb.toml');");
-        // cmd.arg("nonebot.run();");
-        // cmd.current_dir(&self.work_dir)
-        //     .stdin(Stdio::null())
-        //     .stdout(Stdio::inherit())
-        //     .stderr(Stdio::inherit());
-
-        let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.bot_file)
+        let mut cmd = Command::new("uv");
+        cmd.arg("run")
+            .arg(&self.bot_file)
             .current_dir(&self.work_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
-
-        // Set environment variables
-        // for (key, value) in &self.env_vars {
-        //     cmd.env(key, value);
-        // }
-
-        // Set NoneBot specific environment variables
-        // cmd.env("HOST", &self.host);
-        // cmd.env("PORT", self.port.to_string());
 
         let process = cmd
             .spawn()
@@ -413,15 +388,13 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
 
     let reload = matches.get_flag("reload");
     // Load configuration
-    let config_manager = ConfigManager::new()?;
-
-    let work_dir = config_manager.current_dir().to_path_buf();
+    let work_dir = std::env::current_dir().unwrap();
 
     // Find bot file
     let bot_file_path = find_bot_file(&work_dir, bot_file)?;
 
     // Find Python executable
-    let python_path = find_python_executable(config_manager.config())?;
+    let python_path = find_python_executable()?;
 
     // Verify Python environment
     // verify_python_environment(&python_path).await?;
@@ -445,7 +418,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
         port,
         reload,
         work_dir,
-        env_vars,
+        //env_vars,
     )?;
 
     println!("{}", "Starting NoneBot application...".bright_green());
@@ -491,24 +464,34 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
         }
     }
 
-    Err(NbrError::not_found(format!(
-        "Bot file '{}' not found. Tried: {}",
-        bot_file,
-        common_names.join(", ")
-    )))
-}
+    // 询问用户是否创建bot文件
+    let need_create_bot_file = Confirm::new()
+        .with_prompt(format!(
+            "Bot file '{}' not found. Do you want to create it?",
+            bot_file
+        ))
+        .default(false)
+        .interact()
+        .map_err(|e| NbrError::io(e.to_string()))?;
 
-/// Find Python executable
-fn find_python_executable(config: &crate::config::Config) -> Result<String> {
-    // Use configured Python path if available
-    if let Some(ref python_path) = config.user.python_path {
-        if Path::new(python_path).exists() {
-            return Ok(python_path.clone());
-        } else {
-            warn!("Configured Python path does not exist: {}", python_path);
-        }
+    if !need_create_bot_file {
+        return Err(NbrError::not_found(format!(
+            "Bot file '{}' not found. Tried: {}",
+            bot_file,
+            common_names.join(", ")
+        )));
     }
 
+    // 创建bot文件
+    let bot_file_content = include_str!("nbfile/bot.py");
+    fs::write(&bot_path, bot_file_content)
+        .map_err(|e| NbrError::io(format!("Failed to create bot file: {}", e)))?;
+
+    Ok(bot_path)
+}
+
+/// Find Python executabled
+fn find_python_executable() -> Result<String> {
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()
         .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
