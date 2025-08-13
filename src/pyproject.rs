@@ -1,13 +1,12 @@
+use crate::error::{NbrError, Result as NbrResult};
+use serde::{Deserialize, Serialize};
 use std::{
-    fs,
+    collections::HashSet,
     path::{Path, PathBuf},
     vec,
 };
 
-use serde::{Deserialize, Serialize};
-use toml_edit::{Array, Document, DocumentMut, Table, value};
-
-use crate::error::{NbrError, Result};
+use toml_edit::{Document, DocumentMut, InlineTable, Table};
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -57,7 +56,7 @@ pub struct Nonebot {
     pub builtin_plugins: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Adapter {
     pub name: String,
     pub module_name: String,
@@ -78,92 +77,16 @@ impl Default for BuildSystem {
         }
     }
 }
-impl PyProjectConfig {
-    pub async fn load() -> Result<Option<Self>> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
-        let config_path = current_dir.join("pyproject.toml");
-        PyProjectConfig::parse(&config_path).map(Some)
-    }
 
-    pub fn parse(config_path: &Path) -> Result<Self> {
-        let content = fs::read_to_string(config_path)
-            .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
-
-        let parsed: toml::Value = toml::from_str(&content)
-            .map_err(|e| NbrError::config(format!("Failed to parse TOML: {}", e)))?;
-
-        parsed
-            .try_into()
-            .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))
-    }
-
-    pub async fn save(&self) -> Result<()> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
-
-        let config_path = current_dir.join("pyproject.toml");
-        let config_content = toml::to_string_pretty(self).map_err(|e| {
-            NbrError::config(format!("Failed to serialize pyproject config: {}", e))
-        })?;
-
-        fs::write(&config_path, config_content)
-            .map_err(|e| NbrError::config(format!("Failed to write pyproject config: {}", e)))
-    }
-
-    #[allow(dead_code)]
-    pub async fn add_plugin(plugin_module_name: &str) -> Result<()> {
-        let mut pyproject = PyProjectConfig::load().await?.unwrap();
-        pyproject
-            .tool
-            .nonebot
-            .plugins
-            .push(plugin_module_name.to_string());
-        pyproject.save().await
-    }
-
-    #[allow(dead_code)]
-    pub async fn add_adapter(adapter_name: &str, adapter_module_name: &str) -> Result<()> {
-        let mut pyproject = PyProjectConfig::load().await?.unwrap();
-        pyproject.tool.nonebot.adapters.push(Adapter {
-            name: adapter_name.to_string(),
-            module_name: adapter_module_name.to_string(),
-        });
-        pyproject.save().await
-    }
-
-    #[allow(dead_code)]
-    pub async fn remove_plugin(plugin_module_name: &str) -> Result<()> {
-        let mut pyproject = PyProjectConfig::load().await?.unwrap();
-        pyproject
-            .tool
-            .nonebot
-            .plugins
-            .retain(|p| p != &plugin_module_name);
-        pyproject.save().await
-    }
-
-    #[allow(dead_code)]
-    pub async fn remove_adapter(adapter_name: &str) -> Result<()> {
-        let mut pyproject = PyProjectConfig::load().await?.unwrap();
-        pyproject
-            .tool
-            .nonebot
-            .adapters
-            .retain(|a| a.name != adapter_name);
-        pyproject.save().await
-    }
-}
-
-#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct ToolNonebot {
-    pub toml_path: PathBuf,
-    pub doc_mut: DocumentMut,
+    toml_path: PathBuf,
+    doc_mut: DocumentMut,
 }
 
 #[allow(dead_code)]
 impl ToolNonebot {
-    pub fn parse(toml_path: Option<PathBuf>) -> Result<Self> {
+    pub fn parse(toml_path: Option<PathBuf>) -> NbrResult<Self> {
         let toml_path = toml_path
             .clone()
             .unwrap_or_else(|| Path::new("pyproject.toml").to_path_buf());
@@ -174,63 +97,128 @@ impl ToolNonebot {
             .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))?;
 
         let doc_mut = doc.into_mut();
+
         Ok(Self { toml_path, doc_mut })
     }
 
-    fn nonebot_table(&mut self) -> Result<&mut Table> {
-        let nonebot = self
-            .doc_mut
-            .get_mut("tool")
-            .unwrap()
-            .get_mut("nonebot")
-            .unwrap();
-        Ok(nonebot.as_table_mut().unwrap())
+    fn nonebot_table_mut(&mut self) -> NbrResult<&mut Table> {
+        let nonebot = self.doc_mut["tool"]["nonebot"].as_table_mut().unwrap();
+        Ok(nonebot)
     }
 
-    fn save(&self) -> Result<()> {
+    pub fn nonebot(&self) -> NbrResult<Nonebot> {
+        let nonebot = self.doc_mut["tool"]["nonebot"].as_table().unwrap();
+        let nonebot = toml::from_str(nonebot.to_string().as_str())?;
+        Ok(nonebot)
+    }
+
+    fn save(&self) -> NbrResult<()> {
         std::fs::write(self.toml_path.clone(), self.doc_mut.to_string())?;
         Ok(())
     }
 
-    ///
-    /// ```toml
-    /// [tool.nonebot]
-    /// adapters = [
-    ///     {name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11"},
-    ///     {name = "OneBot V12", module_name = "nonebot.adapters.onebot.v12"},
-    /// ]
-    /// ```
-    pub fn add_adapters(&mut self, wait_add_adapters: Vec<Adapter>) -> Result<()> {
-        let nonebot = self.nonebot_table()?;
+    pub fn add_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
+        // 去重
+        let adapters = adapters.into_iter().collect::<HashSet<Adapter>>();
+        let nonebot = self.nonebot_table_mut()?;
 
-        let adapters = if let Some(adapters) = nonebot.get_mut("adapters") {
-            adapters.as_array_of_tables_mut().unwrap()
-        } else {
-            nonebot["adapters"] = value(Array::new());
-            nonebot["adapters"].as_array_of_tables_mut().unwrap()
-        };
-
-        // 添加新的适配器配置
-        for adapter in wait_add_adapters {
-            let mut table = Table::new();
-            table.insert("name", value(adapter.name));
-            table.insert("module_name", value(adapter.module_name));
-            adapters.push(table)
+        if let Some(adapters_array) = nonebot.get_mut("adapters") {
+            let adapters_arr_mut = adapters_array.as_array_mut().unwrap();
+            for adapter in adapters {
+                if adapters_arr_mut
+                    .iter()
+                    .any(|a| a.as_inline_table().unwrap()["name"].as_str().unwrap() == adapter.name)
+                {
+                    continue;
+                }
+                let mut inline_table = InlineTable::new();
+                inline_table.insert("name", adapter.name.into());
+                inline_table.insert("module_name", adapter.module_name.into());
+                adapters_arr_mut.push(inline_table);
+            }
         }
 
         // 写回文件
         self.save()
     }
 
-    pub fn add_plugins(&mut self, wait_add_plugins: Vec<String>) -> Result<()> {
-        let nonebot = self.nonebot_table()?;
+    pub fn remove_adapters(&mut self, adapter_names: Vec<String>) -> NbrResult<()> {
+        let adapter_names = adapter_names.into_iter().collect::<HashSet<String>>();
+        let nonebot = self.nonebot_table_mut()?;
+        let adapters_array = nonebot.get_mut("adapters").unwrap();
+        let adapters_arr_mut = adapters_array.as_array_mut().unwrap();
+        for adapter_name in adapter_names {
+            adapters_arr_mut
+                .retain(|a| a.as_inline_table().unwrap()["name"].as_str().unwrap() != adapter_name);
+        }
+        self.save()
+    }
 
-        if let Some(plugins) = nonebot.get_mut("plugins") {
-            for plugin in wait_add_plugins {
-                plugins.as_array_mut().unwrap().push(plugin);
+    pub fn add_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
+        // 去重
+        let plugins = plugins.into_iter().collect::<HashSet<String>>();
+        let nonebot = self.nonebot_table_mut()?;
+
+        if let Some(plugins_array) = nonebot.get_mut("plugins") {
+            let plugins_arr_mut = plugins_array.as_array_mut().unwrap();
+            for plugin in plugins {
+                if plugins_arr_mut
+                    .iter()
+                    .any(|p| p.as_str().unwrap() == plugin)
+                {
+                    continue;
+                }
+                plugins_arr_mut.push(plugin);
             }
         }
 
         self.save()
+    }
+
+    pub fn remove_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
+        let nonebot_table = self.nonebot_table_mut()?;
+        let plugins_array = nonebot_table.get_mut("plugins").unwrap();
+        let plugins_arr_mut = plugins_array.as_array_mut().unwrap();
+        for plugin in plugins {
+            plugins_arr_mut.retain(|p| p.as_str().unwrap() != plugin);
+        }
+        self.save()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_adapters() {
+        let current_dir = std::env::current_dir().unwrap();
+        let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
+        let mut tool_nonebot = ToolNonebot::parse(Some(toml_path)).unwrap();
+        tool_nonebot
+            .add_adapters(vec![Adapter {
+                name: "OneBot V12".to_string(),
+                module_name: "nonebot.adapters.onebot.v12".to_string(),
+            }])
+            .unwrap();
+    }
+
+    #[test]
+    fn test_add_plugins() {
+        let current_dir = std::env::current_dir().unwrap();
+        let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
+        let mut tool_nonebot = ToolNonebot::parse(Some(toml_path)).unwrap();
+        tool_nonebot
+            .add_plugins(vec!["nonebot-plugin-status".to_string()])
+            .unwrap();
+    }
+
+    #[test]
+    fn test_parse_toml_to_nonebot() {
+        let current_dir = std::env::current_dir().unwrap();
+        let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
+        let tool_nonebot = ToolNonebot::parse(Some(toml_path)).unwrap();
+        let nonebot = tool_nonebot.nonebot().unwrap();
+        dbg!(nonebot);
     }
 }

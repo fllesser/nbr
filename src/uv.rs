@@ -104,7 +104,10 @@ impl Uv {
         Ok(stdout.to_string())
     }
 
-    pub async fn show_version(package: &str, working_dir: Option<&Path>) -> Result<String> {
+    pub async fn get_installed_version(
+        package: &str,
+        working_dir: Option<&Path>,
+    ) -> Result<String> {
         let stdout = Self::show(package, working_dir).await?;
 
         for line in stdout.lines() {
@@ -119,9 +122,9 @@ impl Uv {
         )))
     }
 
-    pub async fn is_installed(package: &str, working_dir: Option<&Path>) -> Result<bool> {
-        let output = Self::show(package, working_dir).await?;
-        Ok(output.contains("Version"))
+    pub async fn is_installed(package: &str, working_dir: Option<&Path>) -> bool {
+        let output = Self::show(package, working_dir).await;
+        output.is_ok() && output.unwrap().contains("Version")
     }
 }
 
@@ -138,15 +141,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_is_installed() {
-        let result = Uv::is_installed("nonebot2", working_dir()).await;
-        assert!(result.is_ok());
-        assert!(result.unwrap());
+        let is_installed = Uv::is_installed("not-exist-package", working_dir()).await;
+        assert!(!is_installed);
+        let is_installed = Uv::is_installed("nonebot2", working_dir()).await;
+        assert!(is_installed);
     }
 
     #[tokio::test]
-    async fn test_show_version() {
-        let result = Uv::show_version("nonebot2", working_dir()).await;
+    async fn test_get_installed_version() {
+        let result = Uv::get_installed_version("nonebot2", working_dir()).await;
         assert!(result.is_ok());
         assert!(result.unwrap().contains("2."));
+        let result = Uv::get_installed_version("not-exist-package", working_dir()).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("0.1.0"));
     }
 }

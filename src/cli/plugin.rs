@@ -4,8 +4,8 @@
 //! listing, searching, and updating plugins from various sources.
 #![allow(dead_code)]
 
-use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
+use crate::pyproject::ToolNonebot;
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::Uv;
 use clap::ArgMatches;
@@ -69,7 +69,7 @@ pub struct PyPIPlugin {
     pub package_name: String,
     pub module_name: String,
     pub version: String,
-    
+
     pub author: String,
     pub homepage: Option<String>,
     pub description: String,
@@ -87,12 +87,8 @@ pub struct GitRepoPlugin {
 
 /// Plugin manager
 pub struct PluginManager {
-    /// Configuration manager
-    config_manager: ConfigManager,
     /// HTTP client for registry requests
     client: Client,
-    /// Python executable path
-    python_path: String,
     /// Working directory
     work_dir: PathBuf,
     /// Registry plugins, key is package name
@@ -102,11 +98,7 @@ pub struct PluginManager {
 impl PluginManager {
     /// Create a new plugin manager
     pub fn new() -> Result<Self> {
-        let config_manager = ConfigManager::new()?;
-        let config = config_manager.config();
-
-        let python_path = find_python_executable(config)?;
-        let work_dir = config_manager.current_dir().to_path_buf();
+        let work_dir = std::env::current_dir().unwrap();
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -115,9 +107,7 @@ impl PluginManager {
             .map_err(|e| NbrError::Network(e))?;
 
         Ok(Self {
-            config_manager,
             client,
-            python_path,
             work_dir,
             registry_plugins: OnceLock::new(),
         })
@@ -132,7 +122,9 @@ impl PluginManager {
         let repo_name = repo_url.split("/").last().unwrap();
         let module_name = repo_name.replace("-", "_");
 
-        self.add_plugin_to_config(module_name).await?;
+        // Add to configuration
+        ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
+
         println!(
             "{} Successfully installed plugin: {}",
             "✓".bright_green(),
@@ -144,9 +136,13 @@ impl PluginManager {
     pub async fn install_unofficial_plugin(&mut self, package_name: &str) -> Result<()> {
         debug!("Installing unofficial plugin: {}", package_name);
 
+        // Install the plugin
         Uv::add(package_name, false, None, Some(&self.work_dir)).await?;
         let module_name = package_name.replace("-", "_");
-        self.add_plugin_to_config(module_name).await?;
+
+        // Add to configuration
+        ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
+
         println!(
             "{} Successfully installed plugin: {}",
             "✓".bright_green(),
@@ -156,7 +152,7 @@ impl PluginManager {
     }
     /// Install a plugin
     pub async fn install_plugin(
-        &mut self,
+        &self,
         name: &str,
         index_url: Option<&str>,
         upgrade: bool,
@@ -167,7 +163,7 @@ impl PluginManager {
         let registry_plugin = self.get_registry_plugin(name).await?;
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
-        if !upgrade && self.is_plugin_installed(&package_name).await? {
+        if !upgrade && Uv::is_installed(&package_name, Some(&self.work_dir)).await {
             return Err(NbrError::already_exists(format!(
                 "Plugin '{}' is already installed. Use --upgrade to update it.",
                 registry_plugin.project_link
@@ -189,9 +185,9 @@ impl PluginManager {
         // Install the plugin
         Uv::add(&package_name, upgrade, index_url, Some(&self.work_dir)).await?;
 
-        //PyProjectConfig::add_plugin(&registry_plugin.module_name).await?;
-        self.add_plugin_to_config(registry_plugin.module_name.clone())
-            .await?;
+        // Add to configuration
+        ToolNonebot::parse(None)?.add_plugins(vec![registry_plugin.module_name.clone()])?;
+
         println!(
             "{} Successfully installed plugin: {}",
             "✓".bright_green(),
@@ -202,13 +198,13 @@ impl PluginManager {
     }
 
     /// Uninstall a plugin
-    pub async fn uninstall_plugin(&mut self, name: &str) -> Result<()> {
+    pub async fn uninstall_plugin(&self, name: &str) -> Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
         let registry_plugin = self.get_registry_plugin(name).await?;
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
-        if !self.is_plugin_installed(&package_name).await? {
+        if !Uv::is_installed(&package_name, Some(&self.work_dir)).await {
             return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
@@ -231,9 +227,9 @@ impl PluginManager {
         // Uninstall the package
         Uv::remove(&package_name, Some(&self.work_dir)).await?;
 
-        // PyProjectConfig::remove_plugin(&module_name).await?;
-        self.remove_plugin_in_config(&registry_plugin.module_name.to_string())
-            .await?;
+        ToolNonebot::parse(None)?.remove_plugins(vec![registry_plugin.module_name.clone()])?;
+        // self.remove_plugin_in_config(&registry_plugin.module_name.to_string())
+        //     .await?;
 
         println!(
             "{} Successfully uninstalled plugin: {}",
@@ -246,12 +242,12 @@ impl PluginManager {
 
     /// List installed plugins
     pub async fn list_plugins(&self, _show_outdated: bool) -> Result<()> {
-        let config = self.config_manager.config();
-        let plugin_modules = &config.nb_config.tool.nonebot.plugins;
+        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
 
         let registry_plugins = self.module_plugins_map().await?;
 
-        let plugins: Vec<&RegistryPlugin> = plugin_modules
+        let plugins: Vec<&RegistryPlugin> = nonebot
+            .plugins
             .iter()
             .filter_map(|module| registry_plugins.get(module.as_str()).cloned())
             .collect();
@@ -259,9 +255,8 @@ impl PluginManager {
         println!("{}", "Installed Plugins:".bright_green().bold());
 
         for plugin in plugins {
-            let installed_version = self
-                .get_installed_package_version(&plugin.project_link)
-                .await?;
+            let installed_version =
+                Uv::get_installed_version(&plugin.project_link, Some(&self.work_dir)).await?;
 
             let mut plugin_display = format!(
                 "  {} {} {}",
@@ -284,7 +279,7 @@ impl PluginManager {
 
     /// Search plugins in registry
     pub async fn search_plugins(&self, query: &str, limit: usize) -> Result<()> {
-        info!("Searching plugins for: {}", query);
+        debug!("Searching plugins for: {}", query);
 
         let spinner = terminal_utils::create_spinner(&format!("Searching for '{}'...", query));
 
@@ -339,12 +334,10 @@ impl PluginManager {
     }
 
     /// Update all plugins
-    async fn update_all_plugins(&mut self) -> Result<()> {
-        let config = self.config_manager.config();
+    async fn update_all_plugins(&self) -> Result<()> {
+        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
 
-        let plugin_modules = &config.nb_config.tool.nonebot.plugins;
-
-        if plugin_modules.is_empty() {
+        if nonebot.plugins.is_empty() {
             println!("{}", "No plugins installed.".bright_yellow());
             return Ok(());
         }
@@ -353,14 +346,14 @@ impl PluginManager {
 
         // registry plugins, installed plugins
         let mut outdated_plugins = Vec::new();
-        let pb = ProgressBar::new(plugin_modules.len() as u64);
+        let pb = ProgressBar::new(nonebot.plugins.len() as u64);
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} Checking {pos}/{len} plugins...")
                 .unwrap(),
         );
 
-        for plugin_module in plugin_modules {
+        for plugin_module in nonebot.plugins {
             pb.set_message(format!("Checking {}", plugin_module));
             let module_plugins_map = self.module_plugins_map().await?;
             let plugin = module_plugins_map
@@ -368,12 +361,11 @@ impl PluginManager {
                 .ok_or_else(|| {
                     NbrError::not_found(format!("Plugin '{}' not found", plugin_module))
                 })?;
-            let (installed_version, latest_version) = tokio::join!(
-                self.get_installed_package_version(&plugin.project_link),
-                self.get_latest_package_version(&plugin.project_link)
-            );
-            let installed_version = installed_version.unwrap();
-            let latest_version = latest_version.unwrap_or(plugin.version.clone());
+            let installed_version =
+                Uv::get_installed_version(&plugin.project_link, Some(&self.work_dir)).await?;
+            let latest_version = self
+                .get_latest_package_version(&plugin.project_link)
+                .await?;
 
             if installed_version != latest_version {
                 outdated_plugins.push((*plugin, installed_version.clone()));
@@ -448,12 +440,13 @@ impl PluginManager {
     }
 
     /// Update a single plugin
-    async fn update_single_plugin(&mut self, name: &str) -> Result<()> {
+    async fn update_single_plugin(&self, name: &str) -> Result<()> {
         let registry_plugin = self.get_registry_plugin(name).await?;
         let package_name = registry_plugin.project_link.clone();
-        let installed_version = self.get_installed_package_version(&package_name).await?;
+        let installed_version =
+            Uv::get_installed_version(&package_name, Some(&self.work_dir)).await?;
         // Check if already installed
-        if !self.is_plugin_installed(&package_name).await? {
+        if !Uv::is_installed(&package_name, Some(&self.work_dir)).await {
             return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
@@ -492,30 +485,6 @@ impl PluginManager {
         Ok(())
     }
 
-    /// Get installed package version
-    async fn get_installed_package_version(&self, package: &str) -> Result<String> {
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &["pip", "show", package],
-            Some(&self.work_dir),
-            30,
-        )
-        .await?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        for line in stdout.lines() {
-            if line.starts_with("Version:") {
-                return Ok(line.replace("Version:", "").trim().to_string());
-            }
-        }
-
-        Err(NbrError::not_found(format!(
-            "Version not found for package: {}",
-            package
-        )))
-    }
-
     /// Get latest package version from PyPI
     async fn get_latest_package_version(&self, package: &str) -> Result<String> {
         let url = format!("https://pypi.org/pypi/{}/json", package);
@@ -539,14 +508,6 @@ impl PluginManager {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .ok_or_else(|| NbrError::not_found("Version field not found in PyPI response"))
-    }
-
-    /// Check if plugin is installed
-    async fn is_plugin_installed(&self, package: &str) -> Result<bool> {
-        match self.get_installed_package_version(package).await {
-            Ok(_) => Ok(true),
-            Err(_) => Ok(false),
-        }
     }
 
     pub async fn fetch_registry_plugins(&self) -> Result<&Vec<RegistryPlugin>> {
@@ -632,8 +593,8 @@ impl PluginManager {
 
     /// Find installed plugin by name
     fn find_installed_plugin(&self, name: &str) -> Result<String> {
-        let config = self.config_manager.config();
-        for plugin in &config.nb_config.tool.nonebot.plugins {
+        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
+        for plugin in &nonebot.plugins {
             if plugin == name || plugin.contains(name) {
                 return Ok(plugin.clone());
             }
@@ -643,28 +604,6 @@ impl PluginManager {
             "Plugin '{}' is not installed",
             name
         )))
-    }
-
-    /// Add plugin to configuration
-    async fn add_plugin_to_config(&mut self, plugin_module: String) -> Result<()> {
-        self.config_manager.update_nb_config(|nb_config| {
-            let plugins = &mut nb_config.tool.nonebot.plugins;
-            // Remove existing plugin with same name
-            if !plugins.contains(&plugin_module) {
-                plugins.push(plugin_module);
-            }
-        })?;
-
-        self.config_manager.save()
-    }
-
-    /// Remove plugin from configuration
-    async fn remove_plugin_in_config(&mut self, name: &str) -> Result<()> {
-        self.config_manager.update_nb_config(|nb_config| {
-            nb_config.tool.nonebot.plugins.retain(|p| p != name);
-        })?;
-
-        self.config_manager.save()
     }
 
     /// Display plugin information

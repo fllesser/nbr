@@ -2,12 +2,9 @@
 //!
 //! This module handles adapter management including installation, removal,
 //! and listing adapters for NoneBot applications.
-#![allow(dead_code)]
 
-use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
-use crate::pyproject::Adapter;
-use crate::utils::process_utils;
+use crate::pyproject::{Adapter, ToolNonebot};
 use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
@@ -15,7 +12,6 @@ use dialoguer::Confirm;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::env;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -51,41 +47,10 @@ pub struct RegistryAdapter {
     pub version: String,
 }
 
-/// Built-in adapter definitions
-const BUILTIN_ADAPTERS: &[(&str, &str, &str)] = &[
-    (
-        "OneBot V11",
-        "nonebot-adapter-onebot",
-        "OneBot V11 协议适配器",
-    ),
-    (
-        "OneBot V12",
-        "nonebot-adapter-ob12",
-        "OneBot V12 协议适配器",
-    ),
-    (
-        "Telegram",
-        "nonebot-adapter-telegram",
-        "Telegram Bot API 适配器",
-    ),
-    ("钉钉", "nonebot-adapter-ding", "钉钉机器人适配器"),
-    ("飞书", "nonebot-adapter-feishu", "飞书机器人适配器"),
-    ("Console", "nonebot-adapter-console", "控制台适配器"),
-    ("Discord", "nonebot-adapter-discord", "Discord Bot 适配器"),
-    ("Kaiheila", "nonebot-adapter-kaiheila", "开黑啦适配器"),
-    ("Mirai", "nonebot-adapter-mirai", "Mirai 适配器"),
-    ("红豆Live", "nonebot-adapter-red", "红豆Live适配器"),
-    ("Satori", "nonebot-adapter-satori", "Satori 协议适配器"),
-];
-
 /// Adapter manager
 pub struct AdapterManager {
-    /// Configuration manager
-    config_manager: ConfigManager,
     /// HTTP client for registry requests
     client: Client,
-    /// Python executable path
-    python_path: String,
     /// Working directory
     work_dir: PathBuf,
     /// Registry adapters
@@ -95,11 +60,7 @@ pub struct AdapterManager {
 impl AdapterManager {
     /// Create a new adapter manager
     pub fn new() -> Result<Self> {
-        let config_manager = ConfigManager::new()?;
-
-        let python_path = find_python_executable(config_manager.config())?;
-        let work_dir = env::current_dir()
-            .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
+        let work_dir = std::env::current_dir().unwrap();
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -108,9 +69,7 @@ impl AdapterManager {
             .map_err(|e| NbrError::Network(e))?;
 
         Ok(Self {
-            config_manager,
             client,
-            python_path,
             work_dir,
             registry_adapters: OnceLock::new(),
         })
@@ -152,22 +111,18 @@ impl AdapterManager {
     pub async fn install_adapter(&mut self, package_name: &str) -> Result<()> {
         debug!("Installing adapter: {}", package_name);
 
-        // Check if it's a built-in adapter
-        let registry_adapter = self.get_registry_adapter(package_name).await?;
-
-        // Validate package name
-        // string_utils::validate_package_name(&registry_adapter.project_link)?;
-
         // Check if already installed
-        if Uv::is_installed(&registry_adapter.project_link, Some(&self.work_dir)).await? {
+        if Uv::is_installed(package_name, Some(&self.work_dir)).await {
             return Err(NbrError::already_exists(format!(
                 "Adapter '{}' is already installed",
-                registry_adapter.project_link
+                package_name
             )));
         }
 
-        // Show adapter information if available
+        // Get registry adapter
+        let registry_adapter = self.get_registry_adapter(package_name).await?;
 
+        // Show adapter information if available
         self.display_adapter_info(&registry_adapter);
 
         if !Confirm::new()
@@ -189,7 +144,11 @@ impl AdapterManager {
         )
         .await?;
 
-        // PyProjectConfig::add_adapter(&registry_adapter.name, &registry_adapter.module_name).await?;
+        // Add to configuration
+        ToolNonebot::parse(None)?.add_adapters(vec![Adapter {
+            name: registry_adapter.name.clone(),
+            module_name: registry_adapter.module_name.clone(),
+        }])?;
 
         println!(
             "{} Successfully installed adapter: {} ({} v{})",
@@ -198,12 +157,6 @@ impl AdapterManager {
             registry_adapter.project_link.bright_black(),
             registry_adapter.version.bright_white()
         );
-
-        self.add_adapter_to_config(Adapter {
-            name: registry_adapter.name.clone(),
-            module_name: registry_adapter.module_name.clone(),
-        })
-        .await?;
 
         // Show configuration instructions
         // if let Some(ref adapter) = adapter_info {
@@ -219,7 +172,15 @@ impl AdapterManager {
     pub async fn uninstall_adapter(&mut self, package_name: &str) -> Result<()> {
         debug!("Uninstalling adapter: {}", package_name);
 
-        // Find the adapter in configuration
+        // Check if installed
+        if !Uv::is_installed(package_name, Some(&self.work_dir)).await {
+            return Err(NbrError::not_found(format!(
+                "Adapter '{}' is not installed",
+                package_name
+            )));
+        }
+
+        // Get registry adapter
         let registry_adapter = self.get_registry_adapter(package_name).await?;
 
         // Confirm uninstallation
@@ -239,6 +200,9 @@ impl AdapterManager {
         // Uninstall the package
         Uv::remove(&registry_adapter.project_link, Some(&self.work_dir)).await?;
 
+        // Remove from configuration
+        ToolNonebot::parse(None)?.remove_adapters(vec![registry_adapter.name.clone()])?;
+
         println!(
             "{} Successfully uninstalled adapter: {} ({} v{})",
             "✓".bright_green(),
@@ -247,17 +211,12 @@ impl AdapterManager {
             registry_adapter.version.bright_white()
         );
 
-        // Remove from configuration
-        self.remove_adapter_from_config(registry_adapter.name.clone())
-            .await?;
-
         Ok(())
     }
 
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
-        let config = self.config_manager.config();
-        let installed_adapters = &config.nb_config.tool.nonebot.adapters;
+        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
 
         let adapters_map = self.fetch_regsitry_adapters().await?;
         if show_all {
@@ -267,7 +226,7 @@ impl AdapterManager {
             });
         } else {
             println!("{}", "Installed Adapters:".bright_green().bold());
-            installed_adapters.iter().for_each(|ia| {
+            nonebot.adapters.iter().for_each(|ia| {
                 let adapter = adapters_map.get(ia.name.as_str()).unwrap();
                 self.display_adapter(adapter);
             });
@@ -300,6 +259,7 @@ impl AdapterManager {
     }
 
     /// Get adapter configuration template
+    #[allow(dead_code)]
     fn get_adapter_config_template(&self, package_name: &str) -> Option<HashMap<String, String>> {
         let mut template = HashMap::new();
 
@@ -350,10 +310,11 @@ impl AdapterManager {
     }
 
     /// Find installed adapter by name
+    #[allow(dead_code)]
     fn find_installed_adapter(&self, name: &str) -> Result<Adapter> {
-        let config = self.config_manager.config();
+        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
 
-        for adapter in &config.nb_config.tool.nonebot.adapters {
+        for adapter in &nonebot.adapters {
             if adapter.name == name
                 || adapter.name.to_lowercase().contains(&name.to_lowercase())
                 || name.to_lowercase().contains(&adapter.name.to_lowercase())
@@ -366,31 +327,6 @@ impl AdapterManager {
             "Adapter '{}' is not installed",
             name
         )))
-    }
-
-    /// Add adapter to configuration
-    async fn add_adapter_to_config(&mut self, adapter: Adapter) -> Result<()> {
-        self.config_manager.update_nb_config(|nb_config| {
-            // Remove existing adapter with same name
-            nb_config
-                .tool
-                .nonebot
-                .adapters
-                .retain(|a| a.name != adapter.name);
-            // Add new adapter info
-            nb_config.tool.nonebot.adapters.push(adapter);
-        })?;
-
-        self.config_manager.save()
-    }
-
-    /// Remove adapter from configuration
-    async fn remove_adapter_from_config(&mut self, name: String) -> Result<()> {
-        self.config_manager.update_nb_config(|nb_config| {
-            nb_config.tool.nonebot.adapters.retain(|a| a.name != name);
-        })?;
-
-        self.config_manager.save()
     }
 
     /// Display adapter information
@@ -420,6 +356,7 @@ impl AdapterManager {
     }
 
     /// Show configuration instructions
+    #[allow(dead_code)]
     fn show_configuration_instructions(
         &self,
         _adapter: &RegistryAdapter,
@@ -461,40 +398,6 @@ pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
         }
         _ => Err(NbrError::invalid_argument("Invalid adapter subcommand")),
     }
-}
-
-/// Find Python executable
-fn find_python_executable(config: &crate::config::Config) -> Result<String> {
-    // Use configured Python path if available
-    if let Some(ref python_path) = config.user.python_path {
-        if std::path::Path::new(python_path).exists() {
-            return Ok(python_path.clone());
-        }
-    }
-
-    // Try to find Python in project virtual environment
-    let current_dir = env::current_dir()
-        .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
-
-    let venv_paths = [
-        current_dir.join("venv").join("bin").join("python"),
-        current_dir.join("venv").join("Scripts").join("python.exe"),
-        current_dir.join(".venv").join("bin").join("python"),
-        current_dir.join(".venv").join("Scripts").join("python.exe"),
-    ];
-
-    for venv_path in &venv_paths {
-        if venv_path.exists() {
-            return Ok(venv_path.to_string_lossy().to_string());
-        }
-    }
-
-    // Fall back to system Python
-    process_utils::find_python().ok_or_else(|| {
-        NbrError::not_found(
-            "Python executable not found. Please install Python 3.8+ or configure python_path",
-        )
-    })
 }
 
 #[cfg(test)]

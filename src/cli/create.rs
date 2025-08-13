@@ -13,7 +13,7 @@ use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::config::NbConfig;
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool};
+use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool, ToolNonebot};
 use crate::utils::terminal_utils;
 use crate::uv::Uv;
 
@@ -393,14 +393,22 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         let adapter_dep = format!("{}>={}", adapter.project_link, adapter.version);
         dependencies.insert(adapter_dep);
     }
-    // for plugin in &options.plugins {
-    //     let plugin_dep = format!("{}>={}", plugin.project_link, plugin.version);
-    //     dependencies.insert(plugin_dep);
-    // }
     pyproject.project.dependencies.extend(dependencies);
 
-    let content = toml::to_string_pretty(&pyproject)?;
+    let content = toml::to_string(&pyproject)?;
     fs::write(options.output_dir.join("pyproject.toml"), content)?;
+
+    let adapters = options
+        .adapters
+        .iter()
+        .map(|a| Adapter {
+            name: a.name.clone(),
+            module_name: a.module_name.clone(),
+        })
+        .collect();
+
+    ToolNonebot::parse(Some(options.output_dir.clone().join("pyproject.toml")))?
+        .add_adapters(adapters)?;
     Ok(())
 }
 

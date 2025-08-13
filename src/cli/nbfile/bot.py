@@ -10,7 +10,7 @@ nonebot.init()
 
 driver = nonebot.get_driver()
 
-with open("nb.toml", "rb") as f:
+with open("pyproject.toml", "rb") as f:
     pyproject = tomllib.load(f)
     tool_nonebot = pyproject["tool"]["nonebot"]
     adapters = tool_nonebot["adapters"]
@@ -23,7 +23,7 @@ with open("nb.toml", "rb") as f:
             continue
     nonebot.load_builtin_plugins(*tool_nonebot["builtin_plugins"])
 
-nonebot.load_from_toml("nb.toml")
+nonebot.load_from_toml("pyproject.toml")
 
 if __name__ == "__main__":
     nonebot.run()
