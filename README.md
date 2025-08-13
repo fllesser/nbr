@@ -31,8 +31,8 @@ pip install uv
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/nb-cli-in-rust.git
-cd nb-cli-in-rust
+git clone https://github.com/your-org/nbr.git
+cd nbr
 
 # Build the project
 cargo build --release
@@ -123,8 +123,8 @@ See [Migration Documentation](docs/pip-to-uv-migration.md) for detailed informat
 
 ```bash
 # Clone and enter directory
-git clone https://github.com/your-org/nb-cli-in-rust.git
-cd nb-cli-in-rust
+git clone https://github.com/your-org/nbr.git
+cd nbr
 
 # Install development dependencies
 cargo install cargo-watch
@@ -185,10 +185,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/nb-cli-in-rust/issues)
+- **Issues**: [GitHub Issues](https://github.com/your-org/nbr/issues)
 - **Documentation**: [docs/](docs/)
 - **NoneBot Community**: [NoneBot Documentation](https://v2.nonebot.dev/)
 
 ---
 
-**Note**: This is a Rust reimplementation of the NoneBot CLI with enhanced performance through uv integration. For the original Python version, see the [official NoneBot CLI](https://github.com/nonebot/nb-cli).
+**Note**: This is a Rust reimplementation of the NoneBot CLI with enhanced performance through uv integration. For the original Python version, see the [official NoneBot CLI](https://github.com/nonebot/nbr).

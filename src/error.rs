@@ -1,13 +1,13 @@
-//! Error handling module for nb-cli
+//! Error handling module for nbr
 //!
 //! This module defines custom error types used throughout the CLI application.
 #![allow(dead_code)]
 
 use thiserror::Error;
 
-/// Main error type for the nb-cli application
+/// Main error type for the nbr application
 #[derive(Error, Debug)]
-pub enum NbCliError {
+pub enum NbrError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -75,7 +75,7 @@ pub enum NbCliError {
     Unknown { message: String },
 }
 
-impl NbCliError {
+impl NbrError {
     /// Create a new template error
     pub fn template<S: Into<String>>(message: S) -> Self {
         Self::Template {
@@ -257,10 +257,10 @@ impl NbCliError {
 }
 
 /// Result type alias for convenience
-pub type Result<T> = std::result::Result<T, NbCliError>;
+pub type Result<T> = std::result::Result<T, NbrError>;
 
-/// Convert anyhow::Error to NbCliError
-impl From<anyhow::Error> for NbCliError {
+/// Convert anyhow::Error to NbrError
+impl From<anyhow::Error> for NbrError {
     fn from(err: anyhow::Error) -> Self {
         Self::Unknown {
             message: err.to_string(),
@@ -277,7 +277,7 @@ pub trait NbCliResultExt<T> {
 
 impl<T, E> NbCliResultExt<T> for std::result::Result<T, E>
 where
-    E: Into<NbCliError>,
+    E: Into<NbrError>,
 {
     fn with_context<F>(self, f: F) -> Result<T>
     where
@@ -287,8 +287,8 @@ where
             let base_err = e.into();
             let context = f();
             match base_err {
-                NbCliError::Unknown { .. } => NbCliError::Unknown { message: context },
-                _ => NbCliError::Unknown {
+                NbrError::Unknown { .. } => NbrError::Unknown { message: context },
+                _ => NbrError::Unknown {
                     message: format!("{}: {}", context, base_err),
                 },
             }
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_error_creation() {
-        let err = NbCliError::template("Test template error");
+        let err = NbrError::template("Test template error");
         assert_eq!(err.to_string(), "Template error: Test template error");
         assert_eq!(err.category(), "template");
         assert!(err.is_recoverable());
@@ -310,8 +310,8 @@ mod tests {
 
     #[test]
     fn test_error_categories() {
-        assert_eq!(NbCliError::plugin("test").category(), "plugin");
-        assert_eq!(NbCliError::adapter("test").category(), "adapter");
-        assert_eq!(NbCliError::config("test").category(), "config");
+        assert_eq!(NbrError::plugin("test").category(), "plugin");
+        assert_eq!(NbrError::adapter("test").category(), "adapter");
+        assert_eq!(NbrError::config("test").category(), "config");
     }
 }

@@ -1,11 +1,11 @@
-//! Plugin command handler for nb-cli
+//! Plugin command handler for nbr
 //!
 //! This module handles plugin management including installation, removal,
 //! listing, searching, and updating plugins from various sources.
 #![allow(dead_code)]
 
 use crate::config::ConfigManager;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::Uv;
 use clap::ArgMatches;
@@ -90,9 +90,9 @@ impl PluginManager {
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("nb-cli-rust")
+            .user_agent("nbr")
             .build()
-            .map_err(|e| NbCliError::Network(e))?;
+            .map_err(|e| NbrError::Network(e))?;
 
         Ok(Self {
             config_manager,
@@ -149,7 +149,7 @@ impl PluginManager {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !upgrade && self.is_plugin_installed(&package_name).await? {
-            return Err(NbCliError::already_exists(format!(
+            return Err(NbrError::already_exists(format!(
                 "Plugin '{}' is already installed. Use --upgrade to update it.",
                 registry_plugin.project_link
             )));
@@ -162,7 +162,7 @@ impl PluginManager {
             .with_prompt("Do you want to install this plugin?")
             .default(true)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
             println!("Installation cancelled by user");
             return Ok(());
@@ -190,7 +190,7 @@ impl PluginManager {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !self.is_plugin_installed(&package_name).await? {
-            return Err(NbCliError::not_found(format!(
+            return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
             )));
@@ -203,7 +203,7 @@ impl PluginManager {
             ))
             .default(false)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
             println!("Uninstallation cancelled by user");
             return Ok(());
@@ -313,7 +313,7 @@ impl PluginManager {
         } else if let Some(name) = plugin_name {
             self.update_single_plugin(name).await
         } else {
-            Err(NbCliError::invalid_argument(
+            Err(NbrError::invalid_argument(
                 "Either specify a plugin name or use --all flag",
             ))
         }
@@ -347,7 +347,7 @@ impl PluginManager {
             let plugin = module_plugins_map
                 .get(plugin_module.as_str())
                 .ok_or_else(|| {
-                    NbCliError::not_found(format!("Plugin '{}' not found", plugin_module))
+                    NbrError::not_found(format!("Plugin '{}' not found", plugin_module))
                 })?;
             let (installed_version, latest_version) = tokio::join!(
                 self.get_installed_package_version(&plugin.project_link),
@@ -389,7 +389,7 @@ impl PluginManager {
             .with_prompt("Do you want to update these plugins?")
             .default(true)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
             info!("Update cancelled by user");
             return Ok(());
@@ -435,7 +435,7 @@ impl PluginManager {
         let installed_version = self.get_installed_package_version(&package_name).await?;
         // Check if already installed
         if !self.is_plugin_installed(&package_name).await? {
-            return Err(NbCliError::not_found(format!(
+            return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
             )));
@@ -491,7 +491,7 @@ impl PluginManager {
             }
         }
 
-        Err(NbCliError::not_found(format!(
+        Err(NbrError::not_found(format!(
             "Version not found for package: {}",
             package
         )))
@@ -503,23 +503,23 @@ impl PluginManager {
 
         let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
             .await
-            .map_err(|_| NbCliError::unknown("Request timeout"))?
-            .map_err(|e| NbCliError::Network(e))?;
+            .map_err(|_| NbrError::unknown("Request timeout"))?
+            .map_err(|e| NbrError::Network(e))?;
 
         if !response.status().is_success() {
-            return Err(NbCliError::not_found(format!(
+            return Err(NbrError::not_found(format!(
                 "Package '{}' not found on PyPI",
                 package
             )));
         }
 
-        let json: serde_json::Value = response.json().await.map_err(|e| NbCliError::Network(e))?;
+        let json: serde_json::Value = response.json().await.map_err(|e| NbrError::Network(e))?;
 
         json.get("info")
             .and_then(|info| info.get("version"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| NbCliError::not_found("Version field not found in PyPI response"))
+            .ok_or_else(|| NbrError::not_found("Version field not found in PyPI response"))
     }
 
     /// Check if plugin is installed
@@ -541,17 +541,17 @@ impl PluginManager {
             self.client.get(plugins_json_url).send(),
         )
         .await
-        .map_err(|_| NbCliError::unknown("Request timeout"))?
-        .map_err(|e| NbCliError::Network(e))?;
+        .map_err(|_| NbrError::unknown("Request timeout"))?
+        .map_err(|e| NbrError::Network(e))?;
 
         if !response.status().is_success() {
-            return Err(NbCliError::not_found("Plugin registry not found"));
+            return Err(NbrError::not_found("Plugin registry not found"));
         }
 
         let plugins: Vec<RegistryPlugin> = response
             .json()
             .await
-            .map_err(|e| NbCliError::plugin(format!("Failed to parse plugin info: {}", e)))?;
+            .map_err(|e| NbrError::plugin(format!("Failed to parse plugin info: {}", e)))?;
 
         self.registry_plugins.set(plugins).unwrap();
 
@@ -584,7 +584,7 @@ impl PluginManager {
         let plugins = self.package_plugins_map().await?;
         let plugin = plugins
             .get(package_name)
-            .ok_or_else(|| NbCliError::not_found(format!("Plugin '{}' not found", package_name)))?;
+            .ok_or_else(|| NbrError::not_found(format!("Plugin '{}' not found", package_name)))?;
         Ok(plugin)
     }
 
@@ -620,7 +620,7 @@ impl PluginManager {
             }
         }
 
-        Err(NbCliError::not_found(format!(
+        Err(NbrError::not_found(format!(
             "Plugin '{}' is not installed",
             name
         )))
@@ -755,7 +755,7 @@ pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
                 .update_plugins(plugin_name.map(|s| s.as_str()), update_all)
                 .await
         }
-        _ => Err(NbCliError::invalid_argument("Invalid plugin subcommand")),
+        _ => Err(NbrError::invalid_argument("Invalid plugin subcommand")),
     }
 }
 
@@ -770,7 +770,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()
-        .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
 
     let venv_paths = [
         current_dir.join("venv").join("bin").join("python"),
@@ -787,7 +787,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
-        NbCliError::not_found(
+        NbrError::not_found(
             "Python executable not found. Please install Python 3.8+ or configure python_path",
         )
     })

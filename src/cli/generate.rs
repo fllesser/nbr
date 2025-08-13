@@ -1,10 +1,10 @@
-//! Generate command handler for nb-cli
+//! Generate command handler for nbr
 //!
 //! This module handles generating bot entry files and other project files
 //! with customizable templates and configurations.
 
 use crate::config::ConfigManager;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::utils::template_utils;
 use clap::ArgMatches;
 use colored::*;
@@ -53,7 +53,7 @@ impl GenerateHandler {
                 .with_prompt(&format!("File '{}' already exists. Overwrite?", filename))
                 .default(false)
                 .interact()
-                .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+                .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
             {
                 info!("File generation cancelled");
                 return Ok(());
@@ -75,7 +75,7 @@ impl GenerateHandler {
 
         // Write file
         fs::write(&bot_path, content)
-            .map_err(|e| NbCliError::io(format!("Failed to write bot file: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write bot file: {}", e)))?;
 
         println!(
             "{} Generated bot file: {}",
@@ -100,7 +100,7 @@ impl GenerateHandler {
             .items(&descriptions)
             .default(0)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
         Ok(templates[selection].to_string())
     }
@@ -147,7 +147,7 @@ impl GenerateHandler {
             "advanced" => self.get_advanced_bot_template(),
             "production" => self.get_production_bot_template(),
             _ => {
-                return Err(NbCliError::template(format!(
+                return Err(NbrError::template(format!(
                     "Unknown template: {}",
                     template
                 )));
@@ -212,7 +212,7 @@ pub async fn handle_generate(matches: &ArgMatches) -> Result<()> {
 
     // Validate filename
     if !filename.ends_with(".py") {
-        return Err(NbCliError::invalid_argument(
+        return Err(NbrError::invalid_argument(
             "Bot file must have .py extension",
         ));
     }

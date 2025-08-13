@@ -12,7 +12,7 @@ use tracing::{debug, warn};
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::config::NbConfig;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool};
 use crate::utils::terminal_utils;
 use crate::uv::Uv;
@@ -75,7 +75,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
             ))
             .default(false)
             .interact()
-            .map_err(|e| NbCliError::io(e.to_string()))?;
+            .map_err(|e| NbrError::io(e.to_string()))?;
 
         if !should_continue {
             println!("{}", "❌ Operation cancelled.".bright_red());
@@ -110,11 +110,11 @@ async fn gather_project_options(
             .default("awesome-bot".to_string())
             .validate_with(|input: &String| -> Result<()> {
                 if input.is_empty() {
-                    Err(NbCliError::invalid_argument(
+                    Err(NbrError::invalid_argument(
                         "Project name cannot be empty".to_string(),
                     ))
                 } else if input.contains(' ') {
-                    Err(NbCliError::invalid_argument(
+                    Err(NbrError::invalid_argument(
                         "Project name cannot contain spaces".to_string(),
                     ))
                 } else {
@@ -179,7 +179,7 @@ async fn select_template() -> Result<String> {
         .default(0)
         .items(&template_descriptions)
         .interact()
-        .map_err(|e| NbCliError::io(e.to_string()))?;
+        .map_err(|e| NbrError::io(e.to_string()))?;
 
     Ok(templates[selection].name.clone())
 }
@@ -203,7 +203,7 @@ async fn select_components(
             .items(&adapter_names)
             //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
             .interact()
-            .map_err(|e| NbCliError::io(e.to_string()))?;
+            .map_err(|e| NbrError::io(e.to_string()))?;
 
         selections
             .into_iter()
@@ -225,7 +225,7 @@ async fn select_components(
         .items(&builtin_plugins)
         .defaults(&vec![true; adapter_names.len().min(1)])
         .interact()
-        .map_err(|e| NbCliError::io(e.to_string()))?
+        .map_err(|e| NbrError::io(e.to_string()))?
         .into_iter()
         .map(|i| builtin_plugins[i].to_string())
         .collect();
@@ -272,7 +272,7 @@ async fn get_template_info(name: &str) -> Result<Template> {
     templates
         .into_iter()
         .find(|t| t.name == name)
-        .ok_or_else(|| NbCliError::not_found(format!("Template '{}' not found", name)))
+        .ok_or_else(|| NbrError::not_found(format!("Template '{}' not found", name)))
 }
 
 async fn create_project(options: &ProjectOptions) -> Result<()> {

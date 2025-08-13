@@ -1,10 +1,10 @@
-//! Configuration management module for nb-cli
+//! Configuration management module for nbr
 //!
 //! This module handles loading, saving, and managing configuration files
 //! for both global user settings and project-specific configurations.
 #![allow(dead_code)]
 
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::pyproject::Tool;
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
@@ -290,12 +290,12 @@ impl Default for Config {
 }
 
 // impl TryFrom<&toml::Value> for NbConfig {
-//     type Error = NbCliError;
+//     type Error = NbrError;
 
 //     fn try_from(value: &toml::Value) -> Result<Self> {
 //         let table = value
 //             .as_table()
-//             .ok_or_else(|| NbCliError::config("Expected table for project config"))?;
+//             .ok_or_else(|| NbrError::config("Expected table for project config"))?;
 
 //         let adapters = table
 //             .get("adapters")
@@ -368,7 +368,7 @@ pub struct ConfigManager {
 impl NbConfig {
     pub fn load() -> Result<Self> {
         let current_dir = std::env::current_dir()
-            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
 
         let config_path = current_dir.join("nb.toml");
         if config_path.exists() {
@@ -380,20 +380,20 @@ impl NbConfig {
 
     fn parse(config_path: &Path) -> Result<Self> {
         let content = fs::read_to_string(config_path)
-            .map_err(|e| NbCliError::config(format!("Failed to read nb config: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to read nb config: {}", e)))?;
 
         let config: NbConfig = toml::from_str(&content)
-            .map_err(|e| NbCliError::config(format!("Failed to parse nb config: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to parse nb config: {}", e)))?;
 
         Ok(config)
     }
 
     fn save(&self, config_path: &Path) -> Result<()> {
         let content = toml::to_string_pretty(self)
-            .map_err(|e| NbCliError::config(format!("Failed to serialize nb config: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to serialize nb config: {}", e)))?;
 
         fs::write(config_path, content)
-            .map_err(|e| NbCliError::config(format!("Failed to write nb config: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to write nb config: {}", e)))?;
 
         Ok(())
     }
@@ -403,16 +403,16 @@ impl ConfigManager {
     /// Create a new configuration manager
     pub fn new() -> Result<Self> {
         let current_dir = std::env::current_dir()
-            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
 
         let config_dir = get_config_dir();
         let cache_dir = get_cache_dir();
 
         // Ensure directories exist
         fs::create_dir_all(&config_dir)
-            .map_err(|e| NbCliError::config(format!("Failed to create config directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to create config directory: {}", e)))?;
         fs::create_dir_all(&cache_dir)
-            .map_err(|e| NbCliError::config(format!("Failed to create cache directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to create cache directory: {}", e)))?;
 
         let current_config = Config::default();
 
@@ -498,23 +498,23 @@ impl ConfigManager {
 
 /// Get platform-specific configuration directory
 fn get_config_dir() -> PathBuf {
-    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nb-cli") {
+    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nbr") {
         proj_dirs.config_dir().to_path_buf()
     } else {
         // Fallback for systems without proper directory support
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        Path::new(&home).join(".config").join("nb-cli")
+        Path::new(&home).join(".config").join("nbr")
     }
 }
 
 /// Get platform-specific cache directory
 fn get_cache_dir() -> PathBuf {
-    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nb-cli") {
+    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nbr") {
         proj_dirs.cache_dir().to_path_buf()
     } else {
         // Fallback for systems without proper directory support
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        Path::new(&home).join(".cache").join("nb-cli")
+        Path::new(&home).join(".cache").join("nbr")
     }
 }
 

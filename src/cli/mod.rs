@@ -1,6 +1,6 @@
 //! CLI command handlers module
 //!
-//! This module contains all the command handlers for the nb-cli tool.
+//! This module contains all the command handlers for the nbr tool.
 
 pub mod adapter;
 pub mod cache;

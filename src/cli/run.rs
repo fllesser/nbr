@@ -1,10 +1,10 @@
-//! Run command handler for nb-cli
+//! Run command handler for nbr
 //!
 //! This module handles running NoneBot applications with various options
 //! including auto-reload, custom host/port, and environment management.
 
 use crate::config::ConfigManager;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::utils::process_utils;
 use clap::ArgMatches;
 use colored::Colorize;
@@ -97,12 +97,12 @@ impl BotRunner {
             },
             Config::default(),
         )
-        .map_err(|e| NbCliError::io(format!("Failed to create file watcher: {}", e)))?;
+        .map_err(|e| NbrError::io(format!("Failed to create file watcher: {}", e)))?;
 
         // Watch the working directory recursively
         watcher
             .watch(&self.work_dir, RecursiveMode::Recursive)
-            .map_err(|e| NbCliError::io(format!("Failed to watch directory: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to watch directory: {}", e)))?;
 
         self._watcher = Some(watcher);
         info!("File watcher setup for auto-reload");
@@ -113,7 +113,7 @@ impl BotRunner {
     pub async fn run(&mut self) -> Result<()> {
         // Validate bot file exists
         if !self.bot_file.exists() {
-            return Err(NbCliError::not_found(format!(
+            return Err(NbrError::not_found(format!(
                 "Bot file not found: {}",
                 self.bot_file.display()
             )));
@@ -146,14 +146,14 @@ impl BotRunner {
 
         let exit_status = process
             .wait()
-            .map_err(|e| NbCliError::io(format!("Failed to wait for process: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to wait for process: {}", e)))?;
 
         if exit_status.success() {
             info!("Bot process exited successfully");
             Ok(())
         } else {
             let exit_code = exit_status.code().unwrap_or(-1);
-            Err(NbCliError::command_execution(
+            Err(NbrError::command_execution(
                 format!("Bot process failed with exit code: {}", exit_code),
                 exit_code,
             ))
@@ -368,7 +368,7 @@ impl BotRunner {
 
         let process = cmd
             .spawn()
-            .map_err(|e| NbCliError::io(format!("Failed to start bot process: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to start bot process: {}", e)))?;
 
         debug!("Bot process started with PID: {:?}", process.id());
         Ok(process)
@@ -491,7 +491,7 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
         }
     }
 
-    Err(NbCliError::not_found(format!(
+    Err(NbrError::not_found(format!(
         "Bot file '{}' not found. Tried: {}",
         bot_file,
         common_names.join(", ")
@@ -511,7 +511,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()
-        .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
 
     let venv_paths = [
         current_dir.join("venv").join("bin").join("python"),
@@ -529,7 +529,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
-        NbCliError::not_found(
+        NbrError::not_found(
             "Python executable not found. Please install Python 3.10+ or set python_path in config",
         )
     })
@@ -546,7 +546,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 
     // Verify it's Python 3.10+
     if !version.contains("Python 3.1") {
-        return Err(NbCliError::environment(format!(
+        return Err(NbrError::environment(format!(
             "Python 3.10+ required, found: {}",
             version
         )));
@@ -555,7 +555,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
     // Check if uv is available
     let has_uv = process_utils::check_uv().await?;
     if !has_uv {
-        return Err(NbCliError::environment(
+        return Err(NbrError::environment(
             "uv not found. Please install uv from https://astral.sh/blog/uv",
         ));
     }
@@ -592,7 +592,7 @@ fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>
             debug!("Loading environment variables from {}", env_path.display());
 
             let content = fs::read_to_string(&env_path)
-                .map_err(|e| NbCliError::io(format!("Failed to read {}: {}", env_file, e)))?;
+                .map_err(|e| NbrError::io(format!("Failed to read {}: {}", env_file, e)))?;
 
             for line in content.lines() {
                 let line = line.trim();

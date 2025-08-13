@@ -1,9 +1,9 @@
-//! Utility functions module for nb-cli
+//! Utility functions module for nbr
 //!
 //! This module contains common utility functions used throughout the application.
 #![allow(dead_code)]
 
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use console::Term;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
@@ -47,7 +47,7 @@ pub mod fs_utils {
         let path = path.as_ref();
         if !path.exists() {
             fs::create_dir_all(path).map_err(|e| {
-                NbCliError::io(format!("Failed to create directory {:?}: {}", path, e))
+                NbrError::io(format!("Failed to create directory {:?}: {}", path, e))
             })?;
             debug!("Created directory: {:?}", path);
         }
@@ -114,7 +114,7 @@ pub mod fs_utils {
         let dir = dir.as_ref();
         let mut matches = Vec::new();
         let regex = Regex::new(pattern)
-            .map_err(|e| NbCliError::invalid_argument(format!("Invalid pattern: {}", e)))?;
+            .map_err(|e| NbrError::invalid_argument(format!("Invalid pattern: {}", e)))?;
 
         find_files_recursive(dir, &regex, recursive, &mut matches)?;
         Ok(matches)
@@ -176,7 +176,7 @@ pub mod process_utils {
         debug!("Executing command: {} {}", program, args.join(" "));
 
         if program.is_empty() {
-            return Err(NbCliError::invalid_argument("Program name cannot be empty"));
+            return Err(NbrError::invalid_argument("Program name cannot be empty"));
         }
 
         let mut cmd = Command::new(program);
@@ -190,13 +190,13 @@ pub mod process_utils {
             cmd.output().await
         })
         .await
-        .map_err(|_| NbCliError::command_execution(format!("{} {}", program, args.join(" ")), -1))?
-        .map_err(|e| NbCliError::io(format!("Failed to execute command: {}", e)))?;
+        .map_err(|_| NbrError::command_execution(format!("{} {}", program, args.join(" ")), -1))?
+        .map_err(|e| NbrError::io(format!("Failed to execute command: {}", e)))?;
 
         if !output.status.success() {
             let exit_code = output.status.code().unwrap_or(-1);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(NbCliError::command_execution(
+            return Err(NbrError::command_execution(
                 format!("{} {} - {}", program, args.join(" "), stderr),
                 exit_code,
             ));
@@ -224,11 +224,11 @@ pub mod process_utils {
 
         let status = cmd
             .status()
-            .map_err(|e| NbCliError::io(format!("Failed to execute command: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to execute command: {}", e)))?;
 
         if !status.success() {
             let exit_code = status.code().unwrap_or(-1);
-            return Err(NbCliError::command_execution(
+            return Err(NbrError::command_execution(
                 format!("{} {}", program, args.join(" ")),
                 exit_code,
             ));
@@ -301,10 +301,10 @@ pub mod net_utils {
             .get(url)
             .send()
             .await
-            .map_err(|e| NbCliError::Network(e))?;
+            .map_err(|e| NbrError::Network(e))?;
 
         if !response.status().is_success() {
-            return Err(NbCliError::unknown(format!(
+            return Err(NbrError::unknown(format!(
                 "Failed to download {}: HTTP {}",
                 url,
                 response.status()
@@ -327,16 +327,16 @@ pub mod net_utils {
         };
 
         let mut file = fs::File::create(destination)
-            .map_err(|e| NbCliError::io(format!("Failed to create file: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to create file: {}", e)))?;
 
         let mut downloaded = 0u64;
         let mut stream = response.bytes_stream();
 
         use futures_util::StreamExt;
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| NbCliError::Network(e))?;
+            let chunk = chunk.map_err(|e| NbrError::Network(e))?;
             file.write_all(&chunk).map_err(|e| {
-                NbCliError::Io(std::io::Error::new(
+                NbrError::Io(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Failed to write to file: {}", e),
                 ))
@@ -372,7 +372,7 @@ pub mod net_utils {
     /// Parse and validate URL
     pub fn parse_url(url: &str) -> Result<Url> {
         Url::parse(url)
-            .map_err(|e| NbCliError::invalid_argument(format!("Invalid URL {}: {}", url, e)))
+            .map_err(|e| NbrError::invalid_argument(format!("Invalid URL {}: {}", url, e)))
     }
 }
 
@@ -419,18 +419,18 @@ pub mod string_utils {
     /// Validate project name
     pub fn validate_project_name(name: &str) -> Result<()> {
         if name.is_empty() {
-            return Err(NbCliError::validation("Project name cannot be empty"));
+            return Err(NbrError::validation("Project name cannot be empty"));
         }
 
         if name.len() > 100 {
-            return Err(NbCliError::validation(
+            return Err(NbrError::validation(
                 "Project name is too long (max 100 characters)",
             ));
         }
 
         let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
         if !re.is_match(name) {
-            return Err(NbCliError::validation(
+            return Err(NbrError::validation(
                 "Project name must start with a letter and contain only letters, numbers, underscores, and hyphens",
             ));
         }
@@ -441,12 +441,12 @@ pub mod string_utils {
     /// Validate package name
     pub fn validate_package_name(name: &str) -> Result<()> {
         if name.is_empty() {
-            return Err(NbCliError::validation("Package name cannot be empty"));
+            return Err(NbrError::validation("Package name cannot be empty"));
         }
 
         let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
         if !re.is_match(name) {
-            return Err(NbCliError::validation(
+            return Err(NbrError::validation(
                 "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens",
             ));
         }
@@ -502,7 +502,7 @@ pub mod archive_utils {
         show_progress: bool,
     ) -> Result<()> {
         let mut archive = ZipArchive::new(reader)
-            .map_err(|e| NbCliError::archive(format!("Failed to read ZIP archive: {}", e)))?;
+            .map_err(|e| NbrError::archive(format!("Failed to read ZIP archive: {}", e)))?;
 
         let pb = if show_progress {
             let pb = ProgressBar::new(archive.len() as u64);
@@ -521,27 +521,27 @@ pub mod archive_utils {
         for i in 0..archive.len() {
             let mut file = archive
                 .by_index(i)
-                .map_err(|e| NbCliError::archive(format!("Failed to read file from ZIP: {}", e)))?;
+                .map_err(|e| NbrError::archive(format!("Failed to read file from ZIP: {}", e)))?;
 
             let outpath = destination.join(file.mangled_name());
 
             if file.name().ends_with('/') {
                 fs::create_dir_all(&outpath)
-                    .map_err(|e| NbCliError::io(format!("Failed to create directory: {}", e)))?;
+                    .map_err(|e| NbrError::io(format!("Failed to create directory: {}", e)))?;
             } else {
                 if let Some(p) = outpath.parent() {
                     if !p.exists() {
                         fs::create_dir_all(p).map_err(|e| {
-                            NbCliError::io(format!("Failed to create directory: {}", e))
+                            NbrError::io(format!("Failed to create directory: {}", e))
                         })?;
                     }
                 }
 
                 let mut outfile = fs::File::create(&outpath)
-                    .map_err(|e| NbCliError::io(format!("Failed to create file: {}", e)))?;
+                    .map_err(|e| NbrError::io(format!("Failed to create file: {}", e)))?;
 
                 io::copy(&mut file, &mut outfile)
-                    .map_err(|e| NbCliError::io(format!("Failed to extract file: {}", e)))?;
+                    .map_err(|e| NbrError::io(format!("Failed to extract file: {}", e)))?;
             }
 
             if let Some(ref pb) = pb {
@@ -567,7 +567,7 @@ pub mod archive_utils {
 
         let entries = archive
             .entries()
-            .map_err(|e| NbCliError::archive(format!("Failed to read TAR entries: {}", e)))?;
+            .map_err(|e| NbrError::archive(format!("Failed to read TAR entries: {}", e)))?;
 
         let pb = if show_progress {
             let pb = ProgressBar::new_spinner();
@@ -582,8 +582,8 @@ pub mod archive_utils {
         };
 
         for (index, entry) in entries.enumerate() {
-            let mut entry = entry
-                .map_err(|e| NbCliError::archive(format!("Failed to read TAR entry: {}", e)))?;
+            let mut entry =
+                entry.map_err(|e| NbrError::archive(format!("Failed to read TAR entry: {}", e)))?;
 
             if let Some(ref pb) = pb {
                 pb.set_message(format!("Extracting file {}", index + 1));
@@ -592,7 +592,7 @@ pub mod archive_utils {
 
             entry
                 .unpack_in(destination)
-                .map_err(|e| NbCliError::archive(format!("Failed to extract TAR entry: {}", e)))?;
+                .map_err(|e| NbrError::archive(format!("Failed to extract TAR entry: {}", e)))?;
         }
 
         if let Some(pb) = pb {
@@ -618,7 +618,7 @@ pub mod git_utils {
             builder.branch(branch);
         }
 
-        builder.clone(url, path).map_err(|e| NbCliError::git(e))?;
+        builder.clone(url, path).map_err(|e| NbrError::git(e))?;
 
         info!("Repository cloned successfully");
         Ok(())
@@ -629,7 +629,7 @@ pub mod git_utils {
         let mut opts = RepositoryInitOptions::new();
         opts.bare(bare);
 
-        Repository::init_opts(path, &opts).map_err(|e| NbCliError::git(e))?;
+        Repository::init_opts(path, &opts).map_err(|e| NbrError::git(e))?;
 
         info!("Initialized Git repository at {:?}", path);
         Ok(())
@@ -642,13 +642,13 @@ pub mod git_utils {
 
     /// Get the current Git branch
     pub fn get_current_branch(repo_path: &Path) -> Result<String> {
-        let repo = Repository::open(repo_path).map_err(|e| NbCliError::git(e))?;
+        let repo = Repository::open(repo_path).map_err(|e| NbrError::git(e))?;
 
-        let head = repo.head().map_err(|e| NbCliError::git(e))?;
+        let head = repo.head().map_err(|e| NbrError::git(e))?;
 
         let branch_name = head
             .shorthand()
-            .ok_or_else(|| NbCliError::unknown("Could not get branch name"))?;
+            .ok_or_else(|| NbrError::unknown("Could not get branch name"))?;
 
         Ok(branch_name.to_string())
     }
@@ -671,7 +671,7 @@ pub mod template_utils {
 
         let rendered = handlebars
             .render_template(template, context)
-            .map_err(|e| NbCliError::template(format!("Failed to render template: {}", e)))?;
+            .map_err(|e| NbrError::template(format!("Failed to render template: {}", e)))?;
 
         Ok(rendered)
     }
@@ -752,7 +752,7 @@ pub mod terminal_utils {
     pub fn clear_screen() -> Result<()> {
         Term::stdout()
             .clear_screen()
-            .map_err(|e| NbCliError::io(format!("Failed to clear screen: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to clear screen: {}", e)))?;
         Ok(())
     }
 
@@ -799,7 +799,7 @@ pub mod path_utils {
     pub fn resolve_path<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
         let path = path.as_ref();
         path.absolutize()
-            .map_err(|e| NbCliError::io(format!("Failed to resolve path {:?}: {}", path, e)))
+            .map_err(|e| NbrError::io(format!("Failed to resolve path {:?}: {}", path, e)))
             .map(|p| p.to_path_buf())
     }
 
@@ -832,7 +832,7 @@ pub mod path_utils {
         // Check for directory traversal attempts
         for component in path.components() {
             if component == std::path::Component::ParentDir {
-                return Err(NbCliError::validation("Path contains '..' components"));
+                return Err(NbrError::validation("Path contains '..' components"));
             }
         }
 

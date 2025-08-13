@@ -1,5 +1,5 @@
 use crate::{
-    error::{NbCliError, Result},
+    error::{NbrError, Result},
     utils::{process_utils, terminal_utils},
 };
 use std::path::Path;
@@ -113,7 +113,7 @@ impl Uv {
             }
         }
 
-        Err(NbCliError::not_found(format!(
+        Err(NbrError::not_found(format!(
             "Version not found for package: {}",
             package
         )))

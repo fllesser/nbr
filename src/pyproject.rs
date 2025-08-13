@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use toml_edit::{Array, Document, DocumentMut, Table, value};
 
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
@@ -81,34 +81,34 @@ impl Default for BuildSystem {
 impl PyProjectConfig {
     pub async fn load() -> Result<Option<Self>> {
         let current_dir = std::env::current_dir()
-            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
         let config_path = current_dir.join("pyproject.toml");
         PyProjectConfig::parse(&config_path).map(Some)
     }
 
     pub fn parse(config_path: &Path) -> Result<Self> {
         let content = fs::read_to_string(config_path)
-            .map_err(|e| NbCliError::config(format!("Failed to read pyproject.toml: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
 
         let parsed: toml::Value = toml::from_str(&content)
-            .map_err(|e| NbCliError::config(format!("Failed to parse TOML: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to parse TOML: {}", e)))?;
 
         parsed
             .try_into()
-            .map_err(|e| NbCliError::config(format!("Failed to parse pyproject.toml: {}", e)))
+            .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))
     }
 
     pub async fn save(&self) -> Result<()> {
         let current_dir = std::env::current_dir()
-            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
 
         let config_path = current_dir.join("pyproject.toml");
         let config_content = toml::to_string_pretty(self).map_err(|e| {
-            NbCliError::config(format!("Failed to serialize pyproject config: {}", e))
+            NbrError::config(format!("Failed to serialize pyproject config: {}", e))
         })?;
 
         fs::write(&config_path, config_content)
-            .map_err(|e| NbCliError::config(format!("Failed to write pyproject config: {}", e)))
+            .map_err(|e| NbrError::config(format!("Failed to write pyproject config: {}", e)))
     }
 
     #[allow(dead_code)]
@@ -168,10 +168,10 @@ impl ToolNonebot {
             .clone()
             .unwrap_or_else(|| Path::new("pyproject.toml").to_path_buf());
         let content = std::fs::read_to_string(toml_path.clone())
-            .map_err(|e| NbCliError::config(format!("Failed to read pyproject.toml: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
 
         let doc = Document::parse(content)
-            .map_err(|e| NbCliError::config(format!("Failed to parse pyproject.toml: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))?;
 
         let doc_mut = doc.into_mut();
         Ok(Self { toml_path, doc_mut })
