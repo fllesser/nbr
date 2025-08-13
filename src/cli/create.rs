@@ -7,12 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::config::NbConfig;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool};
 use crate::utils::terminal_utils;
 use crate::uv::Uv;
@@ -38,27 +38,33 @@ pub struct ProjectOptions {
     pub plugins: Vec<String>,
 }
 
-pub fn display_project_options(options: &ProjectOptions) {
-    println!("\n{}", "Nonebot project options:".bright_green());
-    println!("  name: {}", options.name.bright_blue());
-    println!("  template: {}", options.template.bright_blue());
-    println!("  output_dir: {}", options.output_dir.display().to_string().bright_blue());
-    let adapters = options
-        .adapters
-        .iter()
-        .map(|a| a.name.clone())
-        .collect::<Vec<_>>();
-    println!("  adapters: {}", adapters.join(", ").bright_blue());
-    println!("  plugins: {}", options.plugins.join(", ").bright_blue());
+impl ProjectOptions {
+    pub fn display(&self) {
+        println!("\n{}", "Nonebot project options:".bright_green());
+        println!("  name: {}", self.name.bright_blue());
+        println!("  template: {}", self.template.bright_blue());
+        println!(
+            "  output_dir: {}",
+            self.output_dir.display().to_string().bright_blue()
+        );
+        let adapters = self
+            .adapters
+            .iter()
+            .map(|a| a.name.clone())
+            .collect::<Vec<_>>();
+        println!("  adapters: {}", adapters.join(", ").bright_blue());
+        println!("  plugins: {}", self.plugins.join(", ").bright_blue());
+    }
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("{}", "🎉 Creating NoneBot project...".bright_green());
 
-    let adapter_manager = AdapterManager::new().await?;
+    let adapter_manager = AdapterManager::new()?;
 
     let options = gather_project_options(matches, &adapter_manager).await?;
-    display_project_options(&options);
+
+    options.display();
 
     // Check if directory already exists
     if options.output_dir.exists() && !options.force {
@@ -69,7 +75,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
             ))
             .default(false)
             .interact()
-            .map_err(|e| NbCliError::io(e.to_string()))?;
+            .map_err(|e| NbrError::io(e.to_string()))?;
 
         if !should_continue {
             println!("{}", "❌ Operation cancelled.".bright_red());
@@ -84,7 +90,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("📂 Location: {}", options.output_dir.display());
     println!("\n🚀 Next steps:");
     println!("  cd {}", options.name);
-    println!("  nbuv run");
+    println!("  nbr run");
 
     // Show additional setup instructions
     // show_setup_instructions(&options).await?;
@@ -104,11 +110,11 @@ async fn gather_project_options(
             .default("awesome-bot".to_string())
             .validate_with(|input: &String| -> Result<()> {
                 if input.is_empty() {
-                    Err(NbCliError::invalid_argument(
+                    Err(NbrError::invalid_argument(
                         "Project name cannot be empty".to_string(),
                     ))
                 } else if input.contains(' ') {
-                    Err(NbCliError::invalid_argument(
+                    Err(NbrError::invalid_argument(
                         "Project name cannot contain spaces".to_string(),
                     ))
                 } else {
@@ -173,7 +179,7 @@ async fn select_template() -> Result<String> {
         .default(0)
         .items(&template_descriptions)
         .interact()
-        .map_err(|e| NbCliError::io(e.to_string()))?;
+        .map_err(|e| NbrError::io(e.to_string()))?;
 
     Ok(templates[selection].name.clone())
 }
@@ -197,7 +203,7 @@ async fn select_components(
             .items(&adapter_names)
             //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
             .interact()
-            .map_err(|e| NbCliError::io(e.to_string()))?;
+            .map_err(|e| NbrError::io(e.to_string()))?;
 
         selections
             .into_iter()
@@ -219,7 +225,7 @@ async fn select_components(
         .items(&builtin_plugins)
         .defaults(&vec![true; adapter_names.len().min(1)])
         .interact()
-        .map_err(|e| NbCliError::io(e.to_string()))?
+        .map_err(|e| NbrError::io(e.to_string()))?
         .into_iter()
         .map(|i| builtin_plugins[i].to_string())
         .collect();
@@ -266,14 +272,10 @@ async fn get_template_info(name: &str) -> Result<Template> {
     templates
         .into_iter()
         .find(|t| t.name == name)
-        .ok_or_else(|| NbCliError::not_found(format!("Template '{}' not found", name)))
+        .ok_or_else(|| NbrError::not_found(format!("Template '{}' not found", name)))
 }
 
 async fn create_project(options: &ProjectOptions) -> Result<()> {
-    info!(
-        "Creating project directory: {}",
-        options.output_dir.display()
-    );
     fs::create_dir_all(&options.output_dir).context("Failed to create output directory")?;
 
     match options.template.as_str() {

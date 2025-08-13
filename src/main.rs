@@ -1,7 +1,6 @@
 use anyhow::Result;
 use clap::{Arg, Command};
 use colored::*;
-use tracing::info;
 
 mod cli;
 mod config;
@@ -283,8 +282,6 @@ async fn main() -> Result<()> {
 
     setup_logging(verbose, quiet)?;
 
-    info!("Starting nb cli in rust v{}", VERSION);
-
     match matches.subcommand() {
         Some(("create", sub_matches)) => create::handle_create(sub_matches).await?,
         Some(("run", sub_matches)) => run::handle_run(sub_matches).await?,
@@ -324,7 +321,7 @@ mod tests {
     #[test]
     fn test_verbose_level() {
         let cmd = build_cli();
-        let matches = cmd.get_matches_from(vec!["nbuv", "--verbose"]);
+        let matches = cmd.get_matches_from(vec!["nbr", "--verbose"]);
         let verbose_level = matches.get_count("verbose");
 
         setup_logging(verbose_level, false).unwrap();

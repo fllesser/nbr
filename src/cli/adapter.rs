@@ -1,11 +1,11 @@
-//! Adapter command handler for nb-cli
+//! Adapter command handler for nbr
 //!
 //! This module handles adapter management including installation, removal,
 //! and listing adapters for NoneBot applications.
 #![allow(dead_code)]
 
 use crate::config::ConfigManager;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::pyproject::Adapter;
 use crate::utils::process_utils;
 use crate::uv::Uv;
@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::debug;
 
 // {
 // "module_name": "nonebot.adapters.onebot.v11",
@@ -94,20 +94,18 @@ pub struct AdapterManager {
 
 impl AdapterManager {
     /// Create a new adapter manager
-    pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
-        let config = config_manager.config();
+    pub fn new() -> Result<Self> {
+        let config_manager = ConfigManager::new()?;
 
-        let python_path = find_python_executable(config)?;
+        let python_path = find_python_executable(config_manager.config())?;
         let work_dir = env::current_dir()
-            .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("nb-cli-in-rust")
+            .user_agent("nbr")
             .build()
-            .map_err(|e| NbCliError::Network(e))?;
+            .map_err(|e| NbrError::Network(e))?;
 
         Ok(Self {
             config_manager,
@@ -129,17 +127,17 @@ impl AdapterManager {
             self.client.get(adapters_json_url).send(),
         )
         .await
-        .map_err(|_| NbCliError::unknown("Request timeout"))?
-        .map_err(|e| NbCliError::Network(e))?;
+        .map_err(|_| NbrError::unknown("Request timeout"))?
+        .map_err(|e| NbrError::Network(e))?;
 
         if !response.status().is_success() {
-            return Err(NbCliError::not_found("Adapter registry not found"));
+            return Err(NbrError::not_found("Adapter registry not found"));
         }
 
         let adapters: Vec<RegistryAdapter> = response
             .json()
             .await
-            .map_err(|e| NbCliError::plugin(format!("Failed to parse adapter info: {}", e)))?;
+            .map_err(|e| NbrError::plugin(format!("Failed to parse adapter info: {}", e)))?;
 
         let mut adapters_map = HashMap::new();
         for adapter in adapters {
@@ -152,7 +150,7 @@ impl AdapterManager {
 
     /// Install an adapter
     pub async fn install_adapter(&mut self, package_name: &str) -> Result<()> {
-        info!("Installing adapter: {}", package_name);
+        debug!("Installing adapter: {}", package_name);
 
         // Check if it's a built-in adapter
         let registry_adapter = self.get_registry_adapter(package_name).await?;
@@ -162,7 +160,7 @@ impl AdapterManager {
 
         // Check if already installed
         if Uv::is_installed(&registry_adapter.project_link, Some(&self.work_dir)).await? {
-            return Err(NbCliError::already_exists(format!(
+            return Err(NbrError::already_exists(format!(
                 "Adapter '{}' is already installed",
                 registry_adapter.project_link
             )));
@@ -176,9 +174,9 @@ impl AdapterManager {
             .with_prompt("Do you want to install this adapter?")
             .default(true)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Installation cancelled by user");
+            println!("Installation cancelled by user");
             return Ok(());
         }
 
@@ -219,7 +217,7 @@ impl AdapterManager {
 
     /// Uninstall an adapter
     pub async fn uninstall_adapter(&mut self, package_name: &str) -> Result<()> {
-        info!("Uninstalling adapter: {}", package_name);
+        debug!("Uninstalling adapter: {}", package_name);
 
         // Find the adapter in configuration
         let registry_adapter = self.get_registry_adapter(package_name).await?;
@@ -232,9 +230,9 @@ impl AdapterManager {
             ))
             .default(false)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Uninstallation cancelled by user");
+            println!("Uninstallation cancelled by user");
             return Ok(());
         }
 
@@ -258,22 +256,17 @@ impl AdapterManager {
 
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
-        if show_all {
-            println!("{}", "All Adapters:".bright_green().bold());
-        } else {
-            println!("{}", "Installed Adapters:".bright_green().bold());
-        }
-
-        println!();
         let config = self.config_manager.config();
         let installed_adapters = &config.nb_config.tool.nonebot.adapters;
 
         let adapters_map = self.fetch_regsitry_adapters().await?;
         if show_all {
+            println!("{}", "All Adapters:".bright_green().bold());
             adapters_map.iter().for_each(|(_, adapter)| {
                 self.display_adapter(adapter);
             });
         } else {
+            println!("{}", "Installed Adapters:".bright_green().bold());
             installed_adapters.iter().for_each(|ia| {
                 let adapter = adapters_map.get(ia.name.as_str()).unwrap();
                 self.display_adapter(adapter);
@@ -284,10 +277,13 @@ impl AdapterManager {
     }
 
     pub fn display_adapter(&self, adapter: &RegistryAdapter) {
-        println!(" {}", adapter.name.bright_blue().bold());
-        println!("   Package: {}", adapter.project_link);
-        println!("   Module: {}", adapter.module_name);
-        println!("   Desc: {}", adapter.desc);
+        println!(
+            " {} {} ({} {})",
+            "•".bright_blue(),
+            adapter.name.bright_blue().bold(),
+            adapter.project_link.bright_black(),
+            format!("v{}", adapter.version).bright_green(),
+        );
     }
 
     /// Get adapter from registry
@@ -298,7 +294,7 @@ impl AdapterManager {
             .values()
             .find(|a| a.project_link == package_name)
             .ok_or_else(|| {
-                NbCliError::not_found(format!("Adapter '{}' not found in registry", package_name))
+                NbrError::not_found(format!("Adapter '{}' not found in registry", package_name))
             })?;
         Ok(adapter)
     }
@@ -366,7 +362,7 @@ impl AdapterManager {
             }
         }
 
-        Err(NbCliError::not_found(format!(
+        Err(NbrError::not_found(format!(
             "Adapter '{}' is not installed",
             name
         )))
@@ -385,7 +381,7 @@ impl AdapterManager {
             nb_config.tool.nonebot.adapters.push(adapter);
         })?;
 
-        self.config_manager.save().await
+        self.config_manager.save()
     }
 
     /// Remove adapter from configuration
@@ -394,7 +390,7 @@ impl AdapterManager {
             nb_config.tool.nonebot.adapters.retain(|a| a.name != name);
         })?;
 
-        self.config_manager.save().await
+        self.config_manager.save()
     }
 
     /// Display adapter information
@@ -448,7 +444,7 @@ impl AdapterManager {
 
 /// Handle the adapter command
 pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
-    let mut adapter_manager = AdapterManager::new().await?;
+    let mut adapter_manager = AdapterManager::new()?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -463,7 +459,7 @@ pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
             let show_all = sub_matches.get_flag("all");
             adapter_manager.list_adapters(show_all).await
         }
-        _ => Err(NbCliError::invalid_argument("Invalid adapter subcommand")),
+        _ => Err(NbrError::invalid_argument("Invalid adapter subcommand")),
     }
 }
 
@@ -478,7 +474,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()
-        .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
 
     let venv_paths = [
         current_dir.join("venv").join("bin").join("python"),
@@ -495,7 +491,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
-        NbCliError::not_found(
+        NbrError::not_found(
             "Python executable not found. Please install Python 3.8+ or configure python_path",
         )
     })
@@ -508,7 +504,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_regsitry_adapters() {
-        let manager = AdapterManager::new().await.unwrap();
+        let manager = AdapterManager::new().unwrap();
         let adapters_map = manager.fetch_regsitry_adapters().await.unwrap();
         assert!(adapters_map.len() > 0);
         for adapter in adapters_map.values() {

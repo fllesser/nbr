@@ -1,11 +1,11 @@
-//! Cache command handler for nb-cli
+//! Cache command handler for nbr
 //!
 //! This module handles cache management including clearing caches,
 //! showing cache information, and managing cache policies.
 #![allow(dead_code)]
 
 use crate::config::ConfigManager;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::utils::{fs_utils, terminal_utils};
 use clap::ArgMatches;
 use colored::*;
@@ -94,8 +94,7 @@ pub struct CacheManager {
 impl CacheManager {
     /// Create a new cache manager
     pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
+        let config_manager = ConfigManager::new()?;
 
         let cache_dir = config_manager.cache_dir().to_path_buf();
         fs_utils::ensure_dir(&cache_dir)?;
@@ -122,7 +121,7 @@ impl CacheManager {
     /// Clear cache
     pub async fn clear_cache(&self, cache_types: Vec<CacheType>, force: bool) -> Result<()> {
         if cache_types.is_empty() {
-            return Err(NbCliError::invalid_argument("No cache types specified"));
+            return Err(NbrError::invalid_argument("No cache types specified"));
         }
 
         let stats = self.gather_cache_stats().await?;
@@ -174,7 +173,7 @@ impl CacheManager {
                 .with_prompt("Are you sure you want to clear these cache entries?")
                 .default(false)
                 .interact()
-                .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+                .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
             {
                 info!("Cache clearing cancelled by user");
                 return Ok(());
@@ -462,10 +461,10 @@ impl CacheManager {
     fn remove_cache_entry(&self, entry: &CacheEntry) -> Result<()> {
         if entry.path.is_file() {
             fs::remove_file(&entry.path)
-                .map_err(|e| NbCliError::io(format!("Failed to remove file: {}", e)))?;
+                .map_err(|e| NbrError::io(format!("Failed to remove file: {}", e)))?;
         } else if entry.path.is_dir() {
             fs::remove_dir_all(&entry.path)
-                .map_err(|e| NbCliError::io(format!("Failed to remove directory: {}", e)))?;
+                .map_err(|e| NbrError::io(format!("Failed to remove directory: {}", e)))?;
         }
 
         debug!("Removed cache entry: {}", entry.path.display());
@@ -660,7 +659,7 @@ pub async fn handle_cache(matches: &ArgMatches) -> Result<()> {
                             types.push(cache_type);
                         }
                     } else {
-                        return Err(NbCliError::invalid_argument(format!(
+                        return Err(NbrError::invalid_argument(format!(
                             "Unknown cache type: {}",
                             type_str
                         )));
@@ -676,7 +675,7 @@ pub async fn handle_cache(matches: &ArgMatches) -> Result<()> {
         }
         Some(("info", _)) => cache_manager.show_info().await,
         Some(("cleanup", _)) => cache_manager.cleanup_cache().await,
-        _ => Err(NbCliError::invalid_argument("Invalid cache subcommand")),
+        _ => Err(NbrError::invalid_argument("Invalid cache subcommand")),
     }
 }
 

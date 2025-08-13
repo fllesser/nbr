@@ -1,16 +1,16 @@
-//! Init command handler for nb-cli
+//! Init command handler for nbr
 //!
 //! This module handles initializing NoneBot projects in the current directory,
 //! creating necessary files and directory structure.
 
 use crate::config::{ConfigManager, NbConfig};
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::utils::{fs_utils, git_utils, string_utils, template_utils};
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Input, MultiSelect};
 use std::collections::HashMap;
-use std::env;
+
 use std::fs;
 use std::path::PathBuf;
 use tracing::{debug, info, warn};
@@ -73,11 +73,8 @@ impl Default for InitOptions {
 impl InitHandler {
     /// Create a new init handler
     pub async fn new(force: bool) -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
-
-        let work_dir = env::current_dir()
-            .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        let config_manager = ConfigManager::new()?;
+        let work_dir = config_manager.current_dir().to_path_buf();
 
         let mut options = InitOptions::default();
         options.force = force;
@@ -113,7 +110,7 @@ impl InitHandler {
 
         // Check if directory is empty or force is enabled
         if !self.options.force && !self.is_directory_suitable()? {
-            return Err(NbCliError::already_exists(
+            return Err(NbrError::already_exists(
                 "Directory is not empty. Use --force to initialize anyway.",
             ));
         }
@@ -128,7 +125,7 @@ impl InitHandler {
             .with_prompt("Initialize project with these settings?")
             .default(true)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
             info!("Project initialization cancelled");
             return Ok(());
@@ -162,7 +159,7 @@ impl InitHandler {
     /// Check if directory is suitable for initialization
     fn is_directory_suitable(&self) -> Result<bool> {
         let entries = fs::read_dir(&self.work_dir)
-            .map_err(|e| NbCliError::io(format!("Failed to read directory: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read directory: {}", e)))?;
 
         let mut file_count = 0;
         for entry in entries {
@@ -196,7 +193,7 @@ impl InitHandler {
                     .map_err(|e| format!("Invalid project name: {}", e))
             })
             .interact_text()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
         self.options.name = name;
 
@@ -205,7 +202,7 @@ impl InitHandler {
             .with_prompt("Project description")
             .allow_empty(true)
             .interact_text()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
         if !description.trim().is_empty() {
             self.options.description = Some(description.trim().to_string());
@@ -217,7 +214,7 @@ impl InitHandler {
                 .with_prompt("Author name")
                 .allow_empty(true)
                 .interact_text()
-                .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+                .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
             if !author.trim().is_empty() {
                 self.options.author_name = Some(author.trim().to_string());
@@ -229,7 +226,7 @@ impl InitHandler {
                 .with_prompt("Author email")
                 .allow_empty(true)
                 .interact_text()
-                .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+                .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
             if !email.trim().is_empty() {
                 self.options.author_email = Some(email.trim().to_string());
@@ -250,19 +247,19 @@ impl InitHandler {
             .with_prompt("Initialize git repository?")
             .default(self.options.init_git)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
         self.options.create_venv = Confirm::new()
             .with_prompt("Create virtual environment?")
             .default(self.options.create_venv)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
         self.options.use_poetry = Confirm::new()
             .with_prompt("Use Poetry for dependency management?")
             .default(self.options.use_poetry)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
         Ok(())
     }
@@ -298,7 +295,7 @@ impl InitHandler {
             .items(&descriptions)
             .defaults(&defaults)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
         self.options.adapters = selections
             .iter()
@@ -324,14 +321,14 @@ impl InitHandler {
             .with_prompt("Install common plugins?")
             .default(false)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
             println!("{}", "Select plugins to install:".bright_blue());
 
             let selections = MultiSelect::new()
                 .items(&descriptions)
                 .interact()
-                .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?;
+                .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?;
 
             self.options.plugins = selections
                 .iter()
@@ -448,7 +445,7 @@ impl InitHandler {
 
         let bot_file = self.work_dir.join("bot.py");
         fs::write(&bot_file, content)
-            .map_err(|e| NbCliError::io(format!("Failed to write bot file: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write bot file: {}", e)))?;
 
         debug!("Generated bot.py");
         Ok(())
@@ -460,26 +457,25 @@ impl InitHandler {
         let env_content = self.generate_env_content();
         let env_file = self.work_dir.join(".env");
         fs::write(&env_file, env_content)
-            .map_err(|e| NbCliError::io(format!("Failed to write .env file: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write .env file: {}", e)))?;
 
         // Generate .env.example file
         let env_example_content = self.generate_env_example_content();
         let env_example_file = self.work_dir.join(".env.example");
         fs::write(&env_example_file, env_example_content)
-            .map_err(|e| NbCliError::io(format!("Failed to write .env.example file: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write .env.example file: {}", e)))?;
 
         // Generate pyproject.toml or requirements.txt
         if self.options.use_poetry {
             let pyproject_content = self.generate_pyproject_toml();
             let pyproject_file = self.work_dir.join("pyproject.toml");
-            fs::write(&pyproject_file, pyproject_content).map_err(|e| {
-                NbCliError::io(format!("Failed to write pyproject.toml file: {}", e))
-            })?;
+            fs::write(&pyproject_file, pyproject_content)
+                .map_err(|e| NbrError::io(format!("Failed to write pyproject.toml file: {}", e)))?;
         } else {
             let requirements_content = self.generate_requirements_txt();
             let requirements_file = self.work_dir.join("requirements.txt");
             fs::write(&requirements_file, requirements_content).map_err(|e| {
-                NbCliError::io(format!("Failed to write requirements.txt file: {}", e))
+                NbrError::io(format!("Failed to write requirements.txt file: {}", e))
             })?;
         }
 
@@ -493,7 +489,7 @@ impl InitHandler {
         let readme_content = self.generate_readme();
         let readme_file = self.work_dir.join("README.md");
         fs::write(&readme_file, readme_content)
-            .map_err(|e| NbCliError::io(format!("Failed to write README.md file: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write README.md file: {}", e)))?;
 
         debug!("Generated documentation files");
         Ok(())
@@ -505,19 +501,19 @@ impl InitHandler {
         let gitignore_content = self.generate_gitignore();
         let gitignore_file = self.work_dir.join(".gitignore");
         fs::write(&gitignore_file, gitignore_content)
-            .map_err(|e| NbCliError::io(format!("Failed to write .gitignore file: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write .gitignore file: {}", e)))?;
 
         // Generate Dockerfile
         let dockerfile_content = self.generate_dockerfile();
         let dockerfile_file = self.work_dir.join("Dockerfile");
         fs::write(&dockerfile_file, dockerfile_content)
-            .map_err(|e| NbCliError::io(format!("Failed to write Dockerfile: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write Dockerfile: {}", e)))?;
 
         // Generate docker-compose.yml
         let docker_compose_content = self.generate_docker_compose();
         let docker_compose_file = self.work_dir.join("docker-compose.yml");
         fs::write(&docker_compose_file, docker_compose_content)
-            .map_err(|e| NbCliError::io(format!("Failed to write docker-compose.yml: {}", e)))?;
+            .map_err(|e| NbrError::io(format!("Failed to write docker-compose.yml: {}", e)))?;
 
         debug!("Generated development files");
         Ok(())
@@ -1203,7 +1199,7 @@ networks:
         info!("Creating virtual environment...");
 
         let python_cmd = crate::utils::process_utils::find_python()
-            .ok_or_else(|| NbCliError::not_found("Python executable not found"))?;
+            .ok_or_else(|| NbrError::not_found("Python executable not found"))?;
 
         let venv_path = self.work_dir.join("venv");
 
@@ -1221,7 +1217,7 @@ networks:
         // Install dependencies if requirements.txt exists
         let requirements_file = self.work_dir.join("requirements.txt");
         if requirements_file.exists() {
-            info!("Installing dependencies in virtual environment...");
+            debug!("Installing dependencies in virtual environment...");
 
             let uv_cmd = "uv";
 
@@ -1244,10 +1240,7 @@ networks:
         self.config_manager
             .update_nb_config(|config| *config = NbConfig::default())?;
 
-        self.config_manager.save().await?;
-
-        info!("Project configuration saved");
-        Ok(())
+        self.config_manager.save()
     }
 
     /// Show completion message

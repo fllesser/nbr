@@ -1,11 +1,11 @@
-//! Environment command handler for nb-cli
+//! Environment command handler for nbr
 //!
 //! This module handles environment management including showing system information,
 //! checking dependencies, and validating the current project setup.
 #![allow(dead_code)]
 
 use crate::config::ConfigManager;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
 use clap::ArgMatches;
 use colored::*;
@@ -122,11 +122,9 @@ pub struct EnvironmentChecker {
 impl EnvironmentChecker {
     /// Create a new environment checker
     pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
+        let config_manager = ConfigManager::new()?;
 
-        let work_dir = env::current_dir()
-            .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        let work_dir = config_manager.current_dir().to_path_buf();
 
         let mut system = System::new_all();
         system.refresh_all();
@@ -237,7 +235,7 @@ impl EnvironmentChecker {
     /// Get Python environment information
     async fn get_python_info(&self) -> Result<PythonInfo> {
         let python_exe = process_utils::find_python()
-            .ok_or_else(|| NbCliError::not_found("Python executable not found"))?;
+            .ok_or_else(|| NbrError::not_found("Python executable not found"))?;
 
         let version = process_utils::get_python_version(&python_exe)
             .await
@@ -929,7 +927,7 @@ pub async fn handle_env(matches: &ArgMatches) -> Result<()> {
     match matches.subcommand() {
         Some(("info", _)) => checker.show_info().await,
         Some(("check", _)) => checker.check_environment().await,
-        _ => Err(NbCliError::invalid_argument("Invalid env subcommand")),
+        _ => Err(NbrError::invalid_argument("Invalid env subcommand")),
     }
 }
 

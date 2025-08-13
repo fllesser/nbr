@@ -1,11 +1,11 @@
-//! Plugin command handler for nb-cli
+//! Plugin command handler for nbr
 //!
 //! This module handles plugin management including installation, removal,
 //! listing, searching, and updating plugins from various sources.
 #![allow(dead_code)]
 
 use crate::config::ConfigManager;
-use crate::error::{NbCliError, Result};
+use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::Uv;
 use clap::ArgMatches;
@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{debug, info};
 
 // "module_name": "nonebot_plugin_status",
 // "project_link": "nonebot-plugin-status",
@@ -65,6 +65,26 @@ pub struct RegistryPlugin {
     pub skip_test: bool,
 }
 
+pub struct PyPIPlugin {
+    pub package_name: String,
+    pub module_name: String,
+    pub version: String,
+    
+    pub author: String,
+    pub homepage: Option<String>,
+    pub description: String,
+}
+
+pub struct GitRepoPlugin {
+    pub repo_url: String,
+    pub package_name: String,
+    pub module_name: String,
+
+    pub version: String,
+    pub author: String,
+    pub description: String,
+}
+
 /// Plugin manager
 pub struct PluginManager {
     /// Configuration manager
@@ -81,20 +101,18 @@ pub struct PluginManager {
 
 impl PluginManager {
     /// Create a new plugin manager
-    pub async fn new() -> Result<Self> {
-        let mut config_manager = ConfigManager::new()?;
-        config_manager.load().await?;
+    pub fn new() -> Result<Self> {
+        let config_manager = ConfigManager::new()?;
         let config = config_manager.config();
 
         let python_path = find_python_executable(config)?;
-        let work_dir = env::current_dir()
-            .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        let work_dir = config_manager.current_dir().to_path_buf();
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("nb-cli-rust")
+            .user_agent("nbr")
             .build()
-            .map_err(|e| NbCliError::Network(e))?;
+            .map_err(|e| NbrError::Network(e))?;
 
         Ok(Self {
             config_manager,
@@ -106,7 +124,7 @@ impl PluginManager {
     }
 
     pub async fn install_plugin_from_github(&mut self, repo_url: &str) -> Result<()> {
-        info!("Installing plugin from github: {}", repo_url);
+        debug!("Installing plugin from github: {}", repo_url);
 
         Uv::add_from_github(repo_url, Some(&self.work_dir)).await?;
 
@@ -124,7 +142,7 @@ impl PluginManager {
     }
 
     pub async fn install_unofficial_plugin(&mut self, package_name: &str) -> Result<()> {
-        info!("Installing unofficial plugin: {}", package_name);
+        debug!("Installing unofficial plugin: {}", package_name);
 
         Uv::add(package_name, false, None, Some(&self.work_dir)).await?;
         let module_name = package_name.replace("-", "_");
@@ -136,7 +154,6 @@ impl PluginManager {
         );
         Ok(())
     }
-
     /// Install a plugin
     pub async fn install_plugin(
         &mut self,
@@ -144,14 +161,14 @@ impl PluginManager {
         index_url: Option<&str>,
         upgrade: bool,
     ) -> Result<()> {
-        info!("Installing plugin: {}", name);
+        debug!("Installing plugin: {}", name);
 
         // Check if it's a registry plugin or PyPI package
         let registry_plugin = self.get_registry_plugin(name).await?;
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !upgrade && self.is_plugin_installed(&package_name).await? {
-            return Err(NbCliError::already_exists(format!(
+            return Err(NbrError::already_exists(format!(
                 "Plugin '{}' is already installed. Use --upgrade to update it.",
                 registry_plugin.project_link
             )));
@@ -164,9 +181,9 @@ impl PluginManager {
             .with_prompt("Do you want to install this plugin?")
             .default(true)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Installation cancelled by user");
+            println!("Installation cancelled by user");
             return Ok(());
         }
         // Install the plugin
@@ -186,13 +203,13 @@ impl PluginManager {
 
     /// Uninstall a plugin
     pub async fn uninstall_plugin(&mut self, name: &str) -> Result<()> {
-        info!("Uninstalling plugin: {}", name);
+        debug!("Uninstalling plugin: {}", name);
 
         let registry_plugin = self.get_registry_plugin(name).await?;
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !self.is_plugin_installed(&package_name).await? {
-            return Err(NbCliError::not_found(format!(
+            return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
             )));
@@ -205,9 +222,9 @@ impl PluginManager {
             ))
             .default(false)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Uninstallation cancelled by user");
+            println!("Uninstallation cancelled by user");
             return Ok(());
         }
 
@@ -215,7 +232,7 @@ impl PluginManager {
         Uv::remove(&package_name, Some(&self.work_dir)).await?;
 
         // PyProjectConfig::remove_plugin(&module_name).await?;
-        self.remove_plugin_from_config(&registry_plugin.module_name.to_string())
+        self.remove_plugin_in_config(&registry_plugin.module_name.to_string())
             .await?;
 
         println!(
@@ -239,16 +256,20 @@ impl PluginManager {
             .filter_map(|module| registry_plugins.get(module.as_str()).cloned())
             .collect();
 
+        println!("{}", "Installed Plugins:".bright_green().bold());
+
         for plugin in plugins {
             let installed_version = self
                 .get_installed_package_version(&plugin.project_link)
                 .await?;
+
             let mut plugin_display = format!(
-                "  {} {} v{}",
+                "  {} {} {}",
                 "•".bright_blue(),
                 plugin.project_link.bright_white(),
-                installed_version.bright_green(),
+                format!("v{}", installed_version).bright_green(),
             );
+
             if installed_version != plugin.version {
                 plugin_display += format!(" (available: {})", plugin.version)
                     .bright_yellow()
@@ -311,7 +332,7 @@ impl PluginManager {
         } else if let Some(name) = plugin_name {
             self.update_single_plugin(name).await
         } else {
-            Err(NbCliError::invalid_argument(
+            Err(NbrError::invalid_argument(
                 "Either specify a plugin name or use --all flag",
             ))
         }
@@ -330,11 +351,12 @@ impl PluginManager {
 
         println!("{}", "Checking for plugin updates...".bright_blue());
 
+        // registry plugins, installed plugins
         let mut outdated_plugins = Vec::new();
         let pb = ProgressBar::new(plugin_modules.len() as u64);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] Checking {pos}/{len} plugins...")
+                .template("{spinner:.green} Checking {pos}/{len} plugins...")
                 .unwrap(),
         );
 
@@ -344,7 +366,7 @@ impl PluginManager {
             let plugin = module_plugins_map
                 .get(plugin_module.as_str())
                 .ok_or_else(|| {
-                    NbCliError::not_found(format!("Plugin '{}' not found", plugin_module))
+                    NbrError::not_found(format!("Plugin '{}' not found", plugin_module))
                 })?;
             let (installed_version, latest_version) = tokio::join!(
                 self.get_installed_package_version(&plugin.project_link),
@@ -354,7 +376,7 @@ impl PluginManager {
             let latest_version = latest_version.unwrap_or(plugin.version.clone());
 
             if installed_version != latest_version {
-                outdated_plugins.push((*plugin, latest_version.clone()));
+                outdated_plugins.push((*plugin, installed_version.clone()));
             }
 
             pb.inc(1);
@@ -372,13 +394,13 @@ impl PluginManager {
             outdated_plugins.len().to_string().bright_yellow()
         );
 
-        for (plugin, latest_version) in &outdated_plugins {
+        for (plugin, installed_version) in &outdated_plugins {
             println!(
                 "  {} {} {} → {}",
                 "•".bright_blue(),
                 plugin.project_link.bright_white(),
-                plugin.version.red(),
-                latest_version.bright_green()
+                installed_version.red(),
+                plugin.version.bright_green()
             );
         }
 
@@ -386,7 +408,7 @@ impl PluginManager {
             .with_prompt("Do you want to update these plugins?")
             .default(true)
             .interact()
-            .map_err(|e| NbCliError::io(format!("Failed to read user input: {}", e)))?
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
             info!("Update cancelled by user");
             return Ok(());
@@ -432,7 +454,7 @@ impl PluginManager {
         let installed_version = self.get_installed_package_version(&package_name).await?;
         // Check if already installed
         if !self.is_plugin_installed(&package_name).await? {
-            return Err(NbCliError::not_found(format!(
+            return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
             )));
@@ -488,7 +510,7 @@ impl PluginManager {
             }
         }
 
-        Err(NbCliError::not_found(format!(
+        Err(NbrError::not_found(format!(
             "Version not found for package: {}",
             package
         )))
@@ -500,23 +522,23 @@ impl PluginManager {
 
         let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
             .await
-            .map_err(|_| NbCliError::unknown("Request timeout"))?
-            .map_err(|e| NbCliError::Network(e))?;
+            .map_err(|_| NbrError::unknown("Request timeout"))?
+            .map_err(|e| NbrError::Network(e))?;
 
         if !response.status().is_success() {
-            return Err(NbCliError::not_found(format!(
+            return Err(NbrError::not_found(format!(
                 "Package '{}' not found on PyPI",
                 package
             )));
         }
 
-        let json: serde_json::Value = response.json().await.map_err(|e| NbCliError::Network(e))?;
+        let json: serde_json::Value = response.json().await.map_err(|e| NbrError::Network(e))?;
 
         json.get("info")
             .and_then(|info| info.get("version"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .ok_or_else(|| NbCliError::not_found("Version field not found in PyPI response"))
+            .ok_or_else(|| NbrError::not_found("Version field not found in PyPI response"))
     }
 
     /// Check if plugin is installed
@@ -538,17 +560,17 @@ impl PluginManager {
             self.client.get(plugins_json_url).send(),
         )
         .await
-        .map_err(|_| NbCliError::unknown("Request timeout"))?
-        .map_err(|e| NbCliError::Network(e))?;
+        .map_err(|_| NbrError::unknown("Request timeout"))?
+        .map_err(|e| NbrError::Network(e))?;
 
         if !response.status().is_success() {
-            return Err(NbCliError::not_found("Plugin registry not found"));
+            return Err(NbrError::not_found("Plugin registry not found"));
         }
 
         let plugins: Vec<RegistryPlugin> = response
             .json()
             .await
-            .map_err(|e| NbCliError::plugin(format!("Failed to parse plugin info: {}", e)))?;
+            .map_err(|e| NbrError::plugin(format!("Failed to parse plugin info: {}", e)))?;
 
         self.registry_plugins.set(plugins).unwrap();
 
@@ -581,7 +603,7 @@ impl PluginManager {
         let plugins = self.package_plugins_map().await?;
         let plugin = plugins
             .get(package_name)
-            .ok_or_else(|| NbCliError::not_found(format!("Plugin '{}' not found", package_name)))?;
+            .ok_or_else(|| NbrError::not_found(format!("Plugin '{}' not found", package_name)))?;
         Ok(plugin)
     }
 
@@ -617,7 +639,7 @@ impl PluginManager {
             }
         }
 
-        Err(NbCliError::not_found(format!(
+        Err(NbrError::not_found(format!(
             "Plugin '{}' is not installed",
             name
         )))
@@ -633,35 +655,16 @@ impl PluginManager {
             }
         })?;
 
-        self.config_manager.save().await
+        self.config_manager.save()
     }
 
     /// Remove plugin from configuration
-    async fn remove_plugin_from_config(&mut self, name: &str) -> Result<()> {
+    async fn remove_plugin_in_config(&mut self, name: &str) -> Result<()> {
         self.config_manager.update_nb_config(|nb_config| {
             nb_config.tool.nonebot.plugins.retain(|p| p != name);
         })?;
 
-        self.config_manager.save().await
-    }
-
-    /// Refresh plugin information
-    async fn refresh_plugin_info(&mut self) -> Result<()> {
-        let config = self.config_manager.config();
-
-        let mut updated_plugins = Vec::new();
-
-        for plugin in &config.nb_config.tool.nonebot.plugins {
-            updated_plugins.push(plugin.clone());
-        }
-
-        self.config_manager.update_nb_config(|nb_config| {
-            nb_config.tool.nonebot.plugins = updated_plugins;
-        })?;
-
-        self.config_manager.save().await?;
-
-        Ok(())
+        self.config_manager.save()
     }
 
     /// Display plugin information
@@ -734,7 +737,7 @@ impl PluginManager {
 
 /// Handle the plugin command
 pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
-    let mut plugin_manager = PluginManager::new().await?;
+    let mut plugin_manager = PluginManager::new()?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -771,7 +774,7 @@ pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
                 .update_plugins(plugin_name.map(|s| s.as_str()), update_all)
                 .await
         }
-        _ => Err(NbCliError::invalid_argument("Invalid plugin subcommand")),
+        _ => Err(NbrError::invalid_argument("Invalid plugin subcommand")),
     }
 }
 
@@ -786,7 +789,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()
-        .map_err(|e| NbCliError::io(format!("Failed to get current directory: {}", e)))?;
+        .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
 
     let venv_paths = [
         current_dir.join("venv").join("bin").join("python"),
@@ -803,7 +806,7 @@ fn find_python_executable(config: &crate::config::Config) -> Result<String> {
 
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
-        NbCliError::not_found(
+        NbrError::not_found(
             "Python executable not found. Please install Python 3.8+ or configure python_path",
         )
     })
@@ -840,7 +843,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
-        let plugin_manager = PluginManager::new().await.unwrap();
+        let plugin_manager = PluginManager::new().unwrap();
         let plugins = plugin_manager.package_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
             println!(
@@ -854,7 +857,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_registry_plugin() {
-        let plugin_manager = PluginManager::new().await.unwrap();
+        let plugin_manager = PluginManager::new().unwrap();
         let plugin = plugin_manager
             .get_registry_plugin("nonebot-plugin-status")
             .await

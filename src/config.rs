@@ -1,18 +1,18 @@
-//! Configuration management module for nb-cli
+//! Configuration management module for nbr
 //!
 //! This module handles loading, saving, and managing configuration files
 //! for both global user settings and project-specific configurations.
 #![allow(dead_code)]
 
-use crate::error::{NbCliError, Result};
-use crate::pyproject::{Adapter, Nonebot, Tool};
+use crate::error::{NbrError, Result};
+use crate::pyproject::Tool;
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info};
+use tracing::debug;
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,7 +281,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             user: UserConfig::default(),
-            nb_config: NbConfig::default(),
+            nb_config: NbConfig::load().unwrap_or_default(),
             templates: TemplateConfig::default(),
             cache: CacheConfig::default(),
             registry: RegistryConfig::default(),
@@ -289,159 +289,148 @@ impl Default for Config {
     }
 }
 
-impl TryFrom<&toml::Value> for NbConfig {
-    type Error = NbCliError;
+// impl TryFrom<&toml::Value> for NbConfig {
+//     type Error = NbrError;
 
-    fn try_from(value: &toml::Value) -> Result<Self> {
-        let table = value
-            .as_table()
-            .ok_or_else(|| NbCliError::config("Expected table for project config"))?;
+//     fn try_from(value: &toml::Value) -> Result<Self> {
+//         let table = value
+//             .as_table()
+//             .ok_or_else(|| NbrError::config("Expected table for project config"))?;
 
-        let adapters = table
-            .get("adapters")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|v| {
-                        let adapter: Adapter = toml::from_str(v).unwrap();
-                        adapter
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+//         let adapters = table
+//             .get("adapters")
+//             .and_then(|v| v.as_array())
+//             .map(|arr| {
+//                 arr.iter()
+//                     .filter_map(|v| v.as_str())
+//                     .map(|v| {
+//                         let adapter: Adapter = toml::from_str(v).unwrap();
+//                         adapter
+//                     })
+//                     .collect()
+//             })
+//             .unwrap_or_default();
 
-        let plugins = table
-            .get("plugins")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|name| name.to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+//         let plugins = table
+//             .get("plugins")
+//             .and_then(|v| v.as_array())
+//             .map(|arr| {
+//                 arr.iter()
+//                     .filter_map(|v| v.as_str())
+//                     .map(|name| name.to_string())
+//                     .collect()
+//             })
+//             .unwrap_or_default();
 
-        let plugin_dirs = table
-            .get("plugin_dirs")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|name| name.to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+//         let plugin_dirs = table
+//             .get("plugin_dirs")
+//             .and_then(|v| v.as_array())
+//             .map(|arr| {
+//                 arr.iter()
+//                     .filter_map(|v| v.as_str())
+//                     .map(|name| name.to_string())
+//                     .collect()
+//             })
+//             .unwrap_or_default();
 
-        let builtin_plugins = table
-            .get("builtin_plugins")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|name| name.to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+//         let builtin_plugins = table
+//             .get("builtin_plugins")
+//             .and_then(|v| v.as_array())
+//             .map(|arr| {
+//                 arr.iter()
+//                     .filter_map(|v| v.as_str())
+//                     .map(|name| name.to_string())
+//                     .collect()
+//             })
+//             .unwrap_or_default();
 
-        Ok(NbConfig {
-            tool: Tool {
-                nonebot: Nonebot {
-                    adapters,
-                    plugins,
-                    plugin_dirs,
-                    builtin_plugins,
-                },
-            },
-        })
-    }
-}
+//         Ok(NbConfig {
+//             tool: Tool {
+//                 nonebot: Nonebot {
+//                     adapters,
+//                     plugins,
+//                     plugin_dirs,
+//                     builtin_plugins,
+//                 },
+//             },
+//         })
+//     }
+// }
 
 /// Configuration manager
 pub struct ConfigManager {
+    current_dir: PathBuf,
     config_dir: PathBuf,
     cache_dir: PathBuf,
     current_config: Config,
 }
 
+impl NbConfig {
+    pub fn load() -> Result<Self> {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
+
+        let config_path = current_dir.join("nb.toml");
+        if config_path.exists() {
+            Self::parse(&config_path)
+        } else {
+            Ok(NbConfig::default())
+        }
+    }
+
+    fn parse(config_path: &Path) -> Result<Self> {
+        let content = fs::read_to_string(config_path)
+            .map_err(|e| NbrError::config(format!("Failed to read nb config: {}", e)))?;
+
+        let config: NbConfig = toml::from_str(&content)
+            .map_err(|e| NbrError::config(format!("Failed to parse nb config: {}", e)))?;
+
+        Ok(config)
+    }
+
+    fn save(&self, config_path: &Path) -> Result<()> {
+        let content = toml::to_string_pretty(self)
+            .map_err(|e| NbrError::config(format!("Failed to serialize nb config: {}", e)))?;
+
+        fs::write(config_path, content)
+            .map_err(|e| NbrError::config(format!("Failed to write nb config: {}", e)))?;
+
+        Ok(())
+    }
+}
+
 impl ConfigManager {
     /// Create a new configuration manager
     pub fn new() -> Result<Self> {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
+
         let config_dir = get_config_dir();
         let cache_dir = get_cache_dir();
 
         // Ensure directories exist
         fs::create_dir_all(&config_dir)
-            .map_err(|e| NbCliError::config(format!("Failed to create config directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to create config directory: {}", e)))?;
         fs::create_dir_all(&cache_dir)
-            .map_err(|e| NbCliError::config(format!("Failed to create cache directory: {}", e)))?;
+            .map_err(|e| NbrError::config(format!("Failed to create cache directory: {}", e)))?;
 
         let current_config = Config::default();
 
         Ok(Self {
+            current_dir,
             config_dir,
             cache_dir,
             current_config,
         })
     }
 
-    /// Load configuration from files
-    pub async fn load(&mut self) -> Result<()> {
-        // Load project config if in a project directory
-        if let Some(nb_config) = self.load_nb_config().await? {
-            self.current_config.nb_config = nb_config;
-            info!("Loaded nb configuration");
-        }
-
-        Ok(())
-    }
-
     /// Save configuration to files
-    pub async fn save(&self) -> Result<()> {
+    pub fn save(&self) -> Result<()> {
         // Save project config if it exists
-        self.save_nb_config(&self.config().nb_config).await?;
-
-        info!("Configuration saved successfully");
-        Ok(())
-    }
-
-    /// Load project configuration from current directory
-    async fn load_nb_config(&self) -> Result<Option<NbConfig>> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
-
-        let config_path = current_dir.join("nb.toml");
-        if config_path.exists() {
-            self.parse_nb_config(&config_path).await.map(Some)
-        } else {
-            // init nb.toml
-            Ok(None)
-        }
-    }
-
-    /// Parse project configuration from file
-    async fn parse_nb_config(&self, config_path: &Path) -> Result<NbConfig> {
-        let content = fs::read_to_string(config_path)
-            .map_err(|e| NbCliError::config(format!("Failed to read nb config: {}", e)))?;
-
-        let config: NbConfig = toml::from_str(&content)
-            .map_err(|e| NbCliError::config(format!("Failed to parse nb config: {}", e)))?;
-
-        Ok(config)
-    }
-
-    /// Save project configuration
-    async fn save_nb_config(&self, nb_config: &NbConfig) -> Result<()> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| NbCliError::config(format!("Failed to get current directory: {}", e)))?;
-
-        let config_path = current_dir.join("nb.toml");
-        let config_content = toml::to_string_pretty(nb_config)
-            .map_err(|e| NbCliError::config(format!("Failed to serialize nb config: {}", e)))?;
-
-        fs::write(&config_path, config_content)
-            .map_err(|e| NbCliError::config(format!("Failed to write nb config: {}", e)))?;
-
+        self.config()
+            .nb_config
+            .save(&self.current_dir.join("nb.toml"))?;
+        debug!("Configuration saved successfully");
         Ok(())
     }
 
@@ -483,6 +472,11 @@ impl ConfigManager {
         &self.cache_dir
     }
 
+    /// Get current directory
+    pub fn current_dir(&self) -> &Path {
+        &self.current_dir
+    }
+
     /// Validate current configuration
     pub fn validate(&self) -> Result<()> {
         // Validate user config
@@ -504,23 +498,23 @@ impl ConfigManager {
 
 /// Get platform-specific configuration directory
 fn get_config_dir() -> PathBuf {
-    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nb-cli") {
+    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nbr") {
         proj_dirs.config_dir().to_path_buf()
     } else {
         // Fallback for systems without proper directory support
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        Path::new(&home).join(".config").join("nb-cli")
+        Path::new(&home).join(".config").join("nbr")
     }
 }
 
 /// Get platform-specific cache directory
 fn get_cache_dir() -> PathBuf {
-    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nb-cli") {
+    if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nbr") {
         proj_dirs.cache_dir().to_path_buf()
     } else {
         // Fallback for systems without proper directory support
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        Path::new(&home).join(".cache").join("nb-cli")
+        Path::new(&home).join(".cache").join("nbr")
     }
 }
 
@@ -555,7 +549,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_save_nb_config() {
-        let manager = ConfigManager::new().unwrap();
+        use crate::pyproject::Nonebot;
+
+        let mut manager = ConfigManager::new().unwrap();
         let nb_config = NbConfig {
             tool: Tool {
                 nonebot: Nonebot {
@@ -566,7 +562,12 @@ mod tests {
                 },
             },
         };
-        manager.save_nb_config(&nb_config).await.unwrap();
-        manager.load_nb_config().await.unwrap().unwrap();
+        manager.config_mut().nb_config = nb_config;
+        manager.save().unwrap();
+        let nb_config = NbConfig::load().unwrap();
+        assert_eq!(nb_config.tool.nonebot.adapters.len(), 0);
+        assert_eq!(nb_config.tool.nonebot.plugins.len(), 0);
+        assert_eq!(nb_config.tool.nonebot.plugin_dirs.len(), 0);
+        assert_eq!(nb_config.tool.nonebot.builtin_plugins.len(), 0);
     }
 }
