@@ -1,7 +1,7 @@
 //! Utility functions module for nbr
 //!
 //! This module contains common utility functions used throughout the application.
-#![allow(dead_code)]
+#![allow(unused)]
 
 use crate::error::{NbrError, Result};
 use console::Term;
@@ -279,14 +279,6 @@ pub mod process_utils {
         let version = String::from_utf8_lossy(&output.stdout);
         Ok(version.trim().to_string())
     }
-
-    /// Check if uv is available
-    pub async fn check_uv() -> Result<bool> {
-        match execute_command_with_output("uv", &["--version"], None, 10).await {
-            Ok(_) => Ok(true),
-            Err(_) => Ok(false),
-        }
-    }
 }
 
 /// Network utilities
@@ -482,121 +474,6 @@ pub mod string_utils {
     }
 }
 
-/// Archive utilities
-pub mod archive_utils {
-    use super::*;
-    use flate2::read::GzDecoder;
-    use std::io;
-    use tar::Archive;
-    use zip::ZipArchive;
-
-    /// Extract ZIP archive
-    pub fn extract_zip<R: Read + std::io::Seek>(
-        reader: R,
-        destination: &Path,
-        show_progress: bool,
-    ) -> Result<()> {
-        let mut archive = ZipArchive::new(reader)
-            .map_err(|e| NbrError::archive(format!("Failed to read ZIP archive: {}", e)))?;
-
-        let pb = if show_progress {
-            let pb = ProgressBar::new(archive.len() as u64);
-            pb.set_style(
-                ProgressStyle::default_bar()
-                    .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} files")
-                    .unwrap()
-                    .progress_chars("█▉▊▋▌▍▎▏  "),
-            );
-            pb.set_message("Extracting ZIP archive");
-            Some(pb)
-        } else {
-            None
-        };
-
-        for i in 0..archive.len() {
-            let mut file = archive
-                .by_index(i)
-                .map_err(|e| NbrError::archive(format!("Failed to read file from ZIP: {}", e)))?;
-
-            let outpath = destination.join(file.mangled_name());
-
-            if file.name().ends_with('/') {
-                fs::create_dir_all(&outpath)
-                    .map_err(|e| NbrError::io(format!("Failed to create directory: {}", e)))?;
-            } else {
-                if let Some(p) = outpath.parent()
-                    && !p.exists()
-                {
-                    fs::create_dir_all(p)
-                        .map_err(|e| NbrError::io(format!("Failed to create directory: {}", e)))?;
-                }
-
-                let mut outfile = fs::File::create(&outpath)
-                    .map_err(|e| NbrError::io(format!("Failed to create file: {}", e)))?;
-
-                io::copy(&mut file, &mut outfile)
-                    .map_err(|e| NbrError::io(format!("Failed to extract file: {}", e)))?;
-            }
-
-            if let Some(ref pb) = pb {
-                pb.set_position(i as u64 + 1);
-            }
-        }
-
-        if let Some(pb) = pb {
-            pb.finish_with_message("ZIP extraction completed");
-        }
-
-        Ok(())
-    }
-
-    /// Extract TAR.GZ archive
-    pub fn extract_tar_gz<R: Read>(
-        reader: R,
-        destination: &Path,
-        show_progress: bool,
-    ) -> Result<()> {
-        let tar = GzDecoder::new(reader);
-        let mut archive = Archive::new(tar);
-
-        let entries = archive
-            .entries()
-            .map_err(|e| NbrError::archive(format!("Failed to read TAR entries: {}", e)))?;
-
-        let pb = if show_progress {
-            let pb = ProgressBar::new_spinner();
-            pb.set_style(
-                ProgressStyle::default_spinner()
-                    .template("{spinner:.green} Extracting TAR.GZ archive... {msg}")
-                    .unwrap(),
-            );
-            Some(pb)
-        } else {
-            None
-        };
-
-        for (index, entry) in entries.enumerate() {
-            let mut entry =
-                entry.map_err(|e| NbrError::archive(format!("Failed to read TAR entry: {}", e)))?;
-
-            if let Some(ref pb) = pb {
-                pb.set_message(format!("Extracting file {}", index + 1));
-                pb.tick();
-            }
-
-            entry
-                .unpack_in(destination)
-                .map_err(|e| NbrError::archive(format!("Failed to extract TAR entry: {}", e)))?;
-        }
-
-        if let Some(pb) = pb {
-            pb.finish_with_message("TAR.GZ extraction completed");
-        }
-
-        Ok(())
-    }
-}
-
 /// Git utilities
 pub mod git_utils {
     use super::*;
@@ -704,56 +581,6 @@ pub mod terminal_utils {
         let result = f();
         pb.finish_and_clear();
         result
-    }
-}
-
-/// Path utilities
-pub mod path_utils {
-    use super::*;
-    use path_absolutize::Absolutize;
-
-    /// Resolve and canonicalize path
-    pub fn resolve_path<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
-        let path = path.as_ref();
-        path.absolutize()
-            .map_err(|e| NbrError::io(format!("Failed to resolve path {:?}: {}", path, e)))
-            .map(|p| p.to_path_buf())
-    }
-
-    /// Check if path is inside another path
-    pub fn is_subpath<P: AsRef<Path>, Q: AsRef<Path>>(path: P, parent: Q) -> bool {
-        let path = path.as_ref();
-        let parent = parent.as_ref();
-
-        path.canonicalize()
-            .and_then(|p| parent.canonicalize().map(|parent| p.starts_with(parent)))
-            .unwrap_or(false)
-    }
-
-    /// Get relative path from base to target
-    pub fn get_relative_path<P: AsRef<Path>, Q: AsRef<Path>>(
-        base: P,
-        target: Q,
-    ) -> Option<PathBuf> {
-        let base = base.as_ref();
-        let target = target.as_ref();
-
-        target.strip_prefix(base).ok().map(|p| p.to_path_buf())
-    }
-
-    /// Join paths safely (prevents directory traversal)
-    pub fn safe_join<P: AsRef<Path>, Q: AsRef<Path>>(base: P, path: Q) -> Result<PathBuf> {
-        let base = base.as_ref();
-        let path = path.as_ref();
-
-        // Check for directory traversal attempts
-        for component in path.components() {
-            if component == std::path::Component::ParentDir {
-                return Err(NbrError::validation("Path contains '..' components"));
-            }
-        }
-
-        Ok(base.join(path))
     }
 }
 
