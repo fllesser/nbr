@@ -40,14 +40,14 @@ cargo install nbr
 ```bash
 # Linux
 # Download the latest release from GitHub
-curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.4/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
+curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.5/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
 
 # Move the binary to your PATH
 sudo mv nbr /usr/local/bin/
 
 # MacOS
 # Download the latest release from GitHub
-curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.4/nbr-macOS-arm64.tar.gz | tar -xzf -
+curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.5/nbr-macOS-arm64.tar.gz | tar -xzf -
 
 # Move the binary to your PATH
 sudo mv nbr /Users/{username}/.local/bin/
