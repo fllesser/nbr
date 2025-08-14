@@ -7,6 +7,7 @@
 use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
+use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,7 @@ use sysinfo::System;
 #[derive(Debug, Clone)]
 pub struct EnvironmentInfo {
     /// Operating system information
-    pub os_info: OsInfo,
+    // pub os_info: OsInfo,
     /// Python environment information
     pub python_info: PythonInfo,
     /// NoneBot information
@@ -193,7 +194,6 @@ impl EnvironmentChecker {
     async fn gather_environment_info(&mut self) -> Result<EnvironmentInfo> {
         self.system.refresh_all();
 
-        let os_info = self.get_os_info();
         let python_info = self.get_python_info().await?;
         let nonebot_info = self.get_nonebot_info(&python_info).await.ok();
         let project_info = self.get_project_info();
@@ -201,35 +201,12 @@ impl EnvironmentChecker {
         let env_vars = self.get_relevant_env_vars();
 
         Ok(EnvironmentInfo {
-            os_info,
             python_info,
             nonebot_info,
             project_info,
             system_info,
             env_vars,
         })
-    }
-
-    /// Get operating system information
-    fn get_os_info(&self) -> OsInfo {
-        OsInfo {
-            name: "macOS".to_string(),
-            version: "10.15.7".to_string(),
-            architecture: String::new(),
-            kernel_version: String::new(),
-        }
-        // OsInfo {
-        //     name: self.system..unwrap_or_else(|| "Unknown".to_string()),
-        //     version: self
-        //         .system
-        //         .os_version()
-        //         .unwrap_or_else(|| "Unknown".to_string()),
-        //     architecture: env::consts::ARCH.to_string(),
-        //     kernel_version: self
-        //         .system
-        //         .kernel_version()
-        //         .unwrap_or_else(|| "Unknown".to_string()),
-        // }
     }
 
     /// Get Python environment information
@@ -241,12 +218,14 @@ impl EnvironmentChecker {
             .await
             .unwrap_or_else(|_| "Unknown".to_string());
 
-        let virtual_env = env::var("VIRTUAL_ENV")
-            .ok()
-            .or_else(|| env::var("CONDA_PREFIX").ok());
+        let virtual_env = self
+            .get_virtual_env()
+            .map(|path| path.to_string_lossy().to_string());
 
-        let uv_version = self.get_uv_version().await.ok();
-        let site_packages = self.get_site_packages().await.unwrap_or_default();
+        let uv_version = Uv::get_self_version().await.ok();
+        let site_packages = Uv::get_site_packages(Some(&self.work_dir))
+            .await
+            .unwrap_or_default();
 
         Ok(PythonInfo {
             version,
@@ -257,40 +236,11 @@ impl EnvironmentChecker {
         })
     }
 
-    /// Get uv version
-    async fn get_uv_version(&self) -> Result<String> {
-        let output =
-            process_utils::execute_command_with_output("uv", &["version"], None, 10).await?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.trim().to_string())
-    }
-
-    /// Get site packages information
-    async fn get_site_packages(&self) -> Result<Vec<String>> {
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &["pip", "list", "--format=freeze"],
-            None,
-            30,
-        )
-        .await?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let packages = stdout
-            .lines()
-            .map(|line| line.trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect();
-
-        Ok(packages)
-    }
-
     /// Get NoneBot information
     async fn get_nonebot_info(&self, python_info: &PythonInfo) -> Result<NoneBotInfo> {
         // Check if NoneBot is installed
-        let nonebot_version = self.get_nonebot_version(&python_info.executable).await?;
-        let nonebot_location = self.get_nonebot_location(&python_info.executable).await?;
+        let nonebot_version = Uv::get_installed_version("nonebot2", Some(&self.work_dir)).await?;
+        let nonebot_location = Uv::get_installed_location("nonebot2", Some(&self.work_dir)).await?;
 
         let adapters = self.get_installed_adapters(&python_info.site_packages);
         let plugins = self.get_installed_plugins(&python_info.site_packages);
@@ -303,49 +253,22 @@ impl EnvironmentChecker {
         })
     }
 
-    /// Get NoneBot version
-    async fn get_nonebot_version(&self, python_exe: &str) -> Result<String> {
-        let output = process_utils::execute_command_with_output(
-            python_exe,
-            &["-c", "import nonebot; print(nonebot.__version__)"],
-            None,
-            10,
-        )
-        .await?;
-
-        let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Ok(version)
-    }
-
-    /// Get NoneBot location
-    async fn get_nonebot_location(&self, python_exe: &str) -> Result<String> {
-        let output = process_utils::execute_command_with_output(
-            python_exe,
-            &["-c", "import nonebot; print(nonebot.__file__)"],
-            None,
-            10,
-        )
-        .await?;
-
-        let location = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        Ok(location)
-    }
-
     /// Get installed adapters
     fn get_installed_adapters(&self, packages: &[String]) -> Vec<AdapterInfo> {
         let mut adapters = Vec::new();
 
         for package in packages {
             if package.starts_with("nonebot-adapter-")
-                && let Some((name, version)) = package.split_once("==") {
-                    adapters.push(AdapterInfo {
-                        name: name.to_string(),
-                        version: version.to_string(),
-                        location: "".to_string(), // Could be enhanced to show actual location
-                        package_name: package.to_string(),
-                        module_name: name.to_string(),
-                    });
-                }
+                && let Some((name, version)) = package.split_once("==")
+            {
+                adapters.push(AdapterInfo {
+                    name: name.to_string(),
+                    version: version.to_string(),
+                    location: "".to_string(), // Could be enhanced to show actual location
+                    package_name: package.to_string(),
+                    module_name: name.to_string(),
+                });
+            }
         }
 
         adapters
@@ -357,13 +280,14 @@ impl EnvironmentChecker {
 
         for package in packages {
             if (package.starts_with("nonebot-plugin-") || package.starts_with("nonebot_plugin_"))
-                && let Some((name, version)) = package.split_once("==") {
-                    plugins.push(PluginInfo {
-                        name: name.to_string(),
-                        version: version.to_string(),
-                        location: "".to_string(), // Could be enhanced to show actual location
-                    });
-                }
+                && let Some((name, version)) = package.split_once("==")
+            {
+                plugins.push(PluginInfo {
+                    name: name.to_string(),
+                    version: version.to_string(),
+                    location: "".to_string(), // Could be enhanced to show actual location
+                });
+            }
         }
 
         plugins
@@ -405,16 +329,7 @@ impl EnvironmentChecker {
         let is_git_repo = self.work_dir.join(".git").exists();
 
         // Check for virtual environment
-        let virtual_env = ["venv", ".venv", "env", ".env"]
-            .iter()
-            .find_map(|venv_name| {
-                let venv_path = self.work_dir.join(venv_name);
-                if venv_path.exists() && venv_path.is_dir() {
-                    Some(venv_path)
-                } else {
-                    None
-                }
-            });
+        let virtual_env = self.get_virtual_env();
 
         let project_name = self
             .work_dir
@@ -439,6 +354,20 @@ impl EnvironmentChecker {
         }
     }
 
+    fn get_virtual_env(&self) -> Option<PathBuf> {
+        let virtual_env = ["venv", ".venv", "env", ".env"]
+            .iter()
+            .find_map(|venv_name| {
+                let venv_path = self.work_dir.join(venv_name);
+                if venv_path.exists() && venv_path.is_dir() {
+                    Some(venv_path)
+                } else {
+                    None
+                }
+            });
+
+        virtual_env
+    }
     /// Get system information
     fn get_system_info(&self) -> SystemInfo {
         let total_memory = self.system.total_memory();
@@ -503,9 +432,8 @@ impl EnvironmentChecker {
             "PORT",
             "ENVIRONMENT",
             "LOG_LEVEL",
-            "ONEBOT_ACCESS_TOKEN",
-            "TELEGRAM_BOT_TOKEN",
-            "DISCORD_BOT_TOKEN",
+            "HTTP_PROXY",
+            "HTTPS_PROXY",
         ];
 
         for var_name in &relevant_vars {
@@ -529,35 +457,36 @@ impl EnvironmentChecker {
     /// Display environment information
     fn display_environment_info(&self, env_info: &EnvironmentInfo) {
         // Operating System
-        println!("{}", "Operating System:".bright_green().bold());
-        println!(
-            "  {} {}",
-            "Name:".bright_black(),
-            env_info.os_info.name.bright_white()
-        );
-        println!(
-            "  {} {}",
-            "Version:".bright_black(),
-            env_info.os_info.version.bright_white()
-        );
-        println!(
-            "  {} {}",
-            "Architecture:".bright_black(),
-            env_info.os_info.architecture.bright_white()
-        );
-        println!(
-            "  {} {}",
-            "Kernel:".bright_black(),
-            env_info.os_info.kernel_version.bright_white()
-        );
-        println!();
+        // println!("{}", "Operating System:".bright_green().bold());
+        // println!(
+        //     "  {} {}",
+        //     "Name:".bright_black(),
+        //     env_info.os_info.name.bright_white()
+        // );
+        // println!(
+        //     "  {} {}",
+        //     "Version:".bright_black(),
+        //     env_info.os_info.version.bright_white()
+        // );
+        // println!(
+        //     "  {} {}",
+        //     "Architecture:".bright_black(),
+        //     env_info.os_info.architecture.bright_white()
+        // );
+        // println!(
+        //     "  {} {}",
+        //     "Kernel:".bright_black(),
+        //     env_info.os_info.kernel_version.bright_white()
+        // );
+        // println!();
 
         // Python Environment
         println!("{}", "Python Environment:".bright_green().bold());
         println!(
-            "  {} {}",
+            "  {} {}, {}",
             "Version:".bright_black(),
-            env_info.python_info.version.bright_white()
+            env_info.python_info.version.bright_white(),
+            env_info.python_info.uv_version.as_ref().unwrap().bright_white(),
         );
         println!(
             "  {} {}",
@@ -576,14 +505,6 @@ impl EnvironmentChecker {
                 "  {} {}",
                 "Virtual Environment:".bright_black(),
                 "None".bright_red()
-            );
-        }
-
-        if let Some(ref uv_version) = env_info.python_info.uv_version {
-            println!(
-                "  {} {}",
-                "UV Version:".bright_black(),
-                uv_version.bright_white()
             );
         }
 
@@ -803,13 +724,14 @@ impl EnvironmentChecker {
             // Extract version number for more detailed check
             if let Some(version_str) = env_info.python_info.version.split_whitespace().nth(1)
                 && let Some(version_parts) = version_str.split('.').collect::<Vec<_>>().get(0..2)
-                    && let (Ok(major), Ok(minor)) = (
-                        version_parts[0].parse::<u32>(),
-                        version_parts[1].parse::<u32>(),
-                    )
-                        && (major < 3 || (major == 3 && minor < 8)) {
-                            issues.push("Python 3.8+ is recommended for NoneBot2".to_string());
-                        }
+                && let (Ok(major), Ok(minor)) = (
+                    version_parts[0].parse::<u32>(),
+                    version_parts[1].parse::<u32>(),
+                )
+                && (major < 3 || (major == 3 && minor < 8))
+            {
+                issues.push("Python 3.8+ is recommended for NoneBot2".to_string());
+            }
         }
 
         // Check if NoneBot is installed
@@ -883,12 +805,12 @@ impl EnvironmentChecker {
             } else if issue.contains("virtual environment") {
                 println!(
                     "  • Create a virtual environment: {}",
-                    "python -m venv venv".bright_cyan()
+                    "uv venv".bright_cyan()
                 );
                 println!(
                     "  • Activate it: {} (Linux/Mac) or {} (Windows)",
-                    "source venv/bin/activate".bright_cyan(),
-                    "venv\\Scripts\\activate".bright_cyan()
+                    "source .venv/bin/activate".bright_cyan(),
+                    ".venv\\Scripts\\activate".bright_cyan()
                 );
             } else if issue.contains("memory") {
                 println!("  • Close unnecessary applications to free up memory");
@@ -907,8 +829,8 @@ impl EnvironmentChecker {
                     "cp .env.example .env".bright_cyan()
                 );
                 println!(
-                    "  • Or initialize a new project: {}",
-                    "nb init".bright_cyan()
+                    "  • Or create a new project: {}",
+                    "nb create".bright_cyan()
                 );
             }
         }
@@ -937,32 +859,16 @@ mod tests {
     }
 
     #[test]
-    fn test_os_info_gathering() {
-        let mut system = System::new_all();
-        system.refresh_all();
-
-        let checker = EnvironmentChecker {
-            config_manager: ConfigManager::new().unwrap(),
-            work_dir: PathBuf::new(),
-            system,
-        };
-
-        let os_info = checker.get_os_info();
-        assert!(!os_info.name.is_empty());
-        assert!(!os_info.architecture.is_empty());
-    }
-
-    #[test]
     fn test_issue_detection() {
         let env_info = EnvironmentInfo {
-            os_info: OsInfo {
-                name: "Test OS".to_string(),
-                version: "1.0".to_string(),
-                architecture: "x64".to_string(),
-                kernel_version: "1.0.0".to_string(),
-            },
+            // os_info: OsInfo {
+            //     name: "Test OS".to_string(),
+            //     version: "1.0".to_string(),
+            //     architecture: "x64".to_string(),
+            //     kernel_version: "1.0.0".to_string(),
+            // },
             python_info: PythonInfo {
-                version: "Python 2.7.18".to_string(),
+                version: "Python 3.10.12".to_string(),
                 executable: "python".to_string(),
                 virtual_env: None,
                 uv_version: None,

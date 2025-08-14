@@ -17,6 +17,14 @@ impl Uv {
         Ok(())
     }
 
+    pub async fn get_self_version() -> Result<String> {
+        let output = process_utils::execute_command_with_output("uv", &["--version"], None, 5)
+            .await
+            .map_err(|_| NbrError::environment(UV_NOT_FOUND_MESSAGE))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.trim().to_string())
+    }
+
     pub async fn sync(working_dir: Option<&Path>) -> Result<()> {
         let args = vec!["sync"];
         let spinner = terminal_utils::create_spinner("Installing dependencies...");
@@ -50,7 +58,7 @@ impl Uv {
         }
 
         args.extend(packages.clone());
-        
+
         let spinner =
             terminal_utils::create_spinner(&format!("Installing {}...", packages.join(", ")));
 
@@ -145,9 +153,46 @@ impl Uv {
         )))
     }
 
+    pub async fn get_installed_location(
+        package: &str,
+        working_dir: Option<&Path>,
+    ) -> Result<String> {
+        let stdout = Self::show(package, working_dir).await?;
+
+        for line in stdout.lines() {
+            if line.starts_with("Location:") {
+                return Ok(line.replace("Location:", "").trim().to_string());
+            }
+        }
+
+        Err(NbrError::not_found(format!(
+            "Location not found for package: {}",
+            package
+        )))
+    }
+
     pub async fn is_installed(package: &str, working_dir: Option<&Path>) -> bool {
         let output = Self::show(package, working_dir).await;
         output.is_ok() && output.unwrap().contains("Version")
+    }
+
+    pub async fn get_site_packages(working_dir: Option<&Path>) -> Result<Vec<String>> {
+        let output = process_utils::execute_command_with_output(
+            "uv",
+            &["pip", "list", "--format=freeze"],
+            None,
+            30,
+        )
+        .await?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let packages = stdout
+            .lines()
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect();
+
+        Ok(packages)
     }
 }
 
@@ -178,5 +223,19 @@ mod tests {
         let result = Uv::get_installed_version("not-exist-package", working_dir()).await;
         assert!(result.is_ok());
         assert!(result.unwrap().contains("0.1.0"));
+    }
+
+    #[tokio::test]
+    async fn test_get_site_packages() {
+        let result = Uv::get_site_packages(working_dir()).await;
+        assert!(result.is_ok());
+        println!("{:?}", result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_get_self_version() {
+        let result = Uv::get_self_version().await;
+        assert!(result.is_ok());
+        println!("{}", result.unwrap());
     }
 }

@@ -142,7 +142,7 @@ impl BotRunner {
             .map_err(|e| NbrError::io(format!("Failed to wait for process: {}", e)))?;
 
         if exit_status.success() {
-            println!("{}", "Bot process exited successfully".bright_green());
+            println!("{}", "Bot process exited successfully".green());
         } else {
             let exit_code = exit_status.code().unwrap_or(-1);
             println!(
@@ -170,7 +170,7 @@ impl BotRunner {
 
                     println!(
                         "{}",
-                        "Bot started successfully with auto-reload enabled".bright_green()
+                        "Bot started successfully with auto-reload enabled".green()
                     );
                     let mut restart_count = 0;
 
