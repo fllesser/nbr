@@ -133,8 +133,8 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn install_unofficial_plugin(&mut self, package_name: &str) -> Result<()> {
-        debug!("Installing unofficial plugin: {}", package_name);
+    pub async fn install_unregistered_plugin(&mut self, package_name: &str) -> Result<()> {
+        debug!("Installing unregistered plugin: {}", package_name);
 
         // Install the plugin
         Uv::add(vec![package_name], false, None, Some(&self.work_dir)).await?;
@@ -737,9 +737,10 @@ pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
 fn find_python_executable(config: &crate::config::Config) -> Result<String> {
     // Use configured Python path if available
     if let Some(ref python_path) = config.user.python_path
-        && std::path::Path::new(python_path).exists() {
-            return Ok(python_path.clone());
-        }
+        && std::path::Path::new(python_path).exists()
+    {
+        return Ok(python_path.clone());
+    }
 
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()

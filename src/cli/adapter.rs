@@ -109,8 +109,7 @@ impl AdapterManager {
     }
 
     pub async fn select_adapter(&self) -> Result<Vec<RegistryAdapter>> {
-        let spinner =
-            terminal_utils::create_spinner("Fetching adapters from registry...");
+        let spinner = terminal_utils::create_spinner("Fetching adapters from registry...");
         let registry_adapters = self.fetch_regsitry_adapters().await?;
         spinner.finish_and_clear();
 
@@ -119,6 +118,7 @@ impl AdapterManager {
 
         let selected_adapters = if !adapter_names.is_empty() {
             println!("\n{}\n", "🔌 Select adapters to install:".bright_cyan());
+
             let selections = MultiSelect::new()
                 .with_prompt("Adapters")
                 .items(&adapter_names)
@@ -141,19 +141,24 @@ impl AdapterManager {
     }
 
     /// Install an adapter
-    pub async fn install_adapter(&self, registry_adapters: Vec<RegistryAdapter>) -> Result<()> {
+    pub async fn install_adapter(&self, selected_adapters: Vec<RegistryAdapter>) -> Result<()> {
         // get installed adapters
         let installed_adapters_set = self.get_installed_adapters().await?;
 
         // filter not installed adapters
-        let registry_adapters: Vec<RegistryAdapter> = registry_adapters
+        let selected_adapters: Vec<RegistryAdapter> = selected_adapters
             .into_iter()
             .filter(|a| !installed_adapters_set.contains(&a.project_link))
             .collect();
 
+        if selected_adapters.is_empty() {
+            println!("All selected adapters are already installed");
+            return Ok(());
+        }
+
         let prompt = format!(
-            "Do you want to install the selected uninstalled adapters: [{}]",
-            registry_adapters
+            "Do you want to install [{}] ?",
+            selected_adapters
                 .iter()
                 .map(|a| a.name.clone().bright_blue().bold().to_string())
                 .collect::<Vec<String>>()
@@ -171,15 +176,17 @@ impl AdapterManager {
         }
 
         // Install the adapter
-        let adapter_packages = registry_adapters
+        let adapter_packages = selected_adapters
             .iter()
             .map(|a| a.project_link.as_str())
             .collect::<Vec<&str>>();
+        // check if the adapter is already installed
 
         Uv::add(adapter_packages, false, None, Some(&self.work_dir)).await?;
 
+
         // Add to configuration
-        let adapters = registry_adapters
+        let adapters = selected_adapters
             .iter()
             .map(|a| Adapter {
                 name: a.name.clone(),
@@ -193,7 +200,7 @@ impl AdapterManager {
         println!(
             "{} Successfully installed adapters: {}",
             "✓".bright_green(),
-            registry_adapters
+            selected_adapters
                 .iter()
                 .map(|a| a.name.clone())
                 .collect::<Vec<String>>()
@@ -275,8 +282,7 @@ impl AdapterManager {
         println!(
             "{} Successfully uninstalled adapters: {}",
             "✓".bright_green(),
-            selected_adapters.to_vec()
-                .join(", ")
+            selected_adapters.to_vec().join(", ")
         );
 
         Ok(())
