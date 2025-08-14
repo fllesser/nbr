@@ -17,9 +17,6 @@ pub enum NbrError {
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
-    #[error("YAML parsing error: {0}")]
-    Yaml(#[from] serde_yaml::Error),
-
     #[error("TOML parsing error: {0}")]
     TomlDeserialize(#[from] toml::de::Error),
 
@@ -111,9 +108,7 @@ impl NbrError {
 
     /// Create a new IO error
     pub fn io<S: Into<String>>(message: S) -> Self {
-        Self::Io(std::io::Error::other(
-            message.into(),
-        ))
+        Self::Io(std::io::Error::other(message.into()))
     }
 
     /// Create a new git error from git2 error
@@ -205,7 +200,7 @@ impl NbrError {
             Self::Io(_) => false,
             Self::Network(_) => true,
             Self::Serialization(_) => false,
-            Self::Yaml(_) => false,
+            // Self::Yaml(_) => false,
             Self::TomlDeserialize(_) | Self::TomlSerialize(_) => false,
             Self::Git(_) => true,
             Self::Template { .. } => true,
@@ -231,10 +226,9 @@ impl NbrError {
         match self {
             Self::Io(_) => "io",
             Self::Network(_) => "network",
-            Self::Serialization(_)
-            | Self::Yaml(_)
-            | Self::TomlDeserialize(_)
-            | Self::TomlSerialize(_) => "serialization",
+            Self::Serialization(_) | Self::TomlDeserialize(_) | Self::TomlSerialize(_) => {
+                "serialization"
+            }
             Self::Git(_) => "git",
             Self::Template { .. } => "template",
             Self::ProjectCreation { .. } => "project",

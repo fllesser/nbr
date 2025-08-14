@@ -279,7 +279,9 @@ async fn main() -> Result<()> {
         Some(("plugin", sub_matches)) => plugin::handle_plugin(sub_matches).await?,
         Some(("adapter", sub_matches)) => adapter::handle_adapter(sub_matches).await?,
         Some(("generate", sub_matches)) => generate::handle_generate(sub_matches).await?,
-        Some(("init", sub_matches)) => init::handle_init(sub_matches).await?,
+        Some(("init", _sub_matches)) => {
+            println!("init command is not implemented yet");
+        }
         Some(("env", sub_matches)) => env::handle_env(sub_matches).await?,
         Some(("cache", sub_matches)) => cache::handle_cache(sub_matches).await?,
         _ => {
