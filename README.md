@@ -40,14 +40,14 @@ cargo install nbr
 ```bash
 # Linux
 # Download the latest release from GitHub
-curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.6/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
+curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.7/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
 
 # Move the binary to your PATH
 sudo mv nbr /usr/local/bin/
 
 # MacOS
 # Download the latest release from GitHub
-curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.6/nbr-macOS-arm64.tar.gz | tar -xzf -
+curl -LsSf https://github.com/fllesser/nbr/releases/download/v0.1.7/nbr-macOS-arm64.tar.gz | tar -xzf -
 
 # Move the binary to your PATH
 sudo mv nbr /Users/{username}/.local/bin/
@@ -94,6 +94,9 @@ nbr plugin install nonebot-plugin-emojilike
 # Install with specific index
 nbr plugin install nonebot-plugin-emojilike --index https://pypi.org/simple/
 
+# Install plugin from github repo
+nbr plugin install https://github.com/fllesser/nonebot-plugin-abs@master
+
 # Uninstall a plugin
 nbr plugin uninstall nonebot-plugin-emojilike
 
@@ -107,14 +110,15 @@ nbr plugin update <plugin> or --all
 ### Adapter Management
 
 ```bash
-# Install an adapter
-nbr adapter install nonebot-adapter-onebot
+# Install adapters
+nbr adapter install
 
-# Uninstall an adapter
-nbr adapter uninstall fastapi
+# Uninstall adapters
+nbr adapter uninstall
 
-# List available adapters
+# List installed adapters, -a to show all adapters
 nbr adapter list
+
 ```
 
 ### Environment Management
