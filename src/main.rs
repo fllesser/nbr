@@ -24,7 +24,7 @@ VP   V8P  `Y88P'  VP   V8P Y88888P Y8888P'  `Y88P'     YP
 "#;
 
 fn build_cli() -> Command {
-    Command::new("nb")
+    Command::new("nbr")
         .version(VERSION)
         .author("fllesser")
         .about("CLI for NoneBot2 - Rust implementation")
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn test_cli_creation() {
         let cmd = build_cli();
-        assert_eq!(cmd.get_name(), "nb");
+        assert_eq!(cmd.get_name(), "nbr");
     }
 
     #[test]
