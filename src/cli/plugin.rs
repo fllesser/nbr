@@ -12,6 +12,7 @@ use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
 use indicatif::{ProgressBar, ProgressStyle};
+use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -113,13 +114,46 @@ impl PluginManager {
         })
     }
 
+    pub async fn install_plugin(
+        &mut self,
+        package: &str,
+        index_url: Option<&str>,
+        upgrade: bool,
+    ) -> Result<()> {
+        if package.starts_with("http") {
+            self.install_plugin_from_github(package).await
+        } else {
+            if let Ok(registry_plugin) = self.get_registry_plugin(package).await {
+                self.install_plugin_from_registry(&registry_plugin, index_url, upgrade)
+                    .await
+            } else {
+                self.install_unregistered_plugin(package).await
+            }
+        }
+    }
+
     pub async fn install_plugin_from_github(&mut self, repo_url: &str) -> Result<()> {
         debug!("Installing plugin from github: {}", repo_url);
 
-        Uv::add_from_github(repo_url, Some(&self.work_dir)).await?;
-
         // 获取 module_name
-        let repo_name = repo_url.split("/").last().unwrap();
+        // https://github.com/fllesser/nonebot-plugin-fortnite@dev
+        // 使用正则，只取 nonebot-plugin-fortnite
+
+        // 确定是否安装 github 插件
+        if Confirm::new()
+            .with_prompt("Do you want to install this plugin from github?")
+            .default(true)
+            .interact()
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+        {
+            Uv::add_from_github(repo_url, Some(&self.work_dir)).await?;
+        } else {
+            println!("Installation cancelled by user");
+            return Ok(());
+        }
+
+        let regex = Regex::new(r"nonebot-plugin-(?P<repo>[^/@]+)").unwrap();
+        let repo_name = regex.captures(repo_url).unwrap().get(0).unwrap().as_str();
         let module_name = repo_name.replace("-", "_");
 
         // Add to configuration
@@ -136,10 +170,19 @@ impl PluginManager {
     pub async fn install_unregistered_plugin(&mut self, package_name: &str) -> Result<()> {
         debug!("Installing unregistered plugin: {}", package_name);
 
-        // Install the plugin
-        Uv::add(vec![package_name], false, None, Some(&self.work_dir)).await?;
-        let module_name = package_name.replace("-", "_");
+        if Confirm::new()
+            .with_prompt("Do you want to install this unregistered plugin from PyPI?")
+            .default(true)
+            .interact()
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+        {
+            Uv::add(vec![package_name], false, None, Some(&self.work_dir)).await?;
+        } else {
+            println!("Installation cancelled by user");
+            return Ok(());
+        }
 
+        let module_name = package_name.replace("-", "_");
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
 
@@ -151,17 +194,15 @@ impl PluginManager {
         Ok(())
     }
     /// Install a plugin
-    pub async fn install_plugin(
+    pub async fn install_plugin_from_registry(
         &self,
-        name: &str,
+        registry_plugin: &RegistryPlugin,
         index_url: Option<&str>,
         upgrade: bool,
     ) -> Result<()> {
-        debug!("Installing plugin: {}", name);
+        let package_name = &registry_plugin.project_link;
+        debug!("Installing plugin: {}", package_name);
 
-        // Check if it's a registry plugin or PyPI package
-        let registry_plugin = self.get_registry_plugin(name).await?;
-        let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !upgrade && Uv::is_installed(&package_name, Some(&self.work_dir)).await {
             return Err(NbrError::already_exists(format!(
@@ -207,7 +248,52 @@ impl PluginManager {
     pub async fn uninstall_plugin(&self, name: &str) -> Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
-        let registry_plugin = self.get_registry_plugin(name).await?;
+        if let Ok(registry_plugin) = self.get_registry_plugin(name).await {
+            self.uninstall_plugin_from_registry(&registry_plugin).await
+        } else {
+            self.uninstall_unregistered_plugin(name).await
+        }
+    }
+
+    pub async fn uninstall_unregistered_plugin(&self, package_name: &str) -> Result<()> {
+        debug!("Uninstalling unregistered plugin: {}", package_name);
+
+        if !Uv::is_installed(&package_name, Some(&self.work_dir)).await {
+            return Err(NbrError::not_found(format!(
+                "Plugin '{}' is not installed.",
+                package_name
+            )));
+        }
+
+        if Confirm::new()
+            .with_prompt(format!(
+                "Are you sure you want to uninstall '{}'?",
+                package_name
+            ))
+            .default(false)
+            .interact()
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+        {
+            Uv::remove(vec![&package_name], Some(&self.work_dir)).await?;
+            ToolNonebot::parse(None)?.remove_plugins(vec![package_name.replace("-", "_")])?;
+
+            println!(
+                "{} Successfully uninstalled plugin: {}",
+                "✓".bright_green(),
+                package_name.bright_blue()
+            );
+        } else {
+            println!("Uninstallation cancelled by user");
+            return Ok(());
+        }
+
+        Ok(())
+    }
+
+    pub async fn uninstall_plugin_from_registry(
+        &self,
+        registry_plugin: &RegistryPlugin,
+    ) -> Result<()> {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !Uv::is_installed(&package_name, Some(&self.work_dir)).await {

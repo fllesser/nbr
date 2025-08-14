@@ -77,7 +77,7 @@ impl Uv {
 
     pub async fn add_from_github(repo_url: &str, working_dir: Option<&Path>) -> Result<()> {
         let git_url = format!("git+{}", repo_url);
-        let spinner = terminal_utils::create_spinner(&format!("Installing {}...", repo_url));
+        let spinner = terminal_utils::create_spinner(&format!("Installing {}...", git_url));
         let output = process_utils::execute_command_with_output(
             "uv",
             &["add", &git_url],
