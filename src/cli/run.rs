@@ -26,10 +26,10 @@ pub struct BotRunner {
     /// Bot entry file path
     bot_file: PathBuf,
     /// Python executable path
-    // python_path: String,
-    /// Host to bind
+    python_path: String,
+    // Host to bind
     // host: String,
-    // /// Port to bind
+    // Port to bind
     // port: u16,
     /// Enable auto-reload
     auto_reload: bool,
@@ -50,7 +50,7 @@ impl BotRunner {
     /// Create a new bot runner
     pub fn new(
         bot_file: PathBuf,
-        // python_path: String,
+        python_path: String,
         // host: String,
         // port: u16,
         auto_reload: bool,
@@ -67,7 +67,7 @@ impl BotRunner {
 
         let mut runner = Self {
             bot_file,
-            // python_path,
+            python_path,
             // host,
             // port,
             auto_reload,
@@ -335,9 +335,8 @@ impl BotRunner {
 
     /// Start the bot process
     fn start_bot_process(&self) -> Result<Child> {
-        let mut cmd = Command::new("uv");
-        cmd.arg("run")
-            .arg(&self.bot_file)
+        let mut cmd = Command::new(self.python_path.clone());
+        cmd.arg(&self.bot_file)
             .current_dir(&self.work_dir)
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
@@ -396,7 +395,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     let bot_file_path = find_bot_file(&work_dir, bot_file)?;
 
     // Find Python executable
-    // let python_path = find_python_executable()?;
+    let python_path = find_python_executable()?;
 
     // Verify Python environment
     // verify_python_environment(&python_path).await?;
@@ -415,7 +414,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     // Create and run bot
     let mut runner = BotRunner::new(
         bot_file_path,
-        //python_path,
+        python_path,
         // host,
         // port,
         reload,
@@ -424,12 +423,12 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     )?;
 
     println!("{}", "Starting NoneBot application...".bright_green());
-    println!(
-        "{} {}",
-        "Bot file:".bright_blue(),
-        runner.bot_file.display()
-    );
-    //println!("{} {}", "Python:".bright_blue(), runner.python_path);
+    // println!(
+    //     "{} {}",
+    //     "Bot file:".bright_blue(),
+    //     runner.bot_file.display()
+    // );
+    println!("{} {}", "Using Python:".bright_blue(), runner.python_path);
     // println!(
     //     "{} {}:{}",
     //     "Address:".bright_blue(),
@@ -493,7 +492,6 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
 }
 
 /// Find Python executabled
-#[allow(unused)]
 fn find_python_executable() -> Result<String> {
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()
