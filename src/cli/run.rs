@@ -26,11 +26,11 @@ pub struct BotRunner {
     /// Bot entry file path
     bot_file: PathBuf,
     /// Python executable path
-    python_path: String,
+    // python_path: String,
     /// Host to bind
-    host: String,
-    /// Port to bind
-    port: u16,
+    // host: String,
+    // /// Port to bind
+    // port: u16,
     /// Enable auto-reload
     auto_reload: bool,
     /// Working directory
@@ -50,9 +50,9 @@ impl BotRunner {
     /// Create a new bot runner
     pub fn new(
         bot_file: PathBuf,
-        python_path: String,
-        host: String,
-        port: u16,
+        // python_path: String,
+        // host: String,
+        // port: u16,
         auto_reload: bool,
         work_dir: PathBuf,
         //env_vars: HashMap<String, String>,
@@ -67,9 +67,9 @@ impl BotRunner {
 
         let mut runner = Self {
             bot_file,
-            python_path,
-            host,
-            port,
+            // python_path,
+            // host,
+            // port,
             auto_reload,
             work_dir,
             //env_vars,
@@ -396,28 +396,28 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     let bot_file_path = find_bot_file(&work_dir, bot_file)?;
 
     // Find Python executable
-    let python_path = find_python_executable()?;
+    // let python_path = find_python_executable()?;
 
     // Verify Python environment
     // verify_python_environment(&python_path).await?;
 
     // Load environment variables
-    let env_vars = load_environment_variables(&work_dir)?;
-    let host = env_vars
-        .get("HOST")
-        .map(|s| s.to_string())
-        .unwrap_or("127.0.0.1".to_string());
-    let port = env_vars
-        .get("PORT")
-        .map(|s| s.parse::<u16>().unwrap_or(8080))
-        .unwrap_or(8080);
+    // let env_vars = load_environment_variables(&work_dir)?;
+    // let host = env_vars
+    //     .get("HOST")
+    //     .map(|s| s.to_string())
+    //     .unwrap_or("127.0.0.1".to_string());
+    // let port = env_vars
+    //     .get("PORT")
+    //     .map(|s| s.parse::<u16>().unwrap_or(8080))
+    //     .unwrap_or(8080);
 
     // Create and run bot
     let mut runner = BotRunner::new(
         bot_file_path,
-        python_path,
-        host,
-        port,
+        //python_path,
+        // host,
+        // port,
         reload,
         work_dir,
         //env_vars,
@@ -429,13 +429,13 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
         "Bot file:".bright_blue(),
         runner.bot_file.display()
     );
-    println!("{} {}", "Python:".bright_blue(), runner.python_path);
-    println!(
-        "{} {}:{}",
-        "Address:".bright_blue(),
-        runner.host,
-        runner.port
-    );
+    //println!("{} {}", "Python:".bright_blue(), runner.python_path);
+    // println!(
+    //     "{} {}:{}",
+    //     "Address:".bright_blue(),
+    //     runner.host,
+    //     runner.port
+    // );
 
     if reload {
         println!(
@@ -493,6 +493,7 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
 }
 
 /// Find Python executabled
+#[allow(unused)]
 fn find_python_executable() -> Result<String> {
     // Try to find Python in project virtual environment
     let current_dir = env::current_dir()
@@ -521,7 +522,7 @@ fn find_python_executable() -> Result<String> {
 }
 
 /// Verify Python environment
-#[allow(dead_code)]
+#[allow(unused)]
 async fn verify_python_environment(python_path: &str) -> Result<()> {
     info!("Verifying Python environment...");
 
@@ -535,14 +536,6 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
             "Python 3.10+ required, found: {}",
             version
         )));
-    }
-
-    // Check if uv is available
-    let has_uv = process_utils::check_uv().await?;
-    if !has_uv {
-        return Err(NbrError::environment(
-            "uv not found. Please install uv from https://astral.sh/blog/uv",
-        ));
     }
 
     // Check if NoneBot is installed
@@ -566,6 +559,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 }
 
 /// Load environment variables from .env files
+#[allow(unused)]
 fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>> {
     let mut env_vars = HashMap::new();
 
