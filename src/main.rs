@@ -242,6 +242,7 @@ fn build_cli() -> Command {
 }
 
 fn setup_logging(verbose_level: u8, quiet: bool) -> Result<()> {
+    use fmt::format::FmtSpan;
     use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
     if quiet {
@@ -254,10 +255,32 @@ fn setup_logging(verbose_level: u8, quiet: bool) -> Result<()> {
         _ => "TRACE",
     };
 
+    // Custom time format: MM-DD HH:MM:SS
+    let timer = fmt::time::UtcTime::new(
+        time::format_description::parse("[month]-[day] [hour]:[minute]:[second]")
+            .expect("failed to create time formatter"),
+    );
+
+    // Configure the formatter with colors
+    let fmt_layer = fmt::layer()
+        .with_target(true) // Keep target (like "nbr" in your example)
+        .with_timer(timer.clone())
+        .with_ansi(true)
+        .with_level(true)
+        .with_span_events(FmtSpan::NONE)
+        .event_format(
+            fmt::format()
+                .with_level(true)
+                .with_target(true)
+                .with_timer(timer)
+                .compact(),
+        );
+
     tracing_subscriber::registry()
-        .with(fmt::layer().with_target(false).without_time())
+        .with(fmt_layer)
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
         .init();
+
     Ok(())
 }
 
