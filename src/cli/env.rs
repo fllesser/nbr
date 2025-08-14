@@ -355,7 +355,9 @@ impl EnvironmentChecker {
     }
 
     fn get_virtual_env(&self) -> Option<PathBuf> {
-        let virtual_env = ["venv", ".venv", "env", ".env"]
+        
+
+        ["venv", ".venv", "env", ".env"]
             .iter()
             .find_map(|venv_name| {
                 let venv_path = self.work_dir.join(venv_name);
@@ -364,9 +366,7 @@ impl EnvironmentChecker {
                 } else {
                     None
                 }
-            });
-
-        virtual_env
+            })
     }
     /// Get system information
     fn get_system_info(&self) -> SystemInfo {

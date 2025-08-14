@@ -122,13 +122,11 @@ impl PluginManager {
     ) -> Result<()> {
         if package.starts_with("http") {
             self.install_plugin_from_github(package).await
+        } else if let Ok(registry_plugin) = self.get_registry_plugin(package).await {
+            self.install_plugin_from_registry(registry_plugin, index_url, upgrade)
+                .await
         } else {
-            if let Ok(registry_plugin) = self.get_registry_plugin(package).await {
-                self.install_plugin_from_registry(&registry_plugin, index_url, upgrade)
-                    .await
-            } else {
-                self.install_unregistered_plugin(package).await
-            }
+            self.install_unregistered_plugin(package).await
         }
     }
 
@@ -204,7 +202,7 @@ impl PluginManager {
         debug!("Installing plugin: {}", package_name);
 
         // Check if already installed
-        if !upgrade && Uv::is_installed(&package_name, Some(&self.work_dir)).await {
+        if !upgrade && Uv::is_installed(package_name, Some(&self.work_dir)).await {
             return Err(NbrError::already_exists(format!(
                 "Plugin '{}' is already installed. Use --upgrade to update it.",
                 registry_plugin.project_link
@@ -249,7 +247,7 @@ impl PluginManager {
         debug!("Uninstalling plugin: {}", name);
 
         if let Ok(registry_plugin) = self.get_registry_plugin(name).await {
-            self.uninstall_plugin_from_registry(&registry_plugin).await
+            self.uninstall_plugin_from_registry(registry_plugin).await
         } else {
             self.uninstall_unregistered_plugin(name).await
         }
@@ -258,7 +256,7 @@ impl PluginManager {
     pub async fn uninstall_unregistered_plugin(&self, package_name: &str) -> Result<()> {
         debug!("Uninstalling unregistered plugin: {}", package_name);
 
-        if !Uv::is_installed(&package_name, Some(&self.work_dir)).await {
+        if !Uv::is_installed(package_name, Some(&self.work_dir)).await {
             return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 package_name
