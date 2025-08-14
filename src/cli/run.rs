@@ -401,7 +401,11 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
     println!("{}", "Starting NoneBot Application...".bright_green());
-    println!("{} {}", "Using Python:".bright_blue(), runner.python_path);
+    println!(
+        "{} {}",
+        "Using Python:".bright_blue(),
+        runner.python_path.bright_green()
+    );
 
     if reload {
         println!(
