@@ -60,7 +60,7 @@ thiserror = "2.0.12"
 path-absolutize = "3.1"
 
 # Template engine
-handlebars = "=4.5"
+# handlebars = "=4.5"
 
 # Archive handling
 zip = "4.2.0"

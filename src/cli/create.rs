@@ -2,9 +2,9 @@ use anyhow::Context;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
-use handlebars::Handlebars;
+
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, warn};
@@ -394,26 +394,6 @@ fn generate_gitignore(output_dir: &Path) -> Result<()> {
     let gitignore = include_str!("nbfile/gitignore");
 
     fs::write(output_dir.join(".gitignore"), gitignore)?;
-    Ok(())
-}
-
-#[allow(unused)]
-fn generate_dockerfile(
-    _handlebars: &Handlebars,
-    data: &HashMap<&str, &dyn erased_serde::Serialize>,
-    output_dir: &Path,
-) -> Result<()> {
-    let project_name = data
-        .get("project_name")
-        .and_then(|v| serde_json::to_string(v).ok())
-        .unwrap_or("nb-bot-project".to_string());
-
-    let dockerfile = format!(
-        include_str!("nbfile/dockerfile.template"),
-        project_name, project_name, project_name, project_name
-    );
-
-    fs::write(output_dir.join("Dockerfile"), dockerfile)?;
     Ok(())
 }
 

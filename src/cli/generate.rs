@@ -5,7 +5,7 @@
 
 use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
-use crate::utils::template_utils;
+
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::{Confirm, Select};
@@ -48,16 +48,17 @@ impl GenerateHandler {
         let bot_path = self.work_dir.join(filename);
 
         // Check if file already exists
-        if bot_path.exists() && !force
+        if bot_path.exists()
+            && !force
             && !Confirm::new()
                 .with_prompt(format!("File '{}' already exists. Overwrite?", filename))
                 .default(false)
                 .interact()
                 .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
-            {
-                info!("File generation cancelled");
-                return Ok(());
-            }
+        {
+            info!("File generation cancelled");
+            return Ok(());
+        }
 
         // Select template
         let template = if let Some(template_name) = template_type {
@@ -139,7 +140,7 @@ impl GenerateHandler {
     fn generate_bot_content(
         &self,
         template: &str,
-        context: &HashMap<String, String>,
+        _context: &HashMap<String, String>,
     ) -> Result<String> {
         let template_content = match template {
             "general" => self.get_basic_bot_template(),
@@ -153,7 +154,7 @@ impl GenerateHandler {
             }
         };
 
-        template_utils::render_template(&template_content, context)
+        Ok(template_content)
     }
 
     /// Get basic bot template

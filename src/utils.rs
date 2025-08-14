@@ -8,7 +8,6 @@ use console::Term;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use reqwest::Client;
-use std::collections::HashMap;
 
 use std::fs;
 use std::io::{Read, Write};
@@ -132,9 +131,10 @@ pub mod fs_utils {
 
             if path.is_file() {
                 if let Some(filename) = path.file_name().and_then(|n| n.to_str())
-                    && regex.is_match(filename) {
-                        matches.push(path);
-                    }
+                    && regex.is_match(filename)
+                {
+                    matches.push(path);
+                }
             } else if path.is_dir() && recursive {
                 find_files_recursive(&path, regex, recursive, matches)?;
             }
@@ -296,11 +296,7 @@ pub mod net_utils {
     /// Download file with progress bar
     pub async fn download_file(url: &str, destination: &Path, show_progress: bool) -> Result<()> {
         let client = Client::new();
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .map_err(NbrError::Network)?;
+        let response = client.get(url).send().await.map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::unknown(format!(
@@ -335,9 +331,10 @@ pub mod net_utils {
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.map_err(NbrError::Network)?;
             file.write_all(&chunk).map_err(|e| {
-                NbrError::Io(std::io::Error::other(
-                    format!("Failed to write to file: {}", e),
-                ))
+                NbrError::Io(std::io::Error::other(format!(
+                    "Failed to write to file: {}",
+                    e
+                )))
             })?;
 
             downloaded += chunk.len() as u64;
@@ -528,11 +525,11 @@ pub mod archive_utils {
                     .map_err(|e| NbrError::io(format!("Failed to create directory: {}", e)))?;
             } else {
                 if let Some(p) = outpath.parent()
-                    && !p.exists() {
-                        fs::create_dir_all(p).map_err(|e| {
-                            NbrError::io(format!("Failed to create directory: {}", e))
-                        })?;
-                    }
+                    && !p.exists()
+                {
+                    fs::create_dir_all(p)
+                        .map_err(|e| NbrError::io(format!("Failed to create directory: {}", e)))?;
+                }
 
                 let mut outfile = fs::File::create(&outpath)
                     .map_err(|e| NbrError::io(format!("Failed to create file: {}", e)))?;
@@ -648,83 +645,6 @@ pub mod git_utils {
             .ok_or_else(|| NbrError::unknown("Could not get branch name"))?;
 
         Ok(branch_name.to_string())
-    }
-}
-
-/// Template utilities
-pub mod template_utils {
-    use super::*;
-    use handlebars::Handlebars;
-
-    /// Render template with context
-    pub fn render_template(template: &str, context: &HashMap<String, String>) -> Result<String> {
-        let mut handlebars = Handlebars::new();
-
-        // Register built-in helpers
-        handlebars.register_helper("snake_case", Box::new(snake_case_helper));
-        handlebars.register_helper("pascal_case", Box::new(pascal_case_helper));
-        handlebars.register_helper("upper", Box::new(upper_case_helper));
-        handlebars.register_helper("lower", Box::new(lower_case_helper));
-
-        let rendered = handlebars
-            .render_template(template, context)
-            .map_err(|e| NbrError::template(format!("Failed to render template: {}", e)))?;
-
-        Ok(rendered)
-    }
-
-    fn snake_case_helper(
-        h: &handlebars::Helper,
-        _: &handlebars::Handlebars,
-        _: &handlebars::Context,
-        _: &mut handlebars::RenderContext,
-        out: &mut dyn handlebars::Output,
-    ) -> handlebars::HelperResult {
-        if let Some(param) = h.param(0) {
-            let snake_case = super::string_utils::to_snake_case(&param.value().to_string());
-            out.write(&snake_case)?;
-        }
-        Ok(())
-    }
-
-    fn pascal_case_helper(
-        h: &handlebars::Helper,
-        _: &handlebars::Handlebars,
-        _: &handlebars::Context,
-        _: &mut handlebars::RenderContext,
-        out: &mut dyn handlebars::Output,
-    ) -> handlebars::HelperResult {
-        if let Some(param) = h.param(0) {
-            let pascal_case = super::string_utils::to_pascal_case(&param.value().to_string());
-            out.write(&pascal_case)?;
-        }
-        Ok(())
-    }
-
-    fn upper_case_helper(
-        h: &handlebars::Helper,
-        _: &handlebars::Handlebars,
-        _: &handlebars::Context,
-        _: &mut handlebars::RenderContext,
-        out: &mut dyn handlebars::Output,
-    ) -> handlebars::HelperResult {
-        if let Some(param) = h.param(0) {
-            out.write(&param.value().to_string().to_uppercase())?;
-        }
-        Ok(())
-    }
-
-    fn lower_case_helper(
-        h: &handlebars::Helper,
-        _: &handlebars::Handlebars,
-        _: &handlebars::Context,
-        _: &mut handlebars::RenderContext,
-        out: &mut dyn handlebars::Output,
-    ) -> handlebars::HelperResult {
-        if let Some(param) = h.param(0) {
-            out.write(&param.value().to_string().to_lowercase())?;
-        }
-        Ok(())
     }
 }
 
