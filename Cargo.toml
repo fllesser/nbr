@@ -1,6 +1,6 @@
 [package]
 name = "nbr"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 authors = ["fllesser <fllessive@gmail.com>"]
 description = "CLI for NoneBot2 - A Rust implementation"
@@ -56,22 +56,11 @@ colored = "3.0.0"
 anyhow = "1.0"
 thiserror = "2.0.14"
 
-# Path utilities
-# path-absolutize = "3.1"
-
-# Archive handling
-# zip = "4.2.0"
-# tar = "0.4"
-# flate2 = "1.0"
-
 # Git operations
 git2 = { version = "0.20.2", default-features = false }
 
 # Directory management
 directories = "6.0"
-
-# UUID for temp files
-# uuid = { version = "1.6", features = ["v4"] }
 
 # Regex support
 regex = "1.10"
@@ -84,7 +73,13 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "time",
+    "ansi",
+] }
+time = "0.3"
+
 
 # Config file parsing
 config = "0.15.13"
@@ -101,9 +96,6 @@ sysinfo = "0.37.0"
 # Futures utilities
 futures-util = "0.3"
 
-# URL encoding
-# urlencoding = "2.1"
-# erased-serde = "0.4.6"
 toml_edit = "0.23.3"
 
 [dev-dependencies]

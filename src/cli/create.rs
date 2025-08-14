@@ -278,7 +278,7 @@ fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
                     })
                     .collect(),
                 plugins: vec![],
-                plugin_dirs: vec![format!("src/{}/plugins", options.name.replace("-", "_"))],
+                plugin_dirs: vec![format!("src/plugins")],
                 builtin_plugins: options.plugins.clone(),
             },
         },
@@ -347,7 +347,9 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     }
     // 补齐依赖
     pyproject.project.dependencies.extend(dependencies);
-    // 补齐内置插件
+
+    // 补齐 tool.nonebot
+    pyproject.tool.nonebot.plugin_dirs = vec![format!("src/plugins")];
     pyproject.tool.nonebot.builtin_plugins = options.plugins.clone();
 
     // 写入文件
