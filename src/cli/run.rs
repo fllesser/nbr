@@ -27,21 +27,14 @@ pub struct BotRunner {
     bot_file: PathBuf,
     /// Python executable path
     python_path: String,
-    // Host to bind
-    // host: String,
-    // Port to bind
-    // port: u16,
     /// Enable auto-reload
     auto_reload: bool,
     /// Working directory
     work_dir: PathBuf,
-    /// Environment variables
-    // #[allow(dead_code)]
-    // env_vars: HashMap<String, String>,
     /// Current running process
     current_process: Arc<Mutex<Option<Child>>>,
     /// File watcher for auto-reload
-    _watcher: Option<RecommendedWatcher>,
+    watcher: Option<RecommendedWatcher>,
     /// Watch event receiver
     watch_rx: Option<Receiver<Event>>,
 }
@@ -51,11 +44,8 @@ impl BotRunner {
     pub fn new(
         bot_file: PathBuf,
         python_path: String,
-        // host: String,
-        // port: u16,
         auto_reload: bool,
         work_dir: PathBuf,
-        //env_vars: HashMap<String, String>,
     ) -> Result<Self> {
         let current_process = Arc::new(Mutex::new(None));
         let (watch_tx, watch_rx) = if auto_reload {
@@ -68,13 +58,10 @@ impl BotRunner {
         let mut runner = Self {
             bot_file,
             python_path,
-            // host,
-            // port,
             auto_reload,
             work_dir,
-            //env_vars,
             current_process,
-            _watcher: None,
+            watcher: None,
             watch_rx,
         };
 
@@ -104,8 +91,8 @@ impl BotRunner {
             .watch(&self.work_dir, RecursiveMode::Recursive)
             .map_err(|e| NbrError::io(format!("Failed to watch directory: {}", e)))?;
 
-        self._watcher = Some(watcher);
-        info!("File watcher setup for auto-reload");
+        self.watcher = Some(watcher);
+        println!("{}", "File watcher setup for auto-reload".bright_green());
         Ok(())
     }
 
@@ -123,7 +110,11 @@ impl BotRunner {
         let process_handle = Arc::clone(&self.current_process);
         tokio::spawn(async move {
             let _ = signal::ctrl_c().await;
-            info!("Received interrupt signal, shutting down...");
+
+            println!(
+                " {}",
+                "Received interrupt signal, shutting down...".bright_yellow()
+            );
             if let Ok(mut process) = process_handle.lock()
                 && let Some(mut child) = process.take()
             {
@@ -151,15 +142,15 @@ impl BotRunner {
             .map_err(|e| NbrError::io(format!("Failed to wait for process: {}", e)))?;
 
         if exit_status.success() {
-            info!("Bot process exited successfully");
-            Ok(())
+            println!("{}", "Bot process exited successfully".bright_green());
         } else {
             let exit_code = exit_status.code().unwrap_or(-1);
-            Err(NbrError::command_execution(
-                format!("Bot process failed with exit code: {}", exit_code),
-                exit_code,
-            ))
+            println!(
+                "{}",
+                format!("Bot process failed with exit code: {}", exit_code).bright_red()
+            );
         }
+        Ok(())
     }
 
     /// Run bot with auto-reload
@@ -177,7 +168,10 @@ impl BotRunner {
                         *current = Some(process);
                     }
 
-                    info!("Bot started successfully with auto-reload enabled");
+                    println!(
+                        "{}",
+                        "Bot started successfully with auto-reload enabled".bright_green()
+                    );
                     let mut restart_count = 0;
 
                     // Wait for file changes or process exit
@@ -201,11 +195,14 @@ impl BotRunner {
                     }
                     last_restart = now;
 
-                    info!("Restarting bot...");
+                    println!("{}", "Restarting bot...".bright_yellow());
                     sleep(Duration::from_millis(500)).await;
                 }
                 Err(e) => {
-                    error!("Failed to start bot process: {}", e);
+                    println!(
+                        "{}",
+                        format!("Failed to start bot process: {}", e).bright_red()
+                    );
                     sleep(Duration::from_secs(2)).await;
                 }
             }
@@ -400,41 +397,11 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     // Verify Python environment
     // verify_python_environment(&python_path).await?;
 
-    // Load environment variables
-    // let env_vars = load_environment_variables(&work_dir)?;
-    // let host = env_vars
-    //     .get("HOST")
-    //     .map(|s| s.to_string())
-    //     .unwrap_or("127.0.0.1".to_string());
-    // let port = env_vars
-    //     .get("PORT")
-    //     .map(|s| s.parse::<u16>().unwrap_or(8080))
-    //     .unwrap_or(8080);
-
     // Create and run bot
-    let mut runner = BotRunner::new(
-        bot_file_path,
-        python_path,
-        // host,
-        // port,
-        reload,
-        work_dir,
-        //env_vars,
-    )?;
+    let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
-    println!("{}", "Starting NoneBot application...".bright_green());
-    // println!(
-    //     "{} {}",
-    //     "Bot file:".bright_blue(),
-    //     runner.bot_file.display()
-    // );
+    println!("{}", "Starting NoneBot Application...".bright_green());
     println!("{} {}", "Using Python:".bright_blue(), runner.python_path);
-    // println!(
-    //     "{} {}:{}",
-    //     "Address:".bright_blue(),
-    //     runner.host,
-    //     runner.port
-    // );
 
     if reload {
         println!(
@@ -514,7 +481,7 @@ fn find_python_executable() -> Result<String> {
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
         NbrError::not_found(
-            "Python executable not found. Please install Python 3.10+ or set python_path in config",
+            "Python executable not found. Please use `uv sync -p {version}` to install Python",
         )
     })
 }
@@ -522,7 +489,7 @@ fn find_python_executable() -> Result<String> {
 /// Verify Python environment
 #[allow(unused)]
 async fn verify_python_environment(python_path: &str) -> Result<()> {
-    info!("Verifying Python environment...");
+    debug!("Verifying Python environment...");
 
     // Check Python version
     let version = process_utils::get_python_version(python_path).await?;
@@ -546,7 +513,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
     .await
     {
         Ok(_) => {
-            info!("NoneBot is installed");
+            debug!("NoneBot is installed");
         }
         Err(_) => {
             warn!("NoneBot doesn't seem to be installed. The bot may fail to start.");

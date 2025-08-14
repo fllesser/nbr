@@ -347,7 +347,9 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     }
     // 补齐依赖
     pyproject.project.dependencies.extend(dependencies);
-    // 补齐内置插件
+
+    // 补齐 tool.nonebot
+    pyproject.tool.nonebot.plugin_dirs = vec![format!("src/{}/plugins", options.name.replace("-", "_"))];
     pyproject.tool.nonebot.builtin_plugins = options.plugins.clone();
 
     // 写入文件
