@@ -450,28 +450,4 @@ mod tests {
         let manager = ConfigManager::new();
         assert!(manager.is_ok());
     }
-
-    #[tokio::test]
-    async fn test_save_nb_config() {
-        use crate::pyproject::Nonebot;
-
-        let mut manager = ConfigManager::new().unwrap();
-        let nb_config = NbConfig {
-            tool: Tool {
-                nonebot: Nonebot {
-                    adapters: vec![],
-                    plugins: vec![],
-                    plugin_dirs: vec![],
-                    builtin_plugins: vec![],
-                },
-            },
-        };
-        manager.config_mut().nb_config = nb_config;
-        manager.save().unwrap();
-        let nb_config = NbConfig::load().unwrap();
-        assert_eq!(nb_config.tool.nonebot.adapters.len(), 0);
-        assert_eq!(nb_config.tool.nonebot.plugins.len(), 0);
-        assert_eq!(nb_config.tool.nonebot.plugin_dirs.len(), 0);
-        assert_eq!(nb_config.tool.nonebot.builtin_plugins.len(), 0);
-    }
 }

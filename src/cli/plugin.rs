@@ -6,7 +6,7 @@
 
 use crate::error::{NbrError, Result};
 use crate::pyproject::ToolNonebot;
-use crate::utils::{process_utils, terminal_utils};
+use crate::utils::terminal_utils;
 use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
@@ -17,12 +17,10 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
-use std::env;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tokio::time::timeout;
 use tracing::{debug, info};
 
 // "module_name": "nonebot_plugin_status",
@@ -66,24 +64,35 @@ pub struct RegistryPlugin {
     pub skip_test: bool,
 }
 
-pub struct PyPIPlugin {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginPackageInfo {
     pub package_name: String,
-    pub module_name: String,
-    pub version: String,
-
-    pub author: String,
-    pub homepage: Option<String>,
-    pub description: String,
+    pub installed_version: String,
+    pub latest_version: String,
 }
 
-pub struct GitRepoPlugin {
-    pub repo_url: String,
-    pub package_name: String,
-    pub module_name: String,
+impl PluginPackageInfo {
+    pub fn is_outdated(&self) -> bool {
+        self.installed_version != self.latest_version
+    }
 
-    pub version: String,
-    pub author: String,
-    pub description: String,
+    pub fn display_info(&self) {
+        // name installedeversion (available version)
+        let installed_version = format!("v{}", self.installed_version).bright_green();
+        let available_version = if self.installed_version == self.latest_version {
+            "".to_string()
+        } else {
+            format!("(available: v{})", self.latest_version)
+                .bright_yellow()
+                .to_string()
+        };
+        println!(
+            "  {} {} {}",
+            self.package_name.bright_blue(),
+            installed_version,
+            available_version
+        );
+    }
 }
 
 /// Plugin manager
@@ -96,13 +105,19 @@ pub struct PluginManager {
     registry_plugins: OnceLock<Vec<RegistryPlugin>>,
 }
 
+impl Default for PluginManager {
+    fn default() -> Self {
+        Self::new(None).unwrap()
+    }
+}
+
 impl PluginManager {
     /// Create a new plugin manager
-    pub fn new() -> Result<Self> {
-        let work_dir = std::env::current_dir().unwrap();
+    pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
+        let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
 
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(15))
             .user_agent("nbr")
             .build()
             .map_err(NbrError::Network)?;
@@ -132,10 +147,6 @@ impl PluginManager {
 
     pub async fn install_plugin_from_github(&mut self, repo_url: &str) -> Result<()> {
         debug!("Installing plugin from github: {}", repo_url);
-
-        // 获取 module_name
-        // https://github.com/fllesser/nonebot-plugin-fortnite@dev
-        // 使用正则，只取 nonebot-plugin-fortnite
 
         // 确定是否安装 github 插件
         if Confirm::new()
@@ -191,6 +202,7 @@ impl PluginManager {
         );
         Ok(())
     }
+
     /// Install a plugin
     pub async fn install_plugin_from_registry(
         &self,
@@ -199,13 +211,12 @@ impl PluginManager {
         upgrade: bool,
     ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
-        debug!("Installing plugin: {}", package_name);
+        debug!("Installing plugin: {package_name}");
 
         // Check if already installed
         if !upgrade && Uv::is_installed(package_name, Some(&self.work_dir)).await {
             return Err(NbrError::already_exists(format!(
-                "Plugin '{}' is already installed. Use --upgrade to update it.",
-                registry_plugin.project_link
+                "Plugin '{package_name}' is already installed. Use --upgrade to update it.",
             )));
         }
 
@@ -318,8 +329,6 @@ impl PluginManager {
         Uv::remove(vec![&package_name], Some(&self.work_dir)).await?;
 
         ToolNonebot::parse(None)?.remove_plugins(vec![registry_plugin.module_name.clone()])?;
-        // self.remove_plugin_in_config(&registry_plugin.module_name.to_string())
-        //     .await?;
 
         println!(
             "{} Successfully uninstalled plugin: {}",
@@ -330,8 +339,65 @@ impl PluginManager {
         Ok(())
     }
 
+    pub async fn get_installed_plugins(&self, outdated: bool) -> Result<Vec<PluginPackageInfo>> {
+        let installed_plugins = Uv::list(Some(&self.work_dir), outdated).await?;
+        let installed_plugins = installed_plugins
+            .into_iter()
+            .filter(|a| a.starts_with("nonebot") && a.contains("plugin"))
+            .map(|line| {
+                let parts = line.split_whitespace().collect::<Vec<&str>>();
+                let package_name = parts[0].to_owned();
+                let installed_version = parts[1].to_owned();
+                let latest_version = if outdated {
+                    parts[2].to_owned()
+                } else {
+                    installed_version.clone()
+                };
+                PluginPackageInfo {
+                    package_name,
+                    installed_version,
+                    latest_version,
+                }
+            })
+            .collect();
+        Ok(installed_plugins)
+    }
+
+    pub async fn list_plugins(&self, show_outdated: bool) -> Result<()> {
+        // 获取所有插件
+        let mut installed_plugins = self.get_installed_plugins(false).await?;
+        // 获取需要更新的插件
+        if show_outdated {
+            let outdated_plugins = self.get_installed_plugins(true).await?;
+            installed_plugins.extend(outdated_plugins);
+        }
+        // 去重
+        installed_plugins.dedup_by(|a, b| a.package_name == b.package_name);
+
+        if installed_plugins.is_empty() {
+            println!("{}", "No plugins installed.".bright_yellow());
+            return Ok(());
+        }
+
+        println!("{}", "Installed Plugins:".bright_green().bold());
+        installed_plugins.iter().for_each(|p| p.display_info());
+
+        Ok(())
+    }
+
+    pub async fn fix_nonebot_plugins(&self) -> Result<()> {
+        let installed_plugins = self.get_installed_plugins(false).await?;
+        ToolNonebot::parse(None)?.reset_plugins(
+            installed_plugins
+                .iter()
+                .map(|plugin| plugin.package_name.replace("-", "_"))
+                .collect::<Vec<String>>(),
+        )?;
+        Ok(())
+    }
+
     /// List installed plugins
-    pub async fn list_plugins(&self, _show_outdated: bool) -> Result<()> {
+    pub async fn list_plugins_old(&self, _show_outdated: bool) -> Result<()> {
         let nonebot = ToolNonebot::parse(None)?.nonebot()?;
 
         let registry_plugins = self.module_plugins_map().await?;
@@ -584,9 +650,11 @@ impl PluginManager {
     async fn get_latest_package_version(&self, package: &str) -> Result<String> {
         let url = format!("https://pypi.org/pypi/{}/json", package);
 
-        let response = timeout(Duration::from_secs(10), self.client.get(&url).send())
+        let response = self
+            .client
+            .get(&url)
+            .send()
             .await
-            .map_err(|_| NbrError::unknown("Request timeout"))?
             .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
@@ -611,13 +679,12 @@ impl PluginManager {
         }
 
         let plugins_json_url = "https://registry.nonebot.dev/plugins.json";
-        let response = timeout(
-            Duration::from_secs(10),
-            self.client.get(plugins_json_url).send(),
-        )
-        .await
-        .map_err(|_| NbrError::unknown("Request timeout"))?
-        .map_err(NbrError::Network)?;
+        let response = self
+            .client
+            .get(plugins_json_url)
+            .send()
+            .await
+            .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::not_found("Plugin registry not found"));
@@ -635,22 +702,19 @@ impl PluginManager {
 
     pub async fn package_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
         let plugins = self.fetch_registry_plugins().await?;
-
-        let mut plugins_map = HashMap::new();
-        for plugin in plugins {
-            plugins_map.insert(plugin.project_link.as_str(), plugin);
-        }
-
+        let plugins_map = plugins
+            .iter()
+            .map(|p| (p.project_link.as_str(), p))
+            .collect::<HashMap<&str, &RegistryPlugin>>();
         Ok(plugins_map)
     }
 
     pub async fn module_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
         let plugins = self.fetch_registry_plugins().await?;
-        let mut plugins_map = HashMap::new();
-        for plugin in plugins {
-            plugins_map.insert(plugin.module_name.as_str(), plugin);
-        }
-
+        let plugins_map = plugins
+            .iter()
+            .map(|p| (p.module_name.as_str(), p))
+            .collect::<HashMap<&str, &RegistryPlugin>>();
         Ok(plugins_map)
     }
 
@@ -684,21 +748,6 @@ impl PluginManager {
             .collect();
 
         Ok(results)
-    }
-
-    /// Find installed plugin by name
-    fn find_installed_plugin(&self, name: &str) -> Result<String> {
-        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
-        for plugin in &nonebot.plugins {
-            if plugin == name || plugin.contains(name) {
-                return Ok(plugin.clone());
-            }
-        }
-
-        Err(NbrError::not_found(format!(
-            "Plugin '{}' is not installed",
-            name
-        )))
     }
 
     /// Display plugin information
@@ -776,7 +825,7 @@ impl PluginManager {
 
 /// Handle the plugin command
 pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
-    let mut plugin_manager = PluginManager::new()?;
+    let mut plugin_manager = PluginManager::new(None)?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -817,97 +866,34 @@ pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
     }
 }
 
-/// Find Python executable
-fn find_python_executable(config: &crate::config::Config) -> Result<String> {
-    // Use configured Python path if available
-    if let Some(ref python_path) = config.user.python_path
-        && std::path::Path::new(python_path).exists()
-    {
-        return Ok(python_path.clone());
-    }
-
-    // Try to find Python in project virtual environment
-    let current_dir = env::current_dir()
-        .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
-
-    let venv_paths = [
-        current_dir.join("venv").join("bin").join("python"),
-        current_dir.join("venv").join("Scripts").join("python.exe"),
-        current_dir.join(".venv").join("bin").join("python"),
-        current_dir.join(".venv").join("Scripts").join("python.exe"),
-    ];
-
-    for venv_path in &venv_paths {
-        if venv_path.exists() {
-            return Ok(venv_path.to_string_lossy().to_string());
-        }
-    }
-
-    // Fall back to system Python
-    process_utils::find_python().ok_or_else(|| {
-        NbrError::not_found(
-            "Python executable not found. Please install Python 3.8+ or configure python_path",
-        )
-    })
-}
-
-/// Calculate search relevance score
-fn calculate_search_relevance(plugin: &RegistryPlugin, query: &str) -> f32 {
-    let query_lower = query.to_lowercase();
-    let mut score = 0.0;
-
-    // Exact name match gets highest score
-    if plugin.name.to_lowercase() == query_lower {
-        score += 100.0;
-    } else if plugin.name.to_lowercase().contains(&query_lower) {
-        score += 50.0;
-    }
-
-    // Description match
-    if plugin.desc.to_lowercase().contains(&query_lower) {
-        score += 20.0;
-    }
-
-    // Author match
-    if plugin.author.to_lowercase().contains(&query_lower) {
-        score += 5.0;
-    }
-
-    score
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
-        let plugin_manager = PluginManager::new().unwrap();
+        let plugin_manager = PluginManager::default();
         let plugins = plugin_manager.package_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
-            println!(
-                "{} {} ({})",
-                plugin.project_link.bright_green(),
-                format!("v{}", plugin.version).bright_yellow(),
-                plugin.name.bright_blue()
-            );
+            dbg!(plugin);
         }
     }
 
     #[tokio::test]
     async fn test_get_registry_plugin() {
-        let plugin_manager = PluginManager::new().unwrap();
+        let plugin_manager = PluginManager::default();
         let plugin = plugin_manager
             .get_registry_plugin("nonebot-plugin-status")
             .await
             .unwrap();
-        println!("{}", plugin.project_link);
-        println!("{}", plugin.name);
-        println!("{}", plugin.desc);
-        println!("{}", plugin.author);
-        println!("{:?}", plugin.homepage);
-        println!("{:?}", plugin.tags);
-        println!("{:?}", plugin.plugin_type);
-        println!("{:?}", plugin.supported_adapters);
+        dbg!(plugin);
+    }
+
+    #[tokio::test]
+    async fn test_get_installed_plugins() {
+        let work_dir = std::env::current_dir().unwrap().join("awesome-bot");
+        let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
+        let installed_plugins = plugin_manager.get_installed_plugins(true).await.unwrap();
+        dbg!(installed_plugins);
     }
 }

@@ -87,9 +87,8 @@ pub struct ToolNonebot {
 #[allow(dead_code)]
 impl ToolNonebot {
     pub fn parse(toml_path: Option<PathBuf>) -> NbrResult<Self> {
-        let toml_path = toml_path
-            .clone()
-            .unwrap_or_else(|| Path::new("pyproject.toml").to_path_buf());
+        let toml_path = toml_path.unwrap_or_else(|| Path::new("pyproject.toml").to_path_buf());
+
         let content = std::fs::read_to_string(toml_path.clone())
             .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
 
@@ -106,13 +105,14 @@ impl ToolNonebot {
         Ok(nonebot)
     }
 
+    /// 修改不会改变 pyproject.toml 文件
     pub fn nonebot(&self) -> NbrResult<Nonebot> {
         let nonebot = self.doc_mut["tool"]["nonebot"].as_table().unwrap();
         let nonebot = toml::from_str(nonebot.to_string().as_str())?;
         Ok(nonebot)
     }
 
-    fn save(&self) -> NbrResult<()> {
+    pub fn save(&self) -> NbrResult<()> {
         std::fs::write(self.toml_path.clone(), self.doc_mut.to_string())?;
         Ok(())
     }
@@ -181,6 +181,31 @@ impl ToolNonebot {
         for plugin in plugins {
             plugins_arr_mut.retain(|p| p.as_str().unwrap() != plugin);
         }
+        self.save()
+    }
+
+    /// 重置 tool.nonebot.plugins
+    pub fn reset_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
+        let nonebot_table = self.nonebot_table_mut()?;
+        let plugins_array = nonebot_table.get_mut("plugins").unwrap();
+        let plugins_arr_mut = plugins_array.as_array_mut().unwrap();
+        plugins_arr_mut.clear();
+        plugins_arr_mut.extend(plugins);
+        self.save()
+    }
+
+    /// 重置 tool.nonebot.adapters
+    pub fn reset_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
+        let nonebot_table = self.nonebot_table_mut()?;
+        let adapters_array = nonebot_table.get_mut("adapters").unwrap();
+        let adapters_arr_mut = adapters_array.as_array_mut().unwrap();
+        adapters_arr_mut.clear();
+        adapters_arr_mut.extend(adapters.into_iter().map(|adapter| {
+            let mut inline_table = InlineTable::new();
+            inline_table.insert("name", adapter.name.into());
+            inline_table.insert("module_name", adapter.module_name.into());
+            inline_table
+        }));
         self.save()
     }
 }

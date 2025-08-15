@@ -18,7 +18,6 @@ use tracing::debug;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tokio::time::timeout;
 
 // {
 // "module_name": "nonebot.adapters.onebot.v11",
@@ -58,13 +57,19 @@ pub struct AdapterManager {
     registry_adapters: OnceLock<HashMap<String, RegistryAdapter>>,
 }
 
+impl Default for AdapterManager {
+    fn default() -> Self {
+        Self::new(None).unwrap()
+    }
+}
+
 impl AdapterManager {
     /// Create a new adapter manager
-    pub fn new() -> Result<Self> {
-        let work_dir = std::env::current_dir().unwrap();
+    pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
+        let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
 
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(15))
             .user_agent("nbr")
             .build()
             .map_err(NbrError::Network)?;
@@ -82,13 +87,12 @@ impl AdapterManager {
         }
 
         let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
-        let response = timeout(
-            Duration::from_secs(10),
-            self.client.get(adapters_json_url).send(),
-        )
-        .await
-        .map_err(|_| NbrError::unknown("Request timeout"))?
-        .map_err(NbrError::Network)?;
+        let response = self
+            .client
+            .get(adapters_json_url)
+            .send()
+            .await
+            .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::not_found("Adapter registry not found"));
@@ -184,7 +188,6 @@ impl AdapterManager {
 
         Uv::add(adapter_packages, false, None, Some(&self.work_dir)).await?;
 
-
         // Add to configuration
         let adapters = selected_adapters
             .iter()
@@ -218,7 +221,7 @@ impl AdapterManager {
     }
 
     pub async fn get_installed_adapters(&self) -> Result<HashSet<String>> {
-        let installed_adapters = Uv::list(Some(&self.work_dir)).await?;
+        let installed_adapters = Uv::list(Some(&self.work_dir), false).await?;
         let installed_adapters_set = installed_adapters
             .into_iter()
             .filter(|a| a.contains("nonebot-adapter-"))
@@ -448,7 +451,7 @@ impl AdapterManager {
 
 /// Handle the adapter command
 pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
-    let adapter_manager = AdapterManager::new()?;
+    let adapter_manager = AdapterManager::new(None)?;
 
     match matches.subcommand() {
         Some(("install", _)) => {
@@ -471,16 +474,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_regsitry_adapters() {
-        let manager = AdapterManager::new().unwrap();
+        let manager = AdapterManager::default();
+
         let adapters_map = manager.fetch_regsitry_adapters().await.unwrap();
         assert!(adapters_map.len() > 0);
         for adapter in adapters_map.values() {
-            println!(
-                "{} {} ({})",
-                adapter.project_link.bright_green(),
-                format!("v{}", adapter.version).bright_yellow(),
-                adapter.name.bright_blue()
-            );
+            println!("{}", adapter.name);
         }
     }
 }

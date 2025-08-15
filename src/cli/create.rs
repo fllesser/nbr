@@ -59,7 +59,7 @@ impl ProjectOptions {
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("{}", "🎉 Creating NoneBot project...".bright_green());
 
-    let adapter_manager = AdapterManager::new()?;
+    let adapter_manager = AdapterManager::default();
 
     let options = gather_project_options(matches, &adapter_manager).await?;
 
