@@ -146,15 +146,16 @@ impl CacheManager {
         println!("{}", "Cache Clearing Summary:".bright_blue().bold());
         for cache_type in &cache_types {
             if let Some(entries) = stats.entries_by_type.get(cache_type)
-                && !entries.is_empty() {
-                    let type_size: u64 = entries.iter().map(|e| e.size).sum();
-                    println!(
-                        "  {} {} entries ({})",
-                        "•".bright_blue(),
-                        format!("{}: {}", cache_type.description(), entries.len()).bright_white(),
-                        fs_utils::format_file_size(type_size).bright_yellow()
-                    );
-                }
+                && !entries.is_empty()
+            {
+                let type_size: u64 = entries.iter().map(|e| e.size).sum();
+                println!(
+                    "  {} {} entries ({})",
+                    "•".bright_blue(),
+                    format!("{}: {}", cache_type.description(), entries.len()).bright_white(),
+                    fs_utils::format_file_size(type_size).bright_yellow()
+                );
+            }
         }
 
         println!();
@@ -414,9 +415,10 @@ impl CacheManager {
 
             for entry in entries {
                 if let Ok(duration) = now.duration_since(entry.modified)
-                    && duration.as_secs() > ttl_seconds {
-                        old_entries.push(entry.clone());
-                    }
+                    && duration.as_secs() > ttl_seconds
+                {
+                    old_entries.push(entry.clone());
+                }
             }
         }
 

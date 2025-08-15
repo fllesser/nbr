@@ -223,7 +223,7 @@ impl EnvironmentChecker {
             .map(|path| path.to_string_lossy().to_string());
 
         let uv_version = Uv::get_self_version().await.ok();
-        let site_packages = Uv::get_site_packages(Some(&self.work_dir))
+        let site_packages = Uv::list_site_packages(Some(&self.work_dir))
             .await
             .unwrap_or_default();
 
@@ -355,8 +355,6 @@ impl EnvironmentChecker {
     }
 
     fn get_virtual_env(&self) -> Option<PathBuf> {
-        
-
         ["venv", ".venv", "env", ".env"]
             .iter()
             .find_map(|venv_name| {
@@ -486,7 +484,12 @@ impl EnvironmentChecker {
             "  {} {}, {}",
             "Version:".bright_black(),
             env_info.python_info.version.bright_white(),
-            env_info.python_info.uv_version.as_ref().unwrap().bright_white(),
+            env_info
+                .python_info
+                .uv_version
+                .as_ref()
+                .unwrap()
+                .bright_white(),
         );
         println!(
             "  {} {}",
@@ -778,7 +781,7 @@ impl EnvironmentChecker {
             if !project
                 .config_files
                 .iter()
-                .any(|f| f.file_name().unwrap().to_string_lossy() == ".env")
+                .any(|f| f.file_name().unwrap().to_string_lossy().starts_with(".env"))
             {
                 issues.push("No .env configuration file found".to_string());
             }
@@ -790,9 +793,9 @@ impl EnvironmentChecker {
     /// Show recommendations based on issues
     fn show_recommendations(&self, issues: &[String]) {
         for issue in issues {
-            if issue.contains("Python 3.8+") {
+            if issue.contains("Python 3.10+") {
                 println!(
-                    "  • Install Python 3.8 or later from {}",
+                    "  • Install Python 3.10 or later from {}",
                     "https://python.org".bright_cyan()
                 );
             } else if issue.contains("NoneBot2 is not installed") {
@@ -828,10 +831,7 @@ impl EnvironmentChecker {
                     "  • Create environment configuration: {}",
                     "cp .env.example .env".bright_cyan()
                 );
-                println!(
-                    "  • Or create a new project: {}",
-                    "nb create".bright_cyan()
-                );
+                println!("  • Or create a new project: {}", "nb create".bright_cyan());
             }
         }
     }

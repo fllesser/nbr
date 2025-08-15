@@ -16,7 +16,7 @@ use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 
 use std::path::PathBuf;
@@ -66,26 +66,6 @@ pub struct RegistryPlugin {
     pub skip_test: bool,
 }
 
-pub struct PyPIPlugin {
-    pub package_name: String,
-    pub module_name: String,
-    pub version: String,
-
-    pub author: String,
-    pub homepage: Option<String>,
-    pub description: String,
-}
-
-pub struct GitRepoPlugin {
-    pub repo_url: String,
-    pub package_name: String,
-    pub module_name: String,
-
-    pub version: String,
-    pub author: String,
-    pub description: String,
-}
-
 /// Plugin manager
 pub struct PluginManager {
     /// HTTP client for registry requests
@@ -96,10 +76,16 @@ pub struct PluginManager {
     registry_plugins: OnceLock<Vec<RegistryPlugin>>,
 }
 
+impl Default for PluginManager {
+    fn default() -> Self {
+        Self::new(None).unwrap()
+    }
+}
+
 impl PluginManager {
     /// Create a new plugin manager
-    pub fn new() -> Result<Self> {
-        let work_dir = std::env::current_dir().unwrap();
+    pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
+        let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
 
         let client = Client::builder()
             .timeout(Duration::from_secs(30))
@@ -328,6 +314,29 @@ impl PluginManager {
         );
 
         Ok(())
+    }
+
+    pub async fn get_installed_plugins(&self) -> Result<HashSet<String>> {
+        let installed_plugins = Uv::list(Some(&self.work_dir), false).await?;
+        let installed_plugins_set = installed_plugins
+            .into_iter()
+            .filter(|a| a.contains("nonebot-plugin-"))
+            .map(|a| a.split(" ").next().unwrap().to_owned())
+            .collect::<HashSet<String>>();
+        debug!("Installed plugins: {:?}", installed_plugins_set);
+        Ok(installed_plugins_set)
+    }
+
+    /// 获取非插件的所有依赖
+    pub async fn get_all_unplugin_dependencies(&self) -> Result<Vec<String>> {
+        let site_packages = Uv::list_site_packages(Some(&self.work_dir)).await?;
+        let dependencies = site_packages
+            .into_iter()
+            .filter(|a| !a.contains("nonebot-plugin-"))
+            .map(|a| a.split("==").next().unwrap().to_owned())
+            .collect::<Vec<String>>();
+        debug!("Unplugin dependencies: {:?}", dependencies);
+        Ok(dependencies)
     }
 
     /// List installed plugins
@@ -776,7 +785,7 @@ impl PluginManager {
 
 /// Handle the plugin command
 pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
-    let mut plugin_manager = PluginManager::new()?;
+    let mut plugin_manager = PluginManager::new(None)?;
 
     match matches.subcommand() {
         Some(("install", sub_matches)) => {
@@ -882,32 +891,39 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
-        let plugin_manager = PluginManager::new().unwrap();
+        let plugin_manager = PluginManager::default();
         let plugins = plugin_manager.package_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
-            println!(
-                "{} {} ({})",
-                plugin.project_link.bright_green(),
-                format!("v{}", plugin.version).bright_yellow(),
-                plugin.name.bright_blue()
-            );
+            dbg!(plugin);
         }
     }
 
     #[tokio::test]
     async fn test_get_registry_plugin() {
-        let plugin_manager = PluginManager::new().unwrap();
+        let plugin_manager = PluginManager::default();
         let plugin = plugin_manager
             .get_registry_plugin("nonebot-plugin-status")
             .await
             .unwrap();
-        println!("{}", plugin.project_link);
-        println!("{}", plugin.name);
-        println!("{}", plugin.desc);
-        println!("{}", plugin.author);
-        println!("{:?}", plugin.homepage);
-        println!("{:?}", plugin.tags);
-        println!("{:?}", plugin.plugin_type);
-        println!("{:?}", plugin.supported_adapters);
+        dbg!(plugin);
+    }
+
+    #[tokio::test]
+    async fn test_get_installed_plugins() {
+        let work_dir = std::env::current_dir().unwrap().join("awesome-bot");
+        let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
+        let installed_plugins = plugin_manager.get_installed_plugins().await.unwrap();
+        dbg!(installed_plugins);
+    }
+
+    #[tokio::test]
+    async fn test_get_all_unplugin_dependencies() {
+        let work_dir = std::env::current_dir().unwrap().join("awesome-bot");
+        let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
+        let dependencies = plugin_manager
+            .get_all_unplugin_dependencies()
+            .await
+            .unwrap();
+        dbg!(dependencies);
     }
 }

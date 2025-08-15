@@ -127,14 +127,6 @@ impl Uv {
         Ok(stdout.to_string())
     }
 
-    pub async fn list(working_dir: Option<&Path>) -> Result<Vec<String>> {
-        let output =
-            process_utils::execute_command_with_output("uv", &["pip", "list"], working_dir, 30)
-                .await?;
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.lines().map(|line| line.to_string()).collect())
-    }
-
     pub async fn get_installed_version(
         package: &str,
         working_dir: Option<&Path>,
@@ -176,11 +168,29 @@ impl Uv {
         output.is_ok() && output.unwrap().contains("Version")
     }
 
-    pub async fn get_site_packages(working_dir: Option<&Path>) -> Result<Vec<String>> {
+    pub async fn list(working_dir: Option<&Path>, outdated: bool) -> Result<Vec<String>> {
+        let mut args = vec!["pip", "list"];
+        let mut spinner = None;
+        if outdated {
+            args.push("--outdated");
+            spinner = Some(terminal_utils::create_spinner(
+                "Checking for outdated packages...",
+            ));
+        }
+        let output =
+            process_utils::execute_command_with_output("uv", &args, working_dir, 30).await?;
+        if let Some(spinner) = spinner {
+            spinner.finish_and_clear();
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.lines().map(|line| line.to_string()).collect())
+    }
+
+    pub async fn list_site_packages(working_dir: Option<&Path>) -> Result<Vec<String>> {
         let output = process_utils::execute_command_with_output(
             "uv",
             &["pip", "list", "--format=freeze"],
-            None,
+            working_dir,
             30,
         )
         .await?;
@@ -199,43 +209,54 @@ impl Uv {
 #[cfg(test)]
 mod tests {
 
+    use std::path::PathBuf;
+
     use super::*;
 
-    fn working_dir() -> Option<&'static Path> {
-        // let current_dir = std::env::current_dir().unwrap();
-        // current_dir.join("awesome-bot")
-        Some(Path::new("awesome-bot"))
+    fn working_dir() -> PathBuf {
+        std::env::current_dir().unwrap().join("awesome-bot")
     }
 
     #[tokio::test]
     async fn test_is_installed() {
-        let is_installed = Uv::is_installed("not-exist-package", working_dir()).await;
+        let work_dir = working_dir();
+        let is_installed = Uv::is_installed("not-exist-package", Some(&work_dir)).await;
         assert!(!is_installed);
-        let is_installed = Uv::is_installed("nonebot2", working_dir()).await;
+        let is_installed = Uv::is_installed("nonebot2", Some(&work_dir)).await;
         assert!(is_installed);
     }
 
     #[tokio::test]
     async fn test_get_installed_version() {
-        let result = Uv::get_installed_version("nonebot2", working_dir()).await;
+        let work_dir = working_dir();
+        let result = Uv::get_installed_version("nonebot2", Some(&work_dir)).await;
         assert!(result.is_ok());
         assert!(result.unwrap().contains("2."));
-        let result = Uv::get_installed_version("not-exist-package", working_dir()).await;
+        let result = Uv::get_installed_version("not-exist-package", Some(&work_dir)).await;
         assert!(result.is_ok());
         assert!(result.unwrap().contains("0.1.0"));
     }
 
     #[tokio::test]
-    async fn test_get_site_packages() {
-        let result = Uv::get_site_packages(working_dir()).await;
+    async fn test_list_site_packages() {
+        let work_dir = working_dir();
+        let result = Uv::list_site_packages(Some(&work_dir)).await;
         assert!(result.is_ok());
-        println!("{:?}", result.unwrap());
+        dbg!(result.unwrap());
     }
 
     #[tokio::test]
     async fn test_get_self_version() {
         let result = Uv::get_self_version().await;
         assert!(result.is_ok());
-        println!("{}", result.unwrap());
+        dbg!(result.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_list() {
+        let work_dir = working_dir();
+        let result = Uv::list(Some(&work_dir), true).await;
+        assert!(result.is_ok());
+        dbg!(result.unwrap());
     }
 }
