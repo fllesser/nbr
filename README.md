@@ -21,119 +21,151 @@ A fast and efficient Rust implementation of the NoneBot command-line interface f
 - **uv** (0.80+) - for Python package management
 
 ### Install uv
-```bash
-# Install uv (recommended method)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+<details>
+<summary>Use astral offical install script(recommended)</summary>
 
-# Or via pip
-pip install uv
-```
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+
+</details>
 
 ## 🛠 Installation
 
-### Install from cargo
-```bash
-cargo install nbr
+<details>
+<summary>Install from cargo</summary>
 
-```
+    cargo install nbr
 
-### Install from release
+</details>
 
-```bash
-# Linux
-# Download the latest release from GitHub
-curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
+<details open>
+<summary>Install from releases</summary>
+<details>
+<summary>Linux(x86_64)</summary>
+Download the latest release from GitHub
 
-# Move the binary to your PATH
-sudo mv nbr /usr/local/bin/
+    curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
 
-# MacOS
-# Download the latest release from GitHub
-curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-macOS-arm64.tar.gz | tar -xzf -
+Move the binary to your PATH
 
-# Move the binary to your PATH
-sudo mv nbr /Users/{username}/.local/bin/
+    sudo mv nbr /usr/local/bin/
+</details>
 
-# Windows
-# Download the latest release from GitHub
-https://github.com/fllesser/nbr/releases/latest/download/nbr-Windows-msvc-x86_64.zip
+<details>
+<summary>MacOS(arm64)</summary>
+Download the latest release from GitHub
 
-# Move the binary to your PATH
-...
+    curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-macOS-arm64.tar.gz | tar -xzf -
 
-```
+Move the binary to your PATH
 
+    sudo mv nbr /Users/{username}/.local/bin/
+</details>
 
-### Install with repository
-```bash
-# Clone the repository
-git clone https://github.com/fllesser/nbr.git
-cd nbr
+<details>
+<summary>Windows(x86_64)</summary>
+Download the latest release from GitHub
 
-# Install globally (optional)
-cargo install --path .
-```
+    curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Windows-msvc-x86_64.zip | tar -xzf -
 
+Move the binary to your PATH
+
+    ...
+</details>
+
+</details>
+
+<details>
+<summary>Install with repository</summary>
+Clone the repository
+
+    git clone https://github.com/fllesser/nbr.git
+
+Install globally
+
+    cargo install --path .
+
+</details>
 
 
 ## 📖 Usage
 
-### Project Management
 
-```bash
-# # Initialize a new NoneBot2 project 暂不可用
-# nbr init my-bot 
+<details>
+<summary>Project Management</summary>
+Create a new NoneBot2 project
 
-# Create project files
-nbr create
+    nbr create
 
-# Run the bot
-nbr run
-```
+Run NoneBot2 project
 
-### Plugin Management
+    nbr run
 
-```bash
-# Install a plugin
-nbr plugin install nonebot-plugin-emojilike
+</details>
 
-# Install with specific index
-nbr plugin install nonebot-plugin-emojilike --index https://pypi.org/simple/
+<details>
+<summary>Plugin Management</summary>
 
-# Install plugin from github repo
-nbr plugin install https://github.com/fllesser/nonebot-plugin-abs@master
+Install a plugin
+    nbr plugin install nonebot-plugin-emojilike
 
-# Uninstall a plugin
-nbr plugin uninstall nonebot-plugin-emojilike
+Install a plugin with specific index
 
-# List installed plugins, --outdated to show outdated plugins
-nbr plugin list
+    nbr plugin install nonebot-plugin-emojilike --index https://pypi.org/simple/
 
-# Update plugins
-nbr plugin update <plugin> or --all
-```
+Install a plugin from github repo
 
-### Adapter Management
+    nbr plugin install https://github.com/fllesser/nonebot-plugin-abs@master
 
-```bash
-# Install adapters
-nbr adapter install
+Uninstall a plugin
 
-# Uninstall adapters
-nbr adapter uninstall
+    nbr plugin uninstall nonebot-plugin-emojilike
 
-# List installed adapters, -a to show all adapters
-nbr adapter list
+Update plugins, Option `-r` to reinstall this plugin
 
-```
+    nbr plugin update <plugin> -r
 
-### Environment Management
+Update all plugins
 
-```bash
-# Check environment status
-nbr env
+    nbr plugin update --all
 
-```
+</details>
+
+<details>
+<summary>Adapter Management</summary>
+
+Install adapters
+
+    nbr adapter install
+
+Uninstall adapters
+
+    nbr adapter uninstall
+
+List installed adapters
+
+    nbr adapter list
+
+List all registered adapters
+
+    nbr adapter list -a
+
+</details>
+
+
+<details>
+<summary>Environment Management</summary>
+
+Check environment status
+
+    nbr env check
+
+Print environment information
+
+    nbr env info
+
+</details>
+
+
 
 ## 🔄 Migration from pip
 
