@@ -2,7 +2,6 @@
 //!
 //! This module handles plugin management including installation, removal,
 //! listing, searching, and updating plugins from various sources.
-#![allow(dead_code)]
 
 use crate::error::{NbrError, Result};
 use crate::pyproject::ToolNonebot;
@@ -11,7 +10,6 @@ use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
-use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -21,7 +19,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tracing::{debug, info};
+use tracing::debug;
 
 // "module_name": "nonebot_plugin_status",
 // "project_link": "nonebot-plugin-status",
@@ -79,12 +77,12 @@ impl PluginPackageInfo {
     pub fn display_info(&self) {
         // name installedeversion (available version)
         let installed_version = format!("v{}", self.installed_version).bright_green();
-        let available_version = if self.installed_version == self.latest_version {
-            "".to_string()
-        } else {
+        let available_version = if self.is_outdated() {
             format!("(available: v{})", self.latest_version)
                 .bright_yellow()
                 .to_string()
+        } else {
+            "".to_string()
         };
         println!(
             "  {} {} {}",
@@ -155,7 +153,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            Uv::add_from_github(repo_url, Some(&self.work_dir)).await?;
+            Uv::add_from_github(repo_url, Some(&self.work_dir))?;
         } else {
             println!("Installation cancelled by user");
             return Ok(());
@@ -185,7 +183,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            Uv::add(vec![package_name], false, None, Some(&self.work_dir)).await?;
+            Uv::add(vec![package_name], false, None, Some(&self.work_dir))?;
         } else {
             println!("Installation cancelled by user");
             return Ok(());
@@ -212,14 +210,6 @@ impl PluginManager {
     ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
         debug!("Installing plugin: {package_name}");
-
-        // Check if already installed
-        if !upgrade && Uv::is_installed(package_name, Some(&self.work_dir)).await {
-            return Err(NbrError::already_exists(format!(
-                "Plugin '{package_name}' is already installed. Use --upgrade to update it.",
-            )));
-        }
-
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
 
@@ -238,8 +228,7 @@ impl PluginManager {
             upgrade,
             index_url,
             Some(&self.work_dir),
-        )
-        .await?;
+        )?;
 
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![registry_plugin.module_name.clone()])?;
@@ -283,7 +272,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            Uv::remove(vec![&package_name], Some(&self.work_dir)).await?;
+            Uv::remove(vec![&package_name], Some(&self.work_dir))?;
             ToolNonebot::parse(None)?.remove_plugins(vec![package_name.replace("-", "_")])?;
 
             println!(
@@ -326,7 +315,7 @@ impl PluginManager {
         }
 
         // Uninstall the package
-        Uv::remove(vec![&package_name], Some(&self.work_dir)).await?;
+        Uv::remove(vec![&package_name], Some(&self.work_dir))?;
 
         ToolNonebot::parse(None)?.remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
@@ -385,6 +374,7 @@ impl PluginManager {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn fix_nonebot_plugins(&self) -> Result<()> {
         let installed_plugins = self.get_installed_plugins(false).await?;
         ToolNonebot::parse(None)?.reset_plugins(
@@ -393,48 +383,6 @@ impl PluginManager {
                 .map(|plugin| plugin.package_name.replace("-", "_"))
                 .collect::<Vec<String>>(),
         )?;
-        Ok(())
-    }
-
-    /// List installed plugins
-    pub async fn list_plugins_old(&self, _show_outdated: bool) -> Result<()> {
-        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
-
-        let registry_plugins = self.module_plugins_map().await?;
-
-        let plugins: Vec<&RegistryPlugin> = nonebot
-            .plugins
-            .iter()
-            .filter_map(|module| registry_plugins.get(module.as_str()).cloned())
-            .collect();
-
-        if plugins.is_empty() {
-            println!("{}", "No plugins installed.".bright_yellow());
-            return Ok(());
-        }
-
-        println!("{}", "Installed Plugins:".bright_green().bold());
-
-        for plugin in plugins {
-            let installed_version =
-                Uv::get_installed_version(&plugin.project_link, Some(&self.work_dir)).await?;
-
-            let mut plugin_display = format!(
-                "  {} {} {}",
-                "•".bright_blue(),
-                plugin.project_link.bright_white(),
-                format!("v{}", installed_version).bright_green(),
-            );
-
-            if installed_version != plugin.version {
-                plugin_display += format!(" (available: {})", plugin.version)
-                    .bright_yellow()
-                    .to_string()
-                    .as_str();
-            }
-            println!("{}", plugin_display);
-        }
-
         Ok(())
     }
 
@@ -482,171 +430,71 @@ impl PluginManager {
         &mut self,
         plugin_name: Option<&str>,
         update_all: bool,
+        reinstall: bool,
     ) -> Result<()> {
         if update_all {
             self.update_all_plugins().await
         } else if let Some(name) = plugin_name {
-            self.update_single_plugin(name).await
+            self.update_single_plugin(name, reinstall)
         } else {
             Err(NbrError::invalid_argument(
-                "Either specify a plugin name or use --all flag",
+                "Either specify a plugin name or use --all( -a) / --reinstall( -r) flag",
             ))
         }
     }
 
     /// Update all plugins
     async fn update_all_plugins(&self) -> Result<()> {
-        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
-
-        if nonebot.plugins.is_empty() {
-            println!("{}", "No plugins installed.".bright_yellow());
-            return Ok(());
-        }
-
-        println!("{}", "Checking for plugin updates...".bright_blue());
-
-        // registry plugins, installed plugins
-        let mut outdated_plugins = Vec::new();
-        let pb = ProgressBar::new(nonebot.plugins.len() as u64);
-        pb.set_style(
-            ProgressStyle::default_bar()
-                .template("{spinner:.green} Checking {pos}/{len} plugins...")
-                .unwrap(),
-        );
-
-        for plugin_module in nonebot.plugins {
-            pb.set_message(format!("Checking {}", plugin_module));
-            let module_plugins_map = self.module_plugins_map().await?;
-            let plugin = module_plugins_map
-                .get(plugin_module.as_str())
-                .ok_or_else(|| {
-                    NbrError::not_found(format!("Plugin '{}' not found", plugin_module))
-                })?;
-            let installed_version =
-                Uv::get_installed_version(&plugin.project_link, Some(&self.work_dir)).await?;
-            let latest_version = self
-                .get_latest_package_version(&plugin.project_link)
-                .await?;
-
-            if installed_version != latest_version {
-                outdated_plugins.push((*plugin, installed_version.clone()));
-            }
-
-            pb.inc(1);
-        }
-
-        pb.finish_and_clear();
+        let outdated_plugins = self.get_installed_plugins(true).await?;
 
         if outdated_plugins.is_empty() {
-            println!("{}", "All plugins are up to date.".bright_green());
+            println!("{}", "No plugins need to update.".bright_yellow());
             return Ok(());
         }
-
         println!(
-            "Found {} outdated plugin(s):",
+            "Fount {} outdated plugins:",
             outdated_plugins.len().to_string().bright_yellow()
         );
+        outdated_plugins
+            .iter()
+            .for_each(|plugin| plugin.display_info());
 
-        for (plugin, installed_version) in &outdated_plugins {
-            println!(
-                "  {} {} {} → {}",
-                "•".bright_blue(),
-                plugin.project_link.bright_white(),
-                installed_version.red(),
-                plugin.version.bright_green()
-            );
-        }
-
+        // 确认更新
         if !Confirm::new()
-            .with_prompt("Do you want to update these plugins?")
+            .with_prompt(format!(
+                "Do you want to update these {} outdated plugins?",
+                outdated_plugins.len()
+            ))
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("Update cancelled by user");
+            println!("Update cancelled by user");
             return Ok(());
         }
 
-        // Update plugins
-        for (plugin, _) in &outdated_plugins {
-            match Uv::add(vec![&plugin.project_link], true, None, Some(&self.work_dir)).await {
-                Ok(_) => {
-                    println!(
-                        "{} Updated {}",
-                        "✓".bright_green(),
-                        plugin.project_link.bright_blue()
-                    );
-                }
-                Err(e) => {
-                    println!(
-                        "{} Failed to update {}: {}",
-                        "✗".bright_red(),
-                        plugin.project_link,
-                        e
-                    );
-                }
-            }
-        }
-
-        // Refresh plugin information
-        // self.refresh_plugin_info().await?;
-
-        Ok(())
-    }
-
-    async fn update_installed_github_plugin(&mut self) -> Result<()> {
-        // uv sync
-        Uv::sync(Some(&self.work_dir)).await?;
-        Ok(())
+        Uv::add(
+            outdated_plugins
+                .iter()
+                .map(|plugin| plugin.package_name.as_str())
+                .collect::<Vec<&str>>(),
+            true,
+            None,
+            Some(&self.work_dir),
+        )
     }
 
     /// Update a single plugin
-    async fn update_single_plugin(&self, name: &str) -> Result<()> {
-        let registry_plugin = self.get_registry_plugin(name).await?;
-        let package_name = registry_plugin.project_link.clone();
-        let installed_version =
-            Uv::get_installed_version(&package_name, Some(&self.work_dir)).await?;
-        // Check if already installed
-        if !Uv::is_installed(&package_name, Some(&self.work_dir)).await {
-            return Err(NbrError::not_found(format!(
-                "Plugin '{}' is not installed.",
-                registry_plugin.project_link
-            )));
+    fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> Result<()> {
+        if reinstall {
+            Uv::reinstall(package_name, Some(&self.work_dir))
+        } else {
+            Uv::add(vec![package_name], true, None, Some(&self.work_dir))
         }
-
-        if registry_plugin.version == installed_version {
-            println!(
-                "{} Plugin '{}' is already up to date (v{})",
-                "✓".bright_green(),
-                registry_plugin.project_link.bright_blue(),
-                installed_version
-            );
-            return Ok(());
-        }
-
-        println!(
-            "Updating {} {} → {}",
-            registry_plugin.project_link.bright_blue(),
-            installed_version.red(),
-            registry_plugin.version.bright_green()
-        );
-        let plugin_deps_str = format!(
-            "{} >= {}",
-            registry_plugin.project_link, registry_plugin.version
-        );
-        Uv::add(vec![&plugin_deps_str], true, None, Some(&self.work_dir)).await?;
-
-        println!(
-            "{} Successfully updated plugin: {}",
-            "✓".bright_green(),
-            registry_plugin.project_link.bright_blue()
-        );
-        // self.refresh_plugin_info().await?;
-
-        Ok(())
     }
 
     /// Get latest package version from PyPI
+    #[allow(dead_code)]
     async fn get_latest_package_version(&self, package: &str) -> Result<String> {
         let url = format!("https://pypi.org/pypi/{}/json", package);
 
@@ -700,7 +548,7 @@ impl PluginManager {
         Ok(self.registry_plugins.get().unwrap())
     }
 
-    pub async fn package_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
+    pub async fn get_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
         let plugins = self.fetch_registry_plugins().await?;
         let plugins_map = plugins
             .iter()
@@ -709,18 +557,9 @@ impl PluginManager {
         Ok(plugins_map)
     }
 
-    pub async fn module_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
-        let plugins = self.fetch_registry_plugins().await?;
-        let plugins_map = plugins
-            .iter()
-            .map(|p| (p.module_name.as_str(), p))
-            .collect::<HashMap<&str, &RegistryPlugin>>();
-        Ok(plugins_map)
-    }
-
     /// Get plugin from registry
     async fn get_registry_plugin(&self, package_name: &str) -> Result<&RegistryPlugin> {
-        let plugins = self.package_plugins_map().await?;
+        let plugins = self.get_plugins_map().await?;
         let plugin = plugins
             .get(package_name)
             .ok_or_else(|| NbrError::not_found(format!("Plugin '{}' not found", package_name)))?;
@@ -733,7 +572,7 @@ impl PluginManager {
         query: &str,
         limit: usize,
     ) -> Result<Vec<&RegistryPlugin>> {
-        let plugins_map = self.package_plugins_map().await?;
+        let plugins_map = self.get_plugins_map().await?;
 
         let results: Vec<&RegistryPlugin> = plugins_map
             .values()
@@ -857,9 +696,10 @@ pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
         Some(("update", sub_matches)) => {
             let plugin_name = sub_matches.get_one::<String>("name");
             let update_all = sub_matches.get_flag("all");
+            let reinstall = sub_matches.get_flag("reinstall");
 
             plugin_manager
-                .update_plugins(plugin_name.map(|s| s.as_str()), update_all)
+                .update_plugins(plugin_name.map(|s| s.as_str()), update_all, reinstall)
                 .await
         }
         _ => Err(NbrError::invalid_argument("Invalid plugin subcommand")),
@@ -873,7 +713,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
         let plugin_manager = PluginManager::default();
-        let plugins = plugin_manager.package_plugins_map().await.unwrap();
+        let plugins = plugin_manager.get_plugins_map().await.unwrap();
         for (_, plugin) in plugins {
             dbg!(plugin);
         }

@@ -142,16 +142,24 @@ fn build_cli() -> Command {
                     Command::new("update")
                         .about("Update plugins")
                         .arg(
-                            Arg::new("all")
-                                .long("all")
-                                .help("Update all plugins")
-                                .action(clap::ArgAction::SetTrue),
-                        )
-                        .arg(
                             Arg::new("name")
                                 .help("Plugin name to update")
                                 .required(false)
                                 .index(1),
+                        )
+                        .arg(
+                            Arg::new("all")
+                                .long("all")
+                                .short('a')
+                                .help("Update all plugins")
+                                .action(clap::ArgAction::SetTrue),
+                        )
+                        .arg(
+                            Arg::new("reinstall")
+                                .long("reinstall")
+                                .short('r')
+                                .help("Reinstall a plugin")
+                                .action(clap::ArgAction::SetTrue),
                         ),
                 ),
         )
