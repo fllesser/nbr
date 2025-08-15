@@ -106,7 +106,7 @@ nbr plugin install https://github.com/fllesser/nonebot-plugin-abs@master
 # Uninstall a plugin
 nbr plugin uninstall nonebot-plugin-emojilike
 
-# List installed plugins
+# List installed plugins, --outdated to show outdated plugins
 nbr plugin list
 
 # Update plugins
