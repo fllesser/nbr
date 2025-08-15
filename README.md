@@ -2,6 +2,8 @@
 
 A fast and efficient Rust implementation of the NoneBot command-line interface for managing NoneBot2 projects, plugins, and adapters.
 
+### Note: This project is still under development, and some features may not be fully functional.
+
 ## 🚀 Features
 
 - **Fast Package Management**: Uses [uv](https://astral.sh/blog/uv) for lightning-fast Python package installation
@@ -14,9 +16,9 @@ A fast and efficient Rust implementation of the NoneBot command-line interface f
 ## 📋 Prerequisites
 
 ### Required
-- **Rust** (1.70+) - for building the CLI tool
-- **Python** (3.8+) - for running NoneBot2 projects
-- **uv** - for Python package management
+- **Rust** (1.85+) - for building the CLI tool
+- **Python** (3.10+) - for running NoneBot2 projects
+- **uv** (0.80+) - for Python package management
 
 ### Install uv
 ```bash
@@ -67,9 +69,6 @@ https://github.com/fllesser/nbr/releases/latest/download/nbr-Windows-msvc-x86_64
 # Clone the repository
 git clone https://github.com/fllesser/nbr.git
 cd nbr
-
-# Build the project
-cargo build --release
 
 # Install globally (optional)
 cargo install --path .
@@ -218,7 +217,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [NoneBot2](https://github.com/nonebot/nonebot2) - The original NoneBot framework
 - [uv](https://github.com/astral-sh/uv) - Fast Python package installer
-- Original nbrPython implementation
 
 ## 📞 Support
 
@@ -228,4 +226,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Note**: This is a Rust reimplementation of the NoneBot CLI with enhanced performance through uv integration. For the original Python version, see the [official NoneBot CLI](https://github.com/nonebot/nbr).
+**Note**: This is a Rust reimplementation of the NoneBot CLI with enhanced performance through uv integration. For the original Python version, see the [official NoneBot CLI](https://github.com/nonebot/nb-cli).
