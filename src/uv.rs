@@ -169,7 +169,7 @@ impl Uv {
     }
 
     pub async fn list(working_dir: Option<&Path>, outdated: bool) -> Result<Vec<String>> {
-        let mut args = vec!["pip", "list"];
+        let mut args: Vec<&str> = vec!["pip", "list"];
         let mut spinner = None;
         if outdated {
             args.push("--outdated");
@@ -177,8 +177,10 @@ impl Uv {
                 "Checking for outdated packages...",
             ));
         }
+
         let output =
             process_utils::execute_command_with_output("uv", &args, working_dir, 30).await?;
+
         if let Some(spinner) = spinner {
             spinner.finish_and_clear();
         }

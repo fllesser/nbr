@@ -18,7 +18,6 @@ use tracing::debug;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tokio::time::timeout;
 
 // {
 // "module_name": "nonebot.adapters.onebot.v11",
@@ -70,7 +69,7 @@ impl AdapterManager {
         let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
 
         let client = Client::builder()
-            .timeout(Duration::from_secs(30))
+            .timeout(Duration::from_secs(15))
             .user_agent("nbr")
             .build()
             .map_err(NbrError::Network)?;
@@ -88,13 +87,12 @@ impl AdapterManager {
         }
 
         let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
-        let response = timeout(
-            Duration::from_secs(10),
-            self.client.get(adapters_json_url).send(),
-        )
-        .await
-        .map_err(|_| NbrError::unknown("Request timeout"))?
-        .map_err(NbrError::Network)?;
+        let response = self
+            .client
+            .get(adapters_json_url)
+            .send()
+            .await
+            .map_err(NbrError::Network)?;
 
         if !response.status().is_success() {
             return Err(NbrError::not_found("Adapter registry not found"));
