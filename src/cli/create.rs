@@ -85,11 +85,11 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     // Create the project
     create_project(&options).await?;
 
-    println!("{}", "✨ Project created successfully!".bright_green());
+    println!("\n{}", "✨ Project created successfully!".bright_green());
     println!("📂 Location: {}", options.output_dir.display());
     println!("\n🚀 Next steps:");
-    println!("  cd {}", options.name);
-    println!("  nbr run");
+    println!("     cd {}", options.name);
+    println!("     nbr run");
 
     // Show additional setup instructions
     // show_setup_instructions(&options).await?;
@@ -259,7 +259,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_gitignore(&options.output_dir)?;
 
     // Install dependencies
-    Uv::sync(Some(&options.output_dir)).await?;
+    Uv::sync(Some(&options.output_dir))?;
 
     Ok(())
 }

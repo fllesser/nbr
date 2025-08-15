@@ -25,22 +25,13 @@ impl Uv {
         Ok(stdout.trim().to_string())
     }
 
-    pub async fn sync(working_dir: Option<&Path>) -> Result<()> {
+    pub fn sync(working_dir: Option<&Path>) -> Result<()> {
         let args = vec!["sync"];
-        let spinner = terminal_utils::create_spinner("Installing dependencies...");
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &args,
-            working_dir,
-            1800, // 30 minutes timeout
-        )
-        .await;
-        spinner.finish_and_clear();
-
-        output.map(|_| ())
+        process_utils::execute_interactive("uv", &args, working_dir)?;
+        Ok(())
     }
 
-    pub async fn add(
+    pub fn add(
         packages: Vec<&str>,
         upgrade: bool,
         index_url: Option<&str>,
@@ -59,59 +50,23 @@ impl Uv {
 
         args.extend(packages.clone());
 
-        let spinner =
-            terminal_utils::create_spinner(&format!("Installing {}...", packages.join(", ")));
-
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &args,
-            working_dir,
-            300, // 5 minutes timeout
-        )
-        .await;
-
-        spinner.finish_and_clear();
-
-        output.map(|_| ())
+        process_utils::execute_interactive("uv", &args, working_dir)
     }
 
-    pub async fn add_from_github(repo_url: &str, working_dir: Option<&Path>) -> Result<()> {
+    pub fn add_from_github(repo_url: &str, working_dir: Option<&Path>) -> Result<()> {
         let git_url = format!("git+{}", repo_url);
-        let spinner = terminal_utils::create_spinner(&format!("Installing {}...", git_url));
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &["add", &git_url],
-            working_dir,
-            300, // 5 minutes timeout
-        )
-        .await;
-        spinner.finish_and_clear();
-
-        output.map(|_| ())
+        process_utils::execute_interactive("uv", &["add", &git_url], working_dir)
     }
 
-    pub async fn reinstall(package: &str, working_dir: Option<&Path>) -> Result<()> {
-        Self::remove(vec![package], working_dir).await?;
-        Self::add(vec![package], false, None, working_dir).await
+    pub fn reinstall(package: &str, working_dir: Option<&Path>) -> Result<()> {
+        Self::remove(vec![package], working_dir)?;
+        Self::add(vec![package], false, None, working_dir)
     }
 
-    pub async fn remove(packages: Vec<&str>, working_dir: Option<&Path>) -> Result<()> {
-        let spinner =
-            terminal_utils::create_spinner(&format!("Removing {}...", packages.join(", ")));
-
+    pub fn remove(packages: Vec<&str>, working_dir: Option<&Path>) -> Result<()> {
         let mut args = vec!["remove"];
         args.extend(packages.clone());
-
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &args,
-            working_dir,
-            300, // 5 minutes timeout
-        )
-        .await;
-        spinner.finish_and_clear();
-
-        output.map(|_| ())
+        process_utils::execute_interactive("uv", &args, working_dir)
     }
 
     pub async fn show(package: &str, working_dir: Option<&Path>) -> Result<String> {
@@ -140,8 +95,7 @@ impl Uv {
         }
 
         Err(NbrError::not_found(format!(
-            "Version not found for package: {}",
-            package
+            "package '{package}' is not installed"
         )))
     }
 
@@ -158,8 +112,7 @@ impl Uv {
         }
 
         Err(NbrError::not_found(format!(
-            "Location not found for package: {}",
-            package
+            "package '{package}' is not installed"
         )))
     }
 
@@ -258,6 +211,19 @@ mod tests {
     async fn test_list() {
         let work_dir = working_dir();
         let result = Uv::list(Some(&work_dir), true).await;
+        assert!(result.is_ok());
+        dbg!(result.unwrap());
+    }
+
+    #[test]
+    fn test_add() {
+        let work_dir = working_dir();
+        let result = Uv::add(
+            vec!["nonebot-plugin-status", "nonebot-plugin-abs"],
+            false,
+            None,
+            Some(&work_dir),
+        );
         assert!(result.is_ok());
         dbg!(result.unwrap());
     }
