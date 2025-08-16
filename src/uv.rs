@@ -4,7 +4,10 @@ use crate::{
 };
 use colored::Colorize;
 use serde::Deserialize;
-use std::path::Path;
+use std::{
+    hash::{Hash, Hasher},
+    path::Path,
+};
 
 pub struct Uv;
 
@@ -113,13 +116,13 @@ impl Uv {
             .unwrap()
             .split(" ")
             .last()
-            .map(|s| s.to_owned().split(",").map(|s| s.to_owned()).collect());
+            .map(|s| s.split(",").map(|s| s.to_owned()).collect());
         let requires_by = lines
             .next()
             .unwrap()
             .split(" ")
             .last()
-            .map(|s| s.to_owned().split(",").map(|s| s.to_owned()).collect());
+            .map(|s| s.split(",").map(|s| s.to_owned()).collect());
 
         Ok(Package {
             name,
@@ -158,12 +161,14 @@ impl Uv {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Eq, Hash)]
+#[derive(Debug, Clone, Deserialize, Eq)]
+#[allow(unused)]
 pub struct Package {
     pub name: String,
     pub version: String,
     pub latest_version: Option<String>,
     pub location: Option<String>,
+
     pub requires: Option<Vec<String>>,
     pub requires_by: Option<Vec<String>>,
 }
@@ -171,6 +176,12 @@ pub struct Package {
 impl PartialEq for Package {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
+    }
+}
+
+impl Hash for Package {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
     }
 }
 

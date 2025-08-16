@@ -351,7 +351,7 @@ impl PluginManager {
     pub async fn search_plugins(&self, query: &str, limit: usize) -> Result<()> {
         debug!("Searching plugins for: {}", query);
 
-        let spinner = terminal_utils::create_spinner(&format!("Searching for '{}'...", query));
+        let spinner = terminal_utils::create_spinner(format!("Searching for '{}'...", query));
 
         let results = self.search_registry_plugins(query, limit).await?;
         spinner.finish_and_clear();

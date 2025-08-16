@@ -2,9 +2,7 @@
 //!
 //! This module handles environment management including showing system information,
 //! checking dependencies, and validating the current project setup.
-#![allow(dead_code)]
 
-use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{Package, Uv};
@@ -31,15 +29,6 @@ pub struct EnvironmentInfo {
     pub system_info: SystemInfo,
     /// Environment variables
     pub env_vars: HashMap<String, String>,
-}
-
-/// Operating system information
-#[derive(Debug, Clone)]
-pub struct OsInfo {
-    pub name: String,
-    pub version: String,
-    pub architecture: String,
-    pub kernel_version: String,
 }
 
 /// Python environment information
@@ -69,14 +58,6 @@ pub struct AdapterInfo {
     pub location: String,
     pub package_name: String,
     pub module_name: String,
-}
-
-/// Plugin information
-#[derive(Debug, Clone)]
-pub struct PluginInfo {
-    pub name: String,
-    pub version: String,
-    pub location: String,
 }
 
 /// Project information
@@ -112,8 +93,6 @@ pub struct DiskUsage {
 
 /// Environment checker
 pub struct EnvironmentChecker {
-    /// Configuration manager
-    config_manager: ConfigManager,
     /// Working directory
     work_dir: PathBuf,
     /// System information
@@ -123,18 +102,13 @@ pub struct EnvironmentChecker {
 impl EnvironmentChecker {
     /// Create a new environment checker
     pub async fn new() -> Result<Self> {
-        let config_manager = ConfigManager::new()?;
-
-        let work_dir = config_manager.current_dir().to_path_buf();
-
+        //let config_manager = ConfigManager::new()?;
+        //let work_dir = config_manager.current_dir().to_path_buf();
+        let work_dir = std::env::current_dir().unwrap();
         let mut system = System::new_all();
         system.refresh_all();
 
-        Ok(Self {
-            config_manager,
-            work_dir,
-            system,
-        })
+        Ok(Self { work_dir, system })
     }
 
     /// Show environment information
@@ -255,18 +229,18 @@ impl EnvironmentChecker {
     }
 
     /// Get installed adapters
-    fn get_installed_adapters(&self, packages: &Vec<Package>) -> Vec<Package> {
+    fn get_installed_adapters(&self, packages: &[Package]) -> Vec<Package> {
         packages
-            .into_iter()
+            .iter()
             .filter(|p| p.name.starts_with("nonebot-adapter-"))
             .cloned()
             .collect()
     }
 
     /// Get installed plugins
-    fn get_installed_plugins(&self, packages: &Vec<Package>) -> Vec<Package> {
+    fn get_installed_plugins(&self, packages: &[Package]) -> Vec<Package> {
         packages
-            .into_iter()
+            .iter()
             .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
             .cloned()
             .collect()
@@ -860,7 +834,6 @@ mod tests {
         };
 
         let checker = EnvironmentChecker {
-            config_manager: ConfigManager::new().unwrap(),
             work_dir: PathBuf::new(),
             system: System::new_all(),
         };
