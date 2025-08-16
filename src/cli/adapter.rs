@@ -9,6 +9,7 @@ use crate::utils::terminal_utils;
 use crate::uv::Uv;
 use clap::ArgMatches;
 use colored::*;
+use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, MultiSelect};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -85,7 +86,7 @@ impl AdapterManager {
         if let Some(adapters) = self.registry_adapters.get() {
             return Ok(adapters);
         }
-
+        let spinner = terminal_utils::create_spinner("Fetching adapters from registry...");
         let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
         let response = self
             .client
@@ -94,6 +95,7 @@ impl AdapterManager {
             .await
             .map_err(NbrError::Network)?;
 
+        spinner.finish_and_clear();
         if !response.status().is_success() {
             return Err(NbrError::not_found("Adapter registry not found"));
         }
@@ -113,17 +115,14 @@ impl AdapterManager {
     }
 
     pub async fn select_adapter(&self) -> Result<Vec<RegistryAdapter>> {
-        let spinner = terminal_utils::create_spinner("Fetching adapters from registry...");
         let registry_adapters = self.fetch_regsitry_adapters().await?;
-        spinner.finish_and_clear();
 
         let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
         adapter_names.sort();
 
         let selected_adapters = if !adapter_names.is_empty() {
-            println!("{}", "🔌 Select adapters to install:".blue().bold());
-
-            let selections = MultiSelect::new()
+            let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+                .with_prompt("Which adapter(s) would you like to use")
                 .items(&adapter_names)
                 //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
                 .interact()
@@ -168,13 +167,13 @@ impl AdapterManager {
                 .join(", ")
         );
 
-        if !Confirm::new()
+        if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(&prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("Installation cancelled by user");
+            println!("{}", "❌ Installation operation cancelled.".bright_red());
             return Ok(());
         }
 
@@ -199,15 +198,19 @@ impl AdapterManager {
         // Add adapters to configuration
         ToolNonebot::parse(None)?.add_adapters(adapters)?;
 
-        println!(
-            "{} Successfully installed adapters: {}",
-            "✓".bright_green(),
+        let message = format!(
+            "{} {}",
+            "✓ Successfully installed adapters:".bright_green().bold(),
             selected_adapters
                 .iter()
                 .map(|a| a.name.clone())
                 .collect::<Vec<String>>()
                 .join(", ")
+                .yellow()
+                .bold()
         );
+
+        println!("{}", message);
 
         // Show configuration instructions
         // if let Some(ref adapter) = adapter_info {
@@ -241,9 +244,8 @@ impl AdapterManager {
 
         // select adapters to uninstall
         let selected_adapters: Vec<String> = if !installed_adapters_names.is_empty() {
-            println!("\n{}\n", "🔌 Select adapters to uninstall:".bright_cyan());
-            let selections = MultiSelect::new()
-                .with_prompt("Adapters")
+            let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+                .with_prompt("Select installed adapter(s) to uninstall")
                 .items(&installed_adapters_names)
                 //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
                 .interact()
@@ -281,11 +283,12 @@ impl AdapterManager {
 
         Uv::remove(adapter_packages, Some(&self.work_dir))?;
 
-        println!(
-            "{} Successfully uninstalled adapters: {}",
-            "✓".bright_green(),
-            selected_adapters.to_vec().join(", ")
+        let message = format!(
+            "{} {}",
+            "✓ Successfully uninstalled adapters:".bright_green().bold(),
+            selected_adapters.to_vec().join(", ").yellow().bold()
         );
+        println!("{}", message);
 
         Ok(())
     }

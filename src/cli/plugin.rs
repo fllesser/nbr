@@ -10,6 +10,7 @@ use crate::uv::{Package, Uv};
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
+use dialoguer::theme::ColorfulTheme;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -123,15 +124,15 @@ impl PluginManager {
         debug!("Installing plugin from github: {}", repo_url);
 
         // 确定是否安装 github 插件
-        if Confirm::new()
-            .with_prompt("Do you want to install this plugin from github?")
+        if Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Do you want to install this plugin from github")
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
             Uv::add_from_github(repo_url, Some(&self.work_dir))?;
         } else {
-            println!("Installation cancelled by user");
+            println!("{}", "❌ Installation operation cancelled.".bright_red());
             return Ok(());
         }
 
@@ -142,18 +143,19 @@ impl PluginManager {
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
 
-        println!(
-            "{} Successfully installed plugin: {}",
-            "✓".bright_green(),
-            repo_name.bright_blue()
+        let message = format!(
+            "{} {}",
+            "✓ Successfully installed plugin:".bright_green().bold(),
+            repo_name.yellow().bold()
         );
+        println!("{}", message);
         Ok(())
     }
 
     pub async fn install_unregistered_plugin(&mut self, package_name: &str) -> Result<()> {
         debug!("Installing unregistered plugin: {}", package_name);
 
-        if Confirm::new()
+        if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt("Do you want to install this unregistered plugin from PyPI?")
             .default(true)
             .interact()
@@ -161,7 +163,7 @@ impl PluginManager {
         {
             Uv::add(vec![package_name], false, None, Some(&self.work_dir))?;
         } else {
-            println!("Installation cancelled by user");
+            println!("{}", "❌ Installation operation cancelled.".bright_red());
             return Ok(());
         }
 
@@ -169,11 +171,12 @@ impl PluginManager {
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
 
-        println!(
-            "{} Successfully installed plugin: {}",
-            "✓".bright_green(),
-            package_name.bright_blue()
+        let message = format!(
+            "{} {}",
+            "✓ Successfully installed plugin:".bright_green().bold(),
+            package_name.yellow().bold()
         );
+        println!("{}", message);
         Ok(())
     }
 
@@ -189,13 +192,13 @@ impl PluginManager {
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
 
-        if !Confirm::new()
-            .with_prompt("Do you want to install this plugin?")
+        if !Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Do you want to install this plugin")
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("Installation cancelled by user");
+            println!("{}", "❌ Installation operation cancelled.".bright_red());
             return Ok(());
         }
         // Install the plugin
@@ -209,11 +212,12 @@ impl PluginManager {
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![registry_plugin.module_name.clone()])?;
 
-        println!(
-            "{} Successfully installed plugin: {}",
-            "✓".bright_green(),
-            package_name.bright_blue()
+        let message = format!(
+            "{} {}",
+            "✓ Successfully installed plugin:".bright_green().bold(),
+            package_name.yellow().bold()
         );
+        println!("{}", message);
 
         Ok(())
     }
@@ -239,10 +243,9 @@ impl PluginManager {
             )));
         }
 
-        if Confirm::new()
+        if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(
-                "Are you sure you want to uninstall '{}'?",
-                package_name
+                "Are you sure you want to uninstall '{package_name}'",
             ))
             .default(false)
             .interact()
@@ -251,13 +254,14 @@ impl PluginManager {
             Uv::remove(vec![&package_name], Some(&self.work_dir))?;
             ToolNonebot::parse(None)?.remove_plugins(vec![package_name.replace("-", "_")])?;
 
-            println!(
-                "{} Successfully uninstalled plugin: {}",
-                "✓".bright_green(),
-                package_name.bright_blue()
+            let message = format!(
+                "{} {}",
+                "✓ Successfully uninstalled plugin:".bright_green().bold(),
+                package_name.yellow().bold()
             );
+            println!("{}", message);
         } else {
-            println!("Uninstallation cancelled by user");
+            println!("{}", "❌ Uninstallation operation cancelled.".bright_red());
             return Ok(());
         }
 
@@ -277,16 +281,15 @@ impl PluginManager {
             )));
         }
         // Confirm uninstallation
-        if !Confirm::new()
+        if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(
-                "Are you sure you want to uninstall '{}'?",
-                package_name
+                "Are you sure you want to uninstall '{package_name}'"
             ))
             .default(false)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("Uninstallation cancelled by user");
+            println!("{}", "❌ Uninstallation operation cancelled.".bright_red());
             return Ok(());
         }
 
@@ -421,16 +424,16 @@ impl PluginManager {
             .for_each(|plugin| plugin.display_info());
 
         // 确认更新
-        if !Confirm::new()
+        if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(
-                "Do you want to update these {} outdated plugins?",
+                "Do you want to update these {} outdated plugins",
                 outdated_plugins.len()
             ))
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("Update cancelled by user");
+            println!("{}", "❌ Update operation cancelled.".bright_red());
             return Ok(());
         }
 

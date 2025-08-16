@@ -8,6 +8,7 @@ use crate::error::{NbrError, Result};
 
 use clap::ArgMatches;
 use colored::*;
+use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Select};
 use std::collections::HashMap;
 use std::fs;
@@ -50,8 +51,8 @@ impl GenerateHandler {
         // Check if file already exists
         if bot_path.exists()
             && !force
-            && !Confirm::new()
-                .with_prompt(format!("File '{}' already exists. Overwrite?", filename))
+            && !Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt(format!("File '{filename}' already exists. Overwrite"))
                 .default(false)
                 .interact()
                 .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -77,11 +78,12 @@ impl GenerateHandler {
         fs::write(&bot_path, content)
             .map_err(|e| NbrError::io(format!("Failed to write bot file: {}", e)))?;
 
-        println!(
-            "{} Generated bot file: {}",
-            "✓".bright_green(),
-            filename.bright_blue()
+        let message = format!(
+            "{} {}",
+            "✓ Successfully generated bot file:".bright_green().bold(),
+            filename.yellow().bold()
         );
+        println!("{}", message);
 
         // Show next steps
         self.show_next_steps(&template, filename);
@@ -96,7 +98,7 @@ impl GenerateHandler {
         let templates: Vec<&str> = BOT_TEMPLATES.iter().map(|(name, _)| *name).collect();
         let descriptions: Vec<&str> = BOT_TEMPLATES.iter().map(|(_, desc)| *desc).collect();
 
-        let selection = Select::new()
+        let selection = Select::with_theme(&ColorfulTheme::default())
             .items(&descriptions)
             .default(0)
             .interact()

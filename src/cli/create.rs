@@ -1,13 +1,14 @@
 use anyhow::Context;
 use clap::ArgMatches;
 use colored::*;
+use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
@@ -16,46 +17,41 @@ use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool, ToolNonebot};
 use crate::uv::Uv;
 
-#[allow(unused)]
-#[derive(Debug, Clone)]
-pub struct Template {
-    pub name: String,
-    pub description: String,
-    pub url: Option<String>,
-    pub builtin: bool,
-    pub adapters: Vec<String>,
-    pub plugins: Vec<String>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Template {
+    Bootstrap,
+    Simple,
+}
+
+impl Template {
+    pub fn description(&self) -> &str {
+        match self {
+            Template::Bootstrap => "bootstrap - Basic NoneBot project template",
+            Template::Simple => "simple - Simple bot template with basic plugins",
+        }
+    }
+}
+
+impl Display for Template {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Template::Bootstrap => write!(f, "bootstrap"),
+            Template::Simple => write!(f, "simple"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectOptions {
     pub name: String,
-    pub template: String,
+    pub template: Template,
     pub output_dir: PathBuf,
     pub force: bool,
+    pub drivers: Vec<String>,
     pub adapters: Vec<RegistryAdapter>,
     pub plugins: Vec<String>,
     pub python_version: String,
-}
-
-impl ProjectOptions {
-    pub fn display(&self) {
-        println!("\n{}\n", "Nonebot project options:".blue().bold());
-        println!("  name: {}", self.name.yellow());
-        println!("  template: {}", self.template.yellow());
-        println!(
-            "  output_dir: {}",
-            self.output_dir.display().to_string().yellow()
-        );
-        let adapters = self
-            .adapters
-            .iter()
-            .map(|a| a.name.clone())
-            .collect::<Vec<_>>();
-        println!("  adapters: {}", adapters.join(", ").yellow());
-        println!("  plugins: {}", self.plugins.join(", ").yellow());
-        println!("  python_version: {}", self.python_version.yellow());
-    }
+    pub environment: String,
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
@@ -66,20 +62,13 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     // 补齐项目选项
     let options = gather_project_options(matches, &adapter_manager).await?;
 
-    options.display();
-    println!();
     // Check if directory already exists
     if options.output_dir.exists() && !options.force {
-        let should_continue = Confirm::new()
-            .with_prompt(
-                format!(
-                    "Directory '{}' already exists. Continue?",
-                    options.output_dir.display()
-                )
-                .blue()
-                .bold()
-                .to_string(),
-            )
+        let should_continue = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!(
+                "Directory '{}' already exists. Continue?",
+                options.output_dir.display()
+            ))
             .default(false)
             .interact()
             .map_err(|e| NbrError::io(e.to_string()))?;
@@ -93,13 +82,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     // Create the project
     create_project(&options).await?;
 
-    println!("\n{}", "✨ Project created successfully!".bright_green());
-    println!(
-        "{}",
-        format!("📂 Location: {}", options.output_dir.display())
-            .bright_green()
-            .bold()
-    );
+    println!("\n{}", "✨ Project created successfully !".green().bold());
     println!("{}\n", "🚀 Next steps:".green().bold());
     println!(
         "     {}",
@@ -119,17 +102,13 @@ async fn gather_project_options(
     adapter_manager: &AdapterManager,
 ) -> Result<ProjectOptions> {
     let name = if let Some(name) = matches.get_one::<String>("name") {
-        name.clone()
+        name.to_owned()
     } else {
-        Input::<String>::new()
-            .with_prompt("🌟 Project name".blue().bold().to_string())
+        Input::<String>::with_theme(&ColorfulTheme::default())
+            .with_prompt("Project name")
             .default("awesome-bot".to_string())
             .validate_with(|input: &String| -> Result<()> {
-                if input.is_empty() {
-                    Err(NbrError::invalid_argument(
-                        "Project name cannot be empty".to_string(),
-                    ))
-                } else if input.contains(" ") {
+                if input.contains(" ") {
                     Err(NbrError::invalid_argument(
                         "Project name cannot contain spaces".to_string(),
                     ))
@@ -142,64 +121,97 @@ async fn gather_project_options(
     };
 
     // 选择模板
-    let template = if let Some(template) = matches.get_one::<String>("template") {
-        template.to_owned()
-    } else {
-        select_template()?
-    };
-
+    let template = select_template()?;
     // 选择 Bot 创建目录，默认在当前目录下创建
-    let output_dir = if let Some(dir) = matches.get_one::<String>("output") {
-        PathBuf::from(dir)
-    } else {
-        std::env::current_dir()?.join(&name)
-    };
-
+    let output_dir: PathBuf = matches
+        .get_one::<String>("output")
+        .map(|s| PathBuf::from(s))
+        .unwrap_or(std::env::current_dir()?.join(&name));
     // 是否强制创建
     let force = matches.get_flag("force");
-
+    // 选择驱动
+    let drivers = select_drivers()?;
     // 指定 Python 版本
     let python_version = matches.get_one::<String>("python").unwrap().to_owned();
-
     // 选择适配器
     let adapters = adapter_manager.select_adapter().await?;
-
     // 选择内置插件
     let plugins = select_builtin_plugins()?;
+    // 选择环境类型
+    let environment = select_environment()?;
 
     Ok(ProjectOptions {
         name,
         template,
         output_dir,
         force,
+        drivers,
         adapters,
         plugins,
         python_version,
+        environment,
     })
 }
 
-fn select_template() -> Result<String> {
-    let templates = get_available_templates()?;
+fn select_environment() -> Result<String> {
+    let env_types = vec!["dev", "prod"];
 
-    let template_descriptions: Vec<String> = templates
-        .iter()
-        .map(|t| format!("{} - {}", t.name, t.description))
+    let selected_env_type = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Which environment")
+        .items(&env_types)
+        .default(0)
+        .interact()
+        .map_err(|e| NbrError::io(e.to_string()))?;
+    Ok(env_types[selected_env_type].to_string())
+}
+
+fn select_drivers() -> Result<Vec<String>> {
+    let drivers = vec!["FastAPI", "HTTPX", "websockets", "Quark", "AIOHTTP"];
+    let selected_drivers = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Which driver(s) would you like to use")
+        .items(&drivers)
+        // 默认选择前三个
+        .defaults(&vec![true; 3])
+        .interact()
+        .map_err(|e| NbrError::io(e.to_string()))?;
+
+    let selected_drivers: Vec<String> = selected_drivers
+        .into_iter()
+        .map(|i| drivers[i].to_string())
         .collect();
 
-    let selection = Select::new()
-        .with_prompt("🔍 Select a template".blue().bold().to_string())
+    if selected_drivers.is_empty() {
+        return select_drivers();
+    }
+
+    Ok(selected_drivers)
+}
+
+fn select_template() -> Result<Template> {
+    let template_descriptions: Vec<String> = vec![
+        Template::Bootstrap.description().to_string(),
+        Template::Simple.description().to_string(),
+    ];
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select a template")
         .default(0)
         .items(&template_descriptions)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
 
-    Ok(templates[selection].name.clone())
+    match selection {
+        0 => Ok(Template::Bootstrap),
+        1 => Ok(Template::Simple),
+        _ => unreachable!(),
+    }
 }
 
+// 选择内置插件
 fn select_builtin_plugins() -> Result<Vec<String>> {
     let builtin_plugins = vec!["echo", "single_session"];
-    let selected_plugins = MultiSelect::new()
-        .with_prompt("🔌 Builtin plugins".blue().bold().to_string())
+    let selected_plugins = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select builtin plugins")
         .items(&builtin_plugins)
         .defaults(&vec![true; builtin_plugins.len().min(1)])
         .interact()
@@ -210,54 +222,12 @@ fn select_builtin_plugins() -> Result<Vec<String>> {
     Ok(selected_plugins)
 }
 
-fn get_available_templates() -> Result<Vec<Template>> {
-    let templates = vec![
-        Template {
-            name: "bootstrap".to_string(),
-            description: "Basic NoneBot project template".to_string(),
-            url: None,
-            builtin: true,
-            adapters: vec!["OneBot V11".to_string()],
-            plugins: vec![],
-        },
-        Template {
-            name: "simple".to_string(),
-            description: "Simple bot template with basic plugins".to_string(),
-            url: None,
-            builtin: true,
-            adapters: vec!["OneBot V11".to_string()],
-            plugins: vec!["nonebot-plugin-echo".to_string()],
-        },
-        Template {
-            name: "full".to_string(),
-            description: "Full-featured template with multiple adapters and plugins".to_string(),
-            url: None,
-            builtin: true,
-            adapters: vec!["OneBot V11".to_string(), "Console".to_string()],
-            plugins: vec!["nonebot-plugin-status".to_string()],
-        },
-    ];
-
-    // TODO: Fetch remote templates from registry
-    debug!("Available templates: {:?}", templates);
-
-    Ok(templates)
-}
-
 async fn create_project(options: &ProjectOptions) -> Result<()> {
     fs::create_dir_all(&options.output_dir).context("Failed to create output directory")?;
 
-    match options.template.as_str() {
-        "bootstrap" => create_bootstrap_project(options).await?,
-        "simple" => create_simple_project(options).await?,
-        "full" => create_full_project(options).await?,
-        _ => {
-            warn!(
-                "Unknown template '{}', falling back to bootstrap",
-                options.template
-            );
-            create_bootstrap_project(options).await?
-        }
+    match options.template {
+        Template::Bootstrap => create_bootstrap_project(options).await?,
+        Template::Simple => create_simple_project(options).await?,
     }
 
     Ok(())
@@ -265,13 +235,13 @@ async fn create_project(options: &ProjectOptions) -> Result<()> {
 
 async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     let package_name = options.name.replace("-", "_");
-    // Create directory structure
+    // Create structure
     create_project_structure(&options.output_dir, &package_name)?;
+
     // Generate files
     generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(options)?;
-    // generate_nb_config_file(&options)?;
-    generate_env_files(&options.output_dir)?;
+    generate_env_files(&options)?;
     generate_readme_file(options)?;
     generate_gitignore(&options.output_dir)?;
 
@@ -310,16 +280,8 @@ fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
 async fn create_simple_project(options: &ProjectOptions) -> Result<()> {
     // Start with bootstrap template
     create_bootstrap_project(options).await?;
-
     // Add example plugin
     create_example_plugin(&options.output_dir)?;
-
-    Ok(())
-}
-
-async fn create_full_project(options: &ProjectOptions) -> Result<()> {
-    // Start with simple template
-    create_simple_project(options).await?;
 
     Ok(())
 }
@@ -328,16 +290,12 @@ fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
     let dirs = vec![
         base_dir.join("src/plugins"),
         base_dir.join(format!("src/{}", module_name)),
-        //base_dir.join("data"),
-        //base_dir.join("resources"),
-        //base_dir.join("tests"),
     ];
 
     for dir in dirs {
         fs::create_dir_all(&dir)
             .with_context(|| format!("Failed to create directory: {}", dir.display()))?;
     }
-
     fs::write(
         base_dir.join(format!("src/{}/__init__.py", module_name)),
         "",
@@ -356,14 +314,20 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     let mut pyproject = PyProjectConfig::default();
     pyproject.project.name = options.name.to_string();
 
-    let mut dependencies = HashSet::new();
-    // 补齐插件, 适配器相关表
-    for adapter in &options.adapters {
-        let adapter_dep = format!("{}>={}", adapter.project_link, adapter.version);
-        dependencies.insert(adapter_dep);
-    }
+    // 补齐驱动依赖
+    let drivers = options.drivers.join(",").to_string().to_lowercase();
+    pyproject
+        .project
+        .dependencies
+        .push(format!("nonebot2[{}]>=2.4.3", drivers));
+
+    let adapter_deps = options
+        .adapters
+        .iter()
+        .map(|a| format!("{}>={}", a.project_link, a.version))
+        .collect::<HashSet<String>>(); // 沟槽的 onebot 12
     // 补齐依赖
-    pyproject.project.dependencies.extend(dependencies);
+    pyproject.project.dependencies.extend(adapter_deps);
 
     // 补齐 tool.nonebot
     pyproject.tool.nonebot.plugin_dirs = vec![format!("src/plugins")];
@@ -387,12 +351,25 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
-fn generate_env_files(output_dir: &Path) -> Result<()> {
-    let env_dev = include_str!("nbfile/env.dev");
-    let env_prod = include_str!("nbfile/env.prod");
-
-    fs::write(output_dir.join(".env"), env_dev)?;
-    fs::write(output_dir.join(".env.prod"), env_prod)?;
+fn generate_env_files(options: &ProjectOptions) -> Result<()> {
+    let driver = options
+        .drivers
+        .iter()
+        .map(|d| format!("~{}", d.to_lowercase()))
+        .collect::<Vec<String>>()
+        .join("+");
+    let env_content = format!(
+        include_str!("nbfile/env-template"),
+        driver,
+        options.environment.to_string(),
+        options.name.to_string(),
+    );
+    fs::write(
+        options
+            .output_dir
+            .join(format!(".env.{}", options.environment)),
+        env_content,
+    )?;
 
     Ok(())
 }
@@ -442,4 +419,29 @@ async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_env_files() {
+        let options = ProjectOptions {
+            name: "awesome-bot".to_string(),
+            template: Template::Bootstrap,
+            output_dir: PathBuf::from("awesome-bot"),
+            force: false,
+            drivers: vec![
+                "FastAPI".to_string(),
+                "HTTPX".to_string(),
+                "webosockets".to_string(),
+            ],
+            adapters: vec![],
+            plugins: vec![],
+            python_version: "3.10".to_string(),
+            environment: "dev".to_string(),
+        };
+        generate_env_files(&options).unwrap();
+    }
 }

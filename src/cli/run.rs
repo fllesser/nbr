@@ -8,6 +8,7 @@ use crate::utils::process_utils;
 use clap::ArgMatches;
 use colored::Colorize;
 use dialoguer::Confirm;
+use dialoguer::theme::ColorfulTheme;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -437,10 +438,9 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
     }
 
     // 询问用户是否创建bot文件
-    let need_create_bot_file = Confirm::new()
+    let need_create_bot_file = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(format!(
-            "Bot file '{}' not found. Do you want to create it?",
-            bot_file
+            "Bot file '{bot_file}' not found. Do you want to create it"
         ))
         .default(false)
         .interact()
