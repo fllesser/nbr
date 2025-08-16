@@ -114,11 +114,7 @@ impl EnvironmentChecker {
     /// Show environment information
     pub async fn show_info(&mut self) -> Result<()> {
         let env_info = self.gather_environment_info().await?;
-        println!("{}", "Environment Information:".bright_cyan().bold());
-        println!();
-
         self.display_environment_info(&env_info);
-
         Ok(())
     }
 
