@@ -113,13 +113,9 @@ impl EnvironmentChecker {
 
     /// Show environment information
     pub async fn show_info(&mut self) -> Result<()> {
-        println!("{}", "Environment Information".bright_cyan().bold());
-        println!();
-
-        let spinner = terminal_utils::create_spinner("Gathering environment information...");
-
         let env_info = self.gather_environment_info().await?;
-        spinner.finish_and_clear();
+        println!("{}", "Environment Information:".bright_cyan().bold());
+        println!();
 
         self.display_environment_info(&env_info);
 
@@ -128,10 +124,7 @@ impl EnvironmentChecker {
 
     /// Check environment dependencies
     pub async fn check_environment(&mut self) -> Result<()> {
-        let spinner = terminal_utils::create_spinner("Checking environment...");
-
         let env_info = self.gather_environment_info().await?;
-        spinner.finish_and_clear();
 
         let issues = self.check_for_issues(&env_info);
 
@@ -167,14 +160,14 @@ impl EnvironmentChecker {
 
     /// Gather comprehensive environment information
     async fn gather_environment_info(&mut self) -> Result<EnvironmentInfo> {
+        let spinner = terminal_utils::create_spinner("Checking environment...");
         self.system.refresh_all();
-
         let python_info = self.get_python_info().await?;
         let nonebot_info = self.get_nonebot_info(&python_info).await.ok();
         let project_info = self.get_project_info();
         let system_info = self.get_system_info();
         let env_vars = self.get_relevant_env_vars();
-
+        spinner.finish_and_clear();
         Ok(EnvironmentInfo {
             python_info,
             nonebot_info,
