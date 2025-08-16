@@ -39,10 +39,12 @@ A fast and efficient Rust implementation of the NoneBot command-line interface f
 
 <details>
 <summary>Install from releases</summary>
+
 Only support Linux(x86_64), MacOS(arm64) and Windows(x86_64)
 
 <details>
-<summary>Linux(x86_64)</summary>sd
+<summary>Linux(x86_64)</summary>
+
 Download the latest release from GitHub
 
     curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
@@ -54,6 +56,7 @@ Move the binary to your PATH
 
 <details>
 <summary>MacOS(arm64)</summary>
+
 Download the latest release from GitHub
 
     curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-macOS-arm64.tar.gz | tar -xzf -
@@ -65,6 +68,7 @@ Move the binary to your PATH
 
 <details>
 <summary>Windows(x86_64)</summary>
+
 Download the latest release from GitHub
 
     curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Windows-msvc-x86_64.zip | tar -xzf -
