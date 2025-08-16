@@ -7,7 +7,7 @@
 use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
-use crate::uv::Uv;
+use crate::uv::{Package, Uv};
 use clap::ArgMatches;
 use colored::*;
 use serde::{Deserialize, Serialize};
@@ -49,7 +49,7 @@ pub struct PythonInfo {
     pub executable: String,
     pub virtual_env: Option<String>,
     pub uv_version: Option<String>,
-    pub site_packages: Vec<String>,
+    pub site_packages: Vec<Package>,
 }
 
 /// NoneBot information
@@ -57,8 +57,8 @@ pub struct PythonInfo {
 pub struct NoneBotInfo {
     pub version: String,
     pub location: String,
-    pub adapters: Vec<AdapterInfo>,
-    pub plugins: Vec<PluginInfo>,
+    pub adapters: Vec<Package>,
+    pub plugins: Vec<Package>,
 }
 
 /// Adapter information
@@ -211,10 +211,10 @@ impl EnvironmentChecker {
 
     /// Get Python environment information
     async fn get_python_info(&self) -> Result<PythonInfo> {
-        let python_exe = process_utils::find_python()
+        let executable = process_utils::find_python()
             .ok_or_else(|| NbrError::not_found("Python executable not found"))?;
 
-        let version = process_utils::get_python_version(&python_exe)
+        let version = process_utils::get_python_version(&executable)
             .await
             .unwrap_or_else(|_| "Unknown".to_string());
 
@@ -223,13 +223,13 @@ impl EnvironmentChecker {
             .map(|path| path.to_string_lossy().to_string());
 
         let uv_version = Uv::get_self_version().await.ok();
-        let site_packages = Uv::list_site_packages(Some(&self.work_dir))
+        let site_packages = Uv::list(Some(&self.work_dir), false)
             .await
             .unwrap_or_default();
 
         Ok(PythonInfo {
             version,
-            executable: python_exe,
+            executable,
             virtual_env,
             uv_version,
             site_packages,
@@ -238,59 +238,38 @@ impl EnvironmentChecker {
 
     /// Get NoneBot information
     async fn get_nonebot_info(&self, python_info: &PythonInfo) -> Result<NoneBotInfo> {
+        let package = Uv::show_package_info("nonebot2", Some(&self.work_dir)).await?;
         // Check if NoneBot is installed
-        let nonebot_version = Uv::get_installed_version("nonebot2", Some(&self.work_dir)).await?;
-        let nonebot_location = Uv::get_installed_location("nonebot2", Some(&self.work_dir)).await?;
+        let version = package.version;
+        let location = package.location.unwrap_or("Unknown".to_string());
 
         let adapters = self.get_installed_adapters(&python_info.site_packages);
         let plugins = self.get_installed_plugins(&python_info.site_packages);
 
         Ok(NoneBotInfo {
-            version: nonebot_version,
-            location: nonebot_location,
+            version,
+            location,
             adapters,
             plugins,
         })
     }
 
     /// Get installed adapters
-    fn get_installed_adapters(&self, packages: &[String]) -> Vec<AdapterInfo> {
-        let mut adapters = Vec::new();
-
-        for package in packages {
-            if package.starts_with("nonebot-adapter-")
-                && let Some((name, version)) = package.split_once("==")
-            {
-                adapters.push(AdapterInfo {
-                    name: name.to_string(),
-                    version: version.to_string(),
-                    location: "".to_string(), // Could be enhanced to show actual location
-                    package_name: package.to_string(),
-                    module_name: name.to_string(),
-                });
-            }
-        }
-
-        adapters
+    fn get_installed_adapters(&self, packages: &Vec<Package>) -> Vec<Package> {
+        packages
+            .into_iter()
+            .filter(|p| p.name.starts_with("nonebot-adapter-"))
+            .cloned()
+            .collect()
     }
 
     /// Get installed plugins
-    fn get_installed_plugins(&self, packages: &[String]) -> Vec<PluginInfo> {
-        let mut plugins = Vec::new();
-
-        for package in packages {
-            if (package.starts_with("nonebot-plugin-") || package.starts_with("nonebot_plugin_"))
-                && let Some((name, version)) = package.split_once("==")
-            {
-                plugins.push(PluginInfo {
-                    name: name.to_string(),
-                    version: version.to_string(),
-                    location: "".to_string(), // Could be enhanced to show actual location
-                });
-            }
-        }
-
-        plugins
+    fn get_installed_plugins(&self, packages: &Vec<Package>) -> Vec<Package> {
+        packages
+            .into_iter()
+            .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
+            .cloned()
+            .collect()
     }
 
     /// Get project information
@@ -300,7 +279,7 @@ impl EnvironmentChecker {
         let mut plugins_dir = None;
 
         // Check for common config files
-        for config_name in &["pyproject.toml", "nb.toml", ".env", ".env.example"] {
+        for config_name in &["pyproject.toml", ".env", ".env.prod"] {
             let config_path = self.work_dir.join(config_name);
             if config_path.exists() {
                 config_files.push(config_path);
@@ -308,21 +287,15 @@ impl EnvironmentChecker {
         }
 
         // Check for bot files
-        for bot_name in &["bot.py", "app.py", "main.py", "run.py"] {
-            let bot_path = self.work_dir.join(bot_name);
-            if bot_path.exists() {
-                bot_file = Some(bot_path);
-                break;
-            }
+        let bot_path = self.work_dir.join("bot.py");
+        if bot_path.exists() {
+            bot_file = Some(bot_path);
         }
 
         // Check for plugins directory
-        for plugins_name in &["src/plugins", "plugins", "bot/plugins"] {
-            let plugins_path = self.work_dir.join(plugins_name);
-            if plugins_path.exists() && plugins_path.is_dir() {
-                plugins_dir = Some(plugins_path);
-                break;
-            }
+        let plugins_path = self.work_dir.join("src").join("plugins");
+        if plugins_path.exists() && plugins_path.is_dir() {
+            plugins_dir = Some(plugins_path);
         }
 
         // Check if it's a git repository

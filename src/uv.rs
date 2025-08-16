@@ -2,6 +2,8 @@ use crate::{
     error::{NbrError, Result},
     utils::{process_utils, terminal_utils},
 };
+use colored::Colorize;
+use serde::Deserialize;
 use std::path::Path;
 
 pub struct Uv;
@@ -86,38 +88,47 @@ impl Uv {
         Ok(stdout.to_string())
     }
 
-    pub async fn get_installed_version(
-        package: &str,
-        working_dir: Option<&Path>,
-    ) -> Result<String> {
-        let stdout = Self::show(package, working_dir).await?;
+    /// Get package detailed info
+    pub async fn show_package_info(package: &str, working_dir: Option<&Path>) -> Result<Package> {
+        let output = process_utils::execute_command_with_output(
+            "uv",
+            &["pip", "show", package],
+            working_dir,
+            5,
+        )
+        .await?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut lines = stdout.lines();
+        let name = lines.next().unwrap().split(" ").last().unwrap().to_owned();
+        let version = lines.next().unwrap().split(" ").last().unwrap().to_owned();
+        let latest_version = None;
+        let location = lines
+            .next()
+            .unwrap()
+            .split(" ")
+            .last()
+            .map(|s| s.to_owned());
+        let requires = lines
+            .next()
+            .unwrap()
+            .split(" ")
+            .last()
+            .map(|s| s.to_owned().split(",").map(|s| s.to_owned()).collect());
+        let requires_by = lines
+            .next()
+            .unwrap()
+            .split(" ")
+            .last()
+            .map(|s| s.to_owned().split(",").map(|s| s.to_owned()).collect());
 
-        for line in stdout.lines() {
-            if line.starts_with("Version:") {
-                return Ok(line.replace("Version:", "").trim().to_string());
-            }
-        }
-
-        Err(NbrError::not_found(format!(
-            "package '{package}' is not installed"
-        )))
-    }
-
-    pub async fn get_installed_location(
-        package: &str,
-        working_dir: Option<&Path>,
-    ) -> Result<String> {
-        let stdout = Self::show(package, working_dir).await?;
-
-        for line in stdout.lines() {
-            if line.starts_with("Location:") {
-                return Ok(line.replace("Location:", "").trim().to_string());
-            }
-        }
-
-        Err(NbrError::not_found(format!(
-            "package '{package}' is not installed"
-        )))
+        Ok(Package {
+            name,
+            version,
+            latest_version,
+            location,
+            requires,
+            requires_by,
+        })
     }
 
     pub async fn is_installed(package: &str, working_dir: Option<&Path>) -> bool {
@@ -125,8 +136,8 @@ impl Uv {
         output.is_ok() && output.unwrap().contains("Version")
     }
 
-    pub async fn list(working_dir: Option<&Path>, outdated: bool) -> Result<Vec<String>> {
-        let mut args: Vec<&str> = vec!["pip", "list"];
+    pub async fn list(working_dir: Option<&Path>, outdated: bool) -> Result<Vec<Package>> {
+        let mut args: Vec<&str> = vec!["pip", "list", "--format=json"];
         let mut spinner = None;
         if outdated {
             args.push("--outdated");
@@ -142,26 +153,53 @@ impl Uv {
             spinner.finish_and_clear();
         }
         let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.lines().map(|line| line.to_string()).collect())
+        let packages: Vec<Package> = serde_json::from_str(&stdout)?;
+        Ok(packages)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, Hash)]
+pub struct Package {
+    pub name: String,
+    pub version: String,
+    pub latest_version: Option<String>,
+    pub location: Option<String>,
+    pub requires: Option<Vec<String>>,
+    pub requires_by: Option<Vec<String>>,
+}
+
+impl PartialEq for Package {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Package {
+    pub fn is_outdated(&self) -> bool {
+        if let Some(latest_version) = self.latest_version.as_ref() {
+            &self.version != latest_version
+        } else {
+            false
+        }
     }
 
-    pub async fn list_site_packages(working_dir: Option<&Path>) -> Result<Vec<String>> {
-        let output = process_utils::execute_command_with_output(
-            "uv",
-            &["pip", "list", "--format=freeze"],
-            working_dir,
-            30,
-        )
-        .await?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let packages = stdout
-            .lines()
-            .map(|line| line.trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect();
-
-        Ok(packages)
+    /// Display package info
+    /// name installedeversion (available version)
+    pub fn display_info(&self) {
+        let installed_version = format!("v{}", self.version).bright_green();
+        let available_version = if self.is_outdated() {
+            format!("(available: v{})", self.latest_version.as_ref().unwrap())
+                .bright_yellow()
+                .to_string()
+        } else {
+            "".to_string()
+        };
+        println!(
+            "  {} {} {}",
+            self.name.bright_blue(),
+            installed_version,
+            available_version
+        );
     }
 }
 
@@ -188,20 +226,11 @@ mod tests {
     #[tokio::test]
     async fn test_get_installed_version() {
         let work_dir = working_dir();
-        let result = Uv::get_installed_version("nonebot2", Some(&work_dir)).await;
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("2."));
-        let result = Uv::get_installed_version("not-exist-package", Some(&work_dir)).await;
-        assert!(result.is_ok());
-        assert!(result.unwrap().contains("0.1.0"));
-    }
-
-    #[tokio::test]
-    async fn test_list_site_packages() {
-        let work_dir = working_dir();
-        let result = Uv::list_site_packages(Some(&work_dir)).await;
-        assert!(result.is_ok());
-        dbg!(result.unwrap());
+        let package = Uv::show_package_info("nonebot2", Some(&work_dir)).await;
+        assert!(package.is_ok());
+        assert!(dbg!(package).unwrap().version.contains("2."));
+        let package = Uv::show_package_info("not-exist-package", Some(&work_dir)).await;
+        assert!(package.is_err());
     }
 
     #[tokio::test]
@@ -214,9 +243,12 @@ mod tests {
     #[tokio::test]
     async fn test_list() {
         let work_dir = working_dir();
-        let result = Uv::list(Some(&work_dir), true).await;
-        assert!(result.is_ok());
-        dbg!(result.unwrap());
+        let outdated_package = Uv::list(Some(&work_dir), true).await;
+        assert!(outdated_package.is_ok());
+        dbg!(outdated_package.unwrap());
+        let all_package = Uv::list(Some(&work_dir), false).await;
+        assert!(all_package.is_ok());
+        dbg!(all_package.unwrap());
     }
 
     #[test]
@@ -230,5 +262,18 @@ mod tests {
         );
         assert!(result.is_ok());
         dbg!(result.unwrap());
+    }
+
+    #[test]
+    fn test_package_display_info() {
+        let package = Package {
+            name: "nonebot-plugin-status".to_string(),
+            version: "0.1.0".to_string(),
+            latest_version: Some("0.2.0".to_string()),
+            location: None,
+            requires: None,
+            requires_by: None,
+        };
+        package.display_info();
     }
 }

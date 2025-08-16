@@ -223,8 +223,8 @@ impl AdapterManager {
         let installed_adapters = Uv::list(Some(&self.work_dir), false).await?;
         let installed_adapters_set = installed_adapters
             .into_iter()
-            .filter(|a| a.contains("nonebot-adapter-"))
-            .map(|a| a.split(" ").next().unwrap().to_owned())
+            .filter(|a| a.name.contains("nonebot-adapter-"))
+            .map(|a| a.name)
             .collect::<HashSet<String>>();
         debug!("Installed adapters: {:?}", installed_adapters_set);
         Ok(installed_adapters_set)
