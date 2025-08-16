@@ -358,18 +358,21 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
         .map(|d| format!("~{}", d.to_lowercase()))
         .collect::<Vec<String>>()
         .join("+");
+    let log_level = match options.environment.as_str() {
+        "dev" => "DEBUG",
+        "prod" => "INFO",
+        _ => unreachable!(),
+    };
+    let file_name = format!(".env.{}", options.environment);
     let env_content = format!(
         include_str!("nbfile/env-template"),
-        driver,
-        options.environment.to_string(),
-        options.name.to_string(),
+        driver, log_level, options.name,
     );
     fs::write(
-        options
-            .output_dir
-            .join(format!(".env.{}", options.environment)),
-        env_content,
+        options.output_dir.join(".env"),
+        format!("ENVIRONMENT={}", options.environment),
     )?;
+    fs::write(options.output_dir.join(file_name), env_content)?;
 
     Ok(())
 }
