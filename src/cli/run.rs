@@ -143,12 +143,12 @@ impl BotRunner {
             .map_err(|e| NbrError::io(format!("Failed to wait for process: {}", e)))?;
 
         if exit_status.success() {
-            println!("{}", "Bot process exited successfully".green());
+            println!("{}", "Bot process exited successfully".green().bold());
         } else {
             let exit_code = exit_status.code().unwrap_or(-1);
             println!(
                 "{}",
-                format!("Bot process failed with exit code: {}", exit_code).bright_red()
+                format!("❌ Bot process failed with exit code: {}", exit_code).bright_red()
             );
         }
         Ok(())
