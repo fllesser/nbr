@@ -31,16 +31,18 @@ A fast and efficient Rust implementation of the NoneBot command-line interface f
 ## 🛠 Installation
 
 <details>
-<summary>Install from cargo</summary>
+<summary>Install with cargo</summary>
 
     cargo install nbr
 
 </details>
 
-<details open>
-<summary>Install from releases</summary>
 <details>
-<summary>Linux(x86_64)</summary>
+<summary>Install from releases</summary>
+Only support Linux(x86_64), MacOS(arm64) and Windows(x86_64)
+
+<details>
+<summary>Linux(x86_64)</summary>sd
 Download the latest release from GitHub
 
     curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
@@ -187,23 +189,6 @@ See [Migration Documentation](docs/pip-to-uv-migration.md) for detailed informat
 
 ## 🏗 Development
 
-### Setup Development Environment
-
-```bash
-# Clone and enter directory
-git clone https://github.com/fllesser/nbr.git
-cd nbr
-
-# Install development dependencies
-cargo install cargo-watch
-
-# Run tests
-cargo test
-
-# Run with hot reload during development
-cargo watch -x run
-```
-
 ### Project Structure
 
 ```
@@ -220,14 +205,6 @@ src/
 ├── error.rs            # Error handling
 ├── main.rs             # CLI entry point
 └── utils.rs            # Utility functions
-```
-
-### Testing Migration
-
-Run the included migration test to verify the pip→uv transition:
-
-```bash
-./test_migration.sh
 ```
 
 ## 🤝 Contributing
