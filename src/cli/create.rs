@@ -82,7 +82,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     // Create the project
     create_project(&options).await?;
 
-    println!("\n{}", "✨ Project created successfully!".green().bold());
+    println!("\n{}", "✨ Project created successfully !".green().bold());
     println!("{}\n", "🚀 Next steps:".green().bold());
     println!(
         "     {}",
