@@ -35,24 +35,26 @@ pub struct ProjectOptions {
     pub force: bool,
     pub adapters: Vec<RegistryAdapter>,
     pub plugins: Vec<String>,
+    pub python_version: String,
 }
 
 impl ProjectOptions {
     pub fn display(&self) {
-        println!("\n{}", "Nonebot project options:".bright_green());
-        println!("  name: {}", self.name.bright_blue());
-        println!("  template: {}", self.template.bright_blue());
+        println!("\n{}\n", "Nonebot project options:".blue().bold());
+        println!("  name: {}", self.name.yellow());
+        println!("  template: {}", self.template.yellow());
         println!(
             "  output_dir: {}",
-            self.output_dir.display().to_string().bright_blue()
+            self.output_dir.display().to_string().yellow()
         );
         let adapters = self
             .adapters
             .iter()
             .map(|a| a.name.clone())
             .collect::<Vec<_>>();
-        println!("  adapters: {}", adapters.join(", ").bright_blue());
-        println!("  plugins: {}", self.plugins.join(", ").bright_blue());
+        println!("  adapters: {}", adapters.join(", ").yellow());
+        println!("  plugins: {}", self.plugins.join(", ").yellow());
+        println!("  python_version: {}", self.python_version.yellow());
     }
 }
 
@@ -61,17 +63,23 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
 
     let adapter_manager = AdapterManager::default();
 
+    // 补齐项目选项
     let options = gather_project_options(matches, &adapter_manager).await?;
 
     options.display();
-
+    println!();
     // Check if directory already exists
     if options.output_dir.exists() && !options.force {
         let should_continue = Confirm::new()
-            .with_prompt(format!(
-                "Directory '{}' already exists. Continue?",
-                options.output_dir.display()
-            ))
+            .with_prompt(
+                format!(
+                    "Directory '{}' already exists. Continue?",
+                    options.output_dir.display()
+                )
+                .blue()
+                .bold()
+                .to_string(),
+            )
             .default(false)
             .interact()
             .map_err(|e| NbrError::io(e.to_string()))?;
@@ -86,11 +94,20 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     create_project(&options).await?;
 
     println!("\n{}", "✨ Project created successfully!".bright_green());
-    println!("📂 Location: {}", options.output_dir.display());
-    println!("\n🚀 Next steps:");
-    println!("     cd {}", options.name);
-    println!("     nbr run");
-
+    println!(
+        "{}",
+        format!("📂 Location: {}", options.output_dir.display())
+            .bright_green()
+            .bold()
+    );
+    println!("{}\n", "🚀 Next steps:".green().bold());
+    println!(
+        "     {}",
+        format!("cd {}", options.output_dir.display())
+            .green()
+            .bold()
+    );
+    println!("     {}\n", "nbr run".green().bold());
     // Show additional setup instructions
     // show_setup_instructions(&options).await?;
 
@@ -101,18 +118,18 @@ async fn gather_project_options(
     matches: &ArgMatches,
     adapter_manager: &AdapterManager,
 ) -> Result<ProjectOptions> {
-    let project_name = if let Some(name) = matches.get_one::<String>("name") {
+    let name = if let Some(name) = matches.get_one::<String>("name") {
         name.clone()
     } else {
         Input::<String>::new()
-            .with_prompt("Project name")
+            .with_prompt("🌟 Project name".blue().bold().to_string())
             .default("awesome-bot".to_string())
             .validate_with(|input: &String| -> Result<()> {
                 if input.is_empty() {
                     Err(NbrError::invalid_argument(
                         "Project name cannot be empty".to_string(),
                     ))
-                } else if input.contains(' ') {
+                } else if input.contains(" ") {
                     Err(NbrError::invalid_argument(
                         "Project name cannot contain spaces".to_string(),
                     ))
@@ -124,44 +141,45 @@ async fn gather_project_options(
             .context("Failed to get project name")?
     };
 
-    println!();
-
-    let template_name = if let Some(template) = matches.get_one::<String>("template") {
-        template.clone()
+    // 选择模板
+    let template = if let Some(template) = matches.get_one::<String>("template") {
+        template.to_owned()
     } else {
-        select_template().await?
+        select_template()?
     };
 
+    // 选择 Bot 创建目录，默认在当前目录下创建
     let output_dir = if let Some(dir) = matches.get_one::<String>("output") {
         PathBuf::from(dir)
     } else {
-        std::env::current_dir()?.join(&project_name)
+        std::env::current_dir()?.join(&name)
     };
 
+    // 是否强制创建
     let force = matches.get_flag("force");
+
+    // 指定 Python 版本
+    let python_version = matches.get_one::<String>("python").unwrap().to_owned();
 
     // 选择适配器
     let adapters = adapter_manager.select_adapter().await?;
+
     // 选择内置插件
     let plugins = select_builtin_plugins()?;
 
     Ok(ProjectOptions {
-        name: project_name,
-        template: template_name,
+        name,
+        template,
         output_dir,
         force,
         adapters,
         plugins,
+        python_version,
     })
 }
 
-async fn select_template() -> Result<String> {
-    let templates = get_available_templates().await?;
-
-    if templates.is_empty() {
-        warn!("No templates available, using default bootstrap template");
-        return Ok("bootstrap".to_string());
-    }
+fn select_template() -> Result<String> {
+    let templates = get_available_templates()?;
 
     let template_descriptions: Vec<String> = templates
         .iter()
@@ -169,7 +187,7 @@ async fn select_template() -> Result<String> {
         .collect();
 
     let selection = Select::new()
-        .with_prompt("Select a template")
+        .with_prompt("🔍 Select a template".blue().bold().to_string())
         .default(0)
         .items(&template_descriptions)
         .interact()
@@ -181,7 +199,7 @@ async fn select_template() -> Result<String> {
 fn select_builtin_plugins() -> Result<Vec<String>> {
     let builtin_plugins = vec!["echo", "single_session"];
     let selected_plugins = MultiSelect::new()
-        .with_prompt("Plugins (recommended)")
+        .with_prompt("🔌 Builtin plugins".blue().bold().to_string())
         .items(&builtin_plugins)
         .defaults(&vec![true; builtin_plugins.len().min(1)])
         .interact()
@@ -192,7 +210,7 @@ fn select_builtin_plugins() -> Result<Vec<String>> {
     Ok(selected_plugins)
 }
 
-async fn get_available_templates() -> Result<Vec<Template>> {
+fn get_available_templates() -> Result<Vec<Template>> {
     let templates = vec![
         Template {
             name: "bootstrap".to_string(),
@@ -249,7 +267,6 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     let package_name = options.name.replace("-", "_");
     // Create directory structure
     create_project_structure(&options.output_dir, &package_name)?;
-
     // Generate files
     generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(options)?;
@@ -259,7 +276,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_gitignore(&options.output_dir)?;
 
     // Install dependencies
-    Uv::sync(Some(&options.output_dir))?;
+    Uv::sync(Some(&options.output_dir), Some(&options.python_version))?;
 
     Ok(())
 }

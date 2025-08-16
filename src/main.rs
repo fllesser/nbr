@@ -59,6 +59,14 @@ fn build_cli() -> Command {
                         .short('f')
                         .help("Force creation even if directory exists")
                         .action(clap::ArgAction::SetTrue),
+                )
+                .arg(
+                    Arg::new("python")
+                        .long("python")
+                        .short('p')
+                        .help("Specify Python version")
+                        .value_name("VERSION")
+                        .default_value("3.12"),
                 ),
         )
         .subcommand(

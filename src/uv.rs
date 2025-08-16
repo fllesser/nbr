@@ -25,8 +25,12 @@ impl Uv {
         Ok(stdout.trim().to_string())
     }
 
-    pub fn sync(working_dir: Option<&Path>) -> Result<()> {
-        let args = vec!["sync"];
+    pub fn sync(working_dir: Option<&Path>, python_version: Option<&str>) -> Result<()> {
+        let mut args = vec!["sync"];
+        if let Some(version) = python_version {
+            args.push("--python");
+            args.push(version);
+        }
         process_utils::execute_interactive("uv", &args, working_dir)?;
         Ok(())
     }

@@ -551,7 +551,7 @@ pub mod terminal_utils {
     }
 
     /// Create a progress bar with custom style
-    pub fn create_progress_bar(len: u64, message: &str) -> ProgressBar {
+    pub fn create_progress_bar(len: u64, message: impl Into<String>) -> ProgressBar {
         let pb = ProgressBar::new(len);
         pb.set_style(
             ProgressStyle::default_bar()
@@ -559,19 +559,19 @@ pub mod terminal_utils {
                 .unwrap()
                 .progress_chars("█▉▊▋▌▍▎▏  "),
         );
-        pb.set_message(message.to_string());
+        pb.set_message(message.into());
         pb
     }
 
     /// Create a spinner with custom message
-    pub fn create_spinner(message: &str) -> ProgressBar {
+    pub fn create_spinner(message: impl Into<String>) -> ProgressBar {
         let pb = ProgressBar::new_spinner();
         pb.set_style(
             ProgressStyle::default_spinner()
                 .template("{spinner:.green} {msg}")
                 .unwrap(),
         );
-        pb.set_message(message.to_string());
+        pb.set_message(message.into());
         pb.enable_steady_tick(Duration::from_millis(100));
         pb
     }
