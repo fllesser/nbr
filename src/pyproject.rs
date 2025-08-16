@@ -34,8 +34,8 @@ impl Default for Project {
             name: String::from("awesome-bot"),
             version: String::from("0.1.0"),
             description: String::from("your bot description"),
-            authors: Vec::from([]),
-            dependencies: Vec::from(["nonebot2[fastapi, httpx, websockets]>=2.4.0".to_string()]),
+            authors: vec![],
+            dependencies: vec![],
             requires_python: String::from(">=3.10"),
             readme: String::from("README.md"),
         }

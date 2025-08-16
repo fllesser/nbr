@@ -1,0 +1,18 @@
+HOST=127.0.0.1
+PORT=8080
+DRIVER={}
+LOG_LEVEL={}
+
+SUPERUSERS=[""]
+
+# Command prefix
+COMMAND_START=["", "/"]
+NICKNAME=["{}"]
+
+# localstore(https://github.com/nonebot/plugin-localstore)
+LOCALSTORE_USE_CWD=false
+
+# Adapter configurations
+# OneBot V11
+# ONEBOT_ACCESS_TOKEN=
+# ONEBOT_SECRET=

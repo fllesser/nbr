@@ -10,6 +10,7 @@ use crate::utils::{fs_utils, terminal_utils};
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
+use dialoguer::theme::ColorfulTheme;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -169,8 +170,8 @@ impl CacheManager {
         // Confirm clearing
         if !force {
             println!();
-            if !Confirm::new()
-                .with_prompt("Are you sure you want to clear these cache entries?")
+            if !Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt("Are you sure you want to clear these cache entries")
                 .default(false)
                 .interact()
                 .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
