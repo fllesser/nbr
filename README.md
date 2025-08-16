@@ -98,7 +98,8 @@ Install globally
 
 <details>
 <summary>Project Management</summary>
-Create a new NoneBot2 project
+
+Create a new NoneBot2 project, Option `-p` / `--python` to specify the Python version
 
     nbr create
 

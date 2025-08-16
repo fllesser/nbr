@@ -438,7 +438,7 @@ impl PluginManager {
             self.update_single_plugin(name, reinstall)
         } else {
             Err(NbrError::invalid_argument(
-                "Either specify a plugin name or use --all( -a) / --reinstall( -r) flag",
+                "Either specify a plugin name or use --all( -a) flag",
             ))
         }
     }

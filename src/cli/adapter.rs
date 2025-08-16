@@ -121,10 +121,9 @@ impl AdapterManager {
         adapter_names.sort();
 
         let selected_adapters = if !adapter_names.is_empty() {
-            println!("\n{}\n", "🔌 Select adapters to install:".bright_cyan());
+            println!("{}", "🔌 Select adapters to install:".blue().bold());
 
             let selections = MultiSelect::new()
-                .with_prompt("Adapters")
                 .items(&adapter_names)
                 //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
                 .interact()
