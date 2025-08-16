@@ -393,7 +393,12 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
         options.environment.to_string(),
         options.name.to_string(),
     );
-    fs::write(options.output_dir.join(".env"), env_content)?;
+    fs::write(
+        options
+            .output_dir
+            .join(format!(".env.{}", options.environment)),
+        env_content,
+    )?;
 
     Ok(())
 }
