@@ -6,7 +6,7 @@
 use crate::error::{NbrError, Result};
 use crate::pyproject::ToolNonebot;
 use crate::utils::terminal_utils;
-use crate::uv::Uv;
+use crate::uv::{Package, Uv};
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
@@ -67,30 +67,6 @@ pub struct PluginPackageInfo {
     pub package_name: String,
     pub installed_version: String,
     pub latest_version: String,
-}
-
-impl PluginPackageInfo {
-    pub fn is_outdated(&self) -> bool {
-        self.installed_version != self.latest_version
-    }
-
-    pub fn display_info(&self) {
-        // name installedeversion (available version)
-        let installed_version = format!("v{}", self.installed_version).bright_green();
-        let available_version = if self.is_outdated() {
-            format!("(available: v{})", self.latest_version)
-                .bright_yellow()
-                .to_string()
-        } else {
-            "".to_string()
-        };
-        println!(
-            "  {} {} {}",
-            self.package_name.bright_blue(),
-            installed_version,
-            available_version
-        );
-    }
 }
 
 /// Plugin manager
@@ -328,26 +304,11 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn get_installed_plugins(&self, outdated: bool) -> Result<Vec<PluginPackageInfo>> {
-        let installed_plugins = Uv::list(Some(&self.work_dir), outdated).await?;
-        let installed_plugins = installed_plugins
+    pub async fn get_installed_plugins(&self, outdated: bool) -> Result<Vec<Package>> {
+        let installed_packages = Uv::list(Some(&self.work_dir), outdated).await?;
+        let installed_plugins = installed_packages
             .into_iter()
-            .filter(|a| a.starts_with("nonebot") && a.contains("plugin"))
-            .map(|line| {
-                let parts = line.split_whitespace().collect::<Vec<&str>>();
-                let package_name = parts[0].to_owned();
-                let installed_version = parts[1].to_owned();
-                let latest_version = if outdated {
-                    parts[2].to_owned()
-                } else {
-                    installed_version.clone()
-                };
-                PluginPackageInfo {
-                    package_name,
-                    installed_version,
-                    latest_version,
-                }
-            })
+            .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
             .collect();
         Ok(installed_plugins)
     }
@@ -358,10 +319,10 @@ impl PluginManager {
         // 获取需要更新的插件
         if show_outdated {
             let outdated_plugins = self.get_installed_plugins(true).await?;
+            // 去重，保留 outdated 的包
+            installed_plugins.retain(|p| !outdated_plugins.contains(p));
             installed_plugins.extend(outdated_plugins);
         }
-        // 去重
-        installed_plugins.dedup_by(|a, b| a.package_name == b.package_name);
 
         if installed_plugins.is_empty() {
             println!("{}", "No plugins installed.".bright_yellow());
@@ -380,7 +341,7 @@ impl PluginManager {
         ToolNonebot::parse(None)?.reset_plugins(
             installed_plugins
                 .iter()
-                .map(|plugin| plugin.package_name.replace("-", "_"))
+                .map(|p| p.name.replace("-", "_"))
                 .collect::<Vec<String>>(),
         )?;
         Ok(())
@@ -390,7 +351,7 @@ impl PluginManager {
     pub async fn search_plugins(&self, query: &str, limit: usize) -> Result<()> {
         debug!("Searching plugins for: {}", query);
 
-        let spinner = terminal_utils::create_spinner(&format!("Searching for '{}'...", query));
+        let spinner = terminal_utils::create_spinner(format!("Searching for '{}'...", query));
 
         let results = self.search_registry_plugins(query, limit).await?;
         spinner.finish_and_clear();
@@ -476,7 +437,7 @@ impl PluginManager {
         Uv::add(
             outdated_plugins
                 .iter()
-                .map(|plugin| plugin.package_name.as_str())
+                .map(|p| p.name.as_str())
                 .collect::<Vec<&str>>(),
             true,
             None,
