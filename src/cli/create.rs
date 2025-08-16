@@ -54,27 +54,6 @@ pub struct ProjectOptions {
     pub environment: String,
 }
 
-impl ProjectOptions {
-    pub fn display(&self) {
-        println!("\n{}\n", "Nonebot project options:".green().bold());
-        println!("  name: {}", self.name.yellow());
-        println!("  template: {}", self.template.to_string().yellow());
-        println!(
-            "  output_dir: {}",
-            self.output_dir.display().to_string().yellow()
-        );
-        let adapters = self
-            .adapters
-            .iter()
-            .map(|a| a.name.clone())
-            .collect::<Vec<_>>();
-        println!("  adapters: {}", adapters.join(", ").yellow());
-        println!("  plugins: {}", self.plugins.join(", ").yellow());
-        println!("  python version: {}", self.python_version.yellow());
-        println!("  environment: {}", self.environment.yellow());
-    }
-}
-
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     println!("{}", "🎉 Creating NoneBot project...".bright_green());
 
@@ -83,8 +62,6 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     // 补齐项目选项
     let options = gather_project_options(matches, &adapter_manager).await?;
 
-    options.display();
-    println!();
     // Check if directory already exists
     if options.output_dir.exists() && !options.force {
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
@@ -105,13 +82,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     // Create the project
     create_project(&options).await?;
 
-    println!("\n{}", "✨ Project created successfully!".bright_green());
-    println!(
-        "{}",
-        format!("📂 Location: {}", options.output_dir.display())
-            .bright_green()
-            .bold()
-    );
+    println!("\n{}", "✨ Project created successfully!".green().bold());
     println!("{}\n", "🚀 Next steps:".green().bold());
     println!(
         "     {}",
