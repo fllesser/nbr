@@ -102,7 +102,7 @@ Create a new NoneBot2 project
 
     nbr create
 
-Run NoneBot2 project
+Run NoneBot2 project, Option `-r` / `--reload` to reload the project
 
     nbr run
 
@@ -112,6 +112,7 @@ Run NoneBot2 project
 <summary>Plugin Management</summary>
 
 Install a plugin
+
     nbr plugin install nonebot-plugin-emojilike
 
 Install a plugin with specific index
@@ -126,13 +127,17 @@ Uninstall a plugin
 
     nbr plugin uninstall nonebot-plugin-emojilike
 
-Update plugins, Option `-r` to reinstall this plugin
+Update plugins, Option `-r` / `--reinstall` to reinstall this plugin
 
-    nbr plugin update <plugin> -r
+    nbr plugin update <plugin>
 
 Update all plugins
 
     nbr plugin update --all
+
+List installed plugins, Option `--outdated` to list outdated plugins
+
+    nbr plugin list
 
 </details>
 
@@ -147,13 +152,9 @@ Uninstall adapters
 
     nbr adapter uninstall
 
-List installed adapters
+List installed adapters, Option `-a` / `--all` to list all installed adapters
 
     nbr adapter list
-
-List all registered adapters
-
-    nbr adapter list -a
 
 </details>
 
@@ -198,10 +199,9 @@ src/
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
 4. Run tests (`cargo test`)
-5. Run migration tests (`./test_migration.sh`)
-6. Commit your changes (`git commit -m 'Add amazing feature'`)
-7. Push to the branch (`git push origin feature/amazing-feature`)
-8. Open a Pull Request
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## 📝 License
 
