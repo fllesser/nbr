@@ -172,25 +172,6 @@ Print environment information
 </details>
 
 
-
-## 🔄 Migration from pip
-
-This project has been migrated from pip to uv for improved performance and reliability. Key changes:
-
-### For Users
-- **Install uv**: Required before using the updated CLI
-- **Faster operations**: Package installation is 10-100x faster
-- **Better resolution**: More reliable dependency management
-- **Same commands**: CLI interface remains unchanged
-
-### For Developers
-- All `pip install` operations now use `uv add`
-- Package information retrieved via `uv pip show`
-- Environment checks now verify uv availability
-- Templates updated to reference uv commands
-
-See [Migration Documentation](docs/pip-to-uv-migration.md) for detailed information.
-
 ## 🏗 Development
 
 ### Project Structure
