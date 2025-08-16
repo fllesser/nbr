@@ -128,9 +128,6 @@ impl EnvironmentChecker {
 
     /// Check environment dependencies
     pub async fn check_environment(&mut self) -> Result<()> {
-        println!("{}", "Environment Health Check".bright_cyan().bold());
-        println!();
-
         let spinner = terminal_utils::create_spinner("Checking environment...");
 
         let env_info = self.gather_environment_info().await?;
@@ -139,8 +136,12 @@ impl EnvironmentChecker {
         let issues = self.check_for_issues(&env_info);
 
         if issues.is_empty() {
-            println!("{}", "✓ Environment is healthy!".bright_green().bold());
-            println!("All checks passed. Your environment is ready for NoneBot development.");
+            println!(
+                "{}",
+                "✓ Environment is healthy!, you can run `nbr run` to start your bot"
+                    .bright_green()
+                    .bold()
+            );
         } else {
             println!(
                 "{}",
