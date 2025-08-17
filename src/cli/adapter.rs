@@ -198,19 +198,16 @@ impl AdapterManager {
         // Add adapters to configuration
         ToolNonebot::parse(None)?.add_adapters(adapters)?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully installed adapters:".bright_green().bold(),
+        info!(
+            "✓ Successfully installed adapters: {}",
             selected_adapters
                 .iter()
                 .map(|a| a.name.clone())
                 .collect::<Vec<String>>()
                 .join(", ")
-                .yellow()
+                .cyan()
                 .bold()
         );
-
-        println!("{}", message);
 
         // Show configuration instructions
         // if let Some(ref adapter) = adapter_info {
@@ -283,12 +280,10 @@ impl AdapterManager {
 
         uv::remove(adapter_packages, Some(&self.work_dir))?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully uninstalled adapters:".bright_green().bold(),
-            selected_adapters.to_vec().join(", ").yellow().bold()
+        info!(
+            "✓ Successfully uninstalled adapters: {}",
+            selected_adapters.to_vec().join(", ").cyan().bold()
         );
-        println!("{}", message);
 
         Ok(())
     }

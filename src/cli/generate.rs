@@ -13,7 +13,7 @@ use dialoguer::{Confirm, Select};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use tracing::error;
+use tracing::{error, info};
 
 /// Bot file templates
 const BOT_TEMPLATES: &[(&str, &str)] = &[("general", "Basic bot template with minimal setup")];
@@ -78,12 +78,10 @@ impl GenerateHandler {
         fs::write(&bot_path, content)
             .map_err(|e| NbrError::io(format!("Failed to write bot file: {}", e)))?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully generated bot file:".bright_green().bold(),
-            filename.yellow().bold()
+        info!(
+            "✓ Successfully generated bot file: {}",
+            filename.cyan().bold()
         );
-        println!("{}", message);
 
         // Show next steps
         self.show_next_steps(&template, filename);

@@ -145,7 +145,7 @@ impl PluginManager {
 
         info!(
             "✓ Successfully installed plugin: {}",
-            repo_name.yellow().bold()
+            repo_name.cyan().bold()
         );
         Ok(())
     }
@@ -171,7 +171,7 @@ impl PluginManager {
 
         info!(
             "✓ Successfully installed plugin: {}",
-            package_name.yellow().bold()
+            package_name.cyan().bold()
         );
         Ok(())
     }
@@ -210,7 +210,7 @@ impl PluginManager {
 
         info!(
             "✓ Successfully installed plugin: {}",
-            package_name.yellow().bold()
+            package_name.cyan().bold()
         );
 
         Ok(())
@@ -250,7 +250,7 @@ impl PluginManager {
 
             info!(
                 "✓ Successfully uninstalled plugin: {}",
-                package_name.yellow().bold()
+                package_name.cyan().bold()
             );
         } else {
             error!("Uninstallation operation cancelled.");
@@ -292,7 +292,7 @@ impl PluginManager {
 
         info!(
             "✓ Successfully uninstalled plugin: {}",
-            package_name.yellow().bold()
+            package_name.cyan().bold()
         );
 
         Ok(())
