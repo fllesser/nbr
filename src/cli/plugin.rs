@@ -6,7 +6,7 @@
 use crate::error::{NbrError, Result};
 use crate::pyproject::ToolNonebot;
 use crate::utils::terminal_utils;
-use crate::uv::{Package, Uv};
+use crate::uv::{self, Package};
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
@@ -130,7 +130,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            Uv::add_from_github(repo_url, Some(&self.work_dir))?;
+            uv::add_from_github(repo_url, Some(&self.work_dir))?;
         } else {
             println!("{}", "❌ Installation operation cancelled.".bright_red());
             return Ok(());
@@ -161,7 +161,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            Uv::add(vec![package_name], false, None, Some(&self.work_dir))?;
+            uv::add(vec![package_name], false, None, Some(&self.work_dir))?;
         } else {
             println!("{}", "❌ Installation operation cancelled.".bright_red());
             return Ok(());
@@ -202,7 +202,7 @@ impl PluginManager {
             return Ok(());
         }
         // Install the plugin
-        Uv::add(
+        uv::add(
             vec![&package_name],
             upgrade,
             index_url,
@@ -236,7 +236,7 @@ impl PluginManager {
     pub async fn uninstall_unregistered_plugin(&self, package_name: &str) -> Result<()> {
         debug!("Uninstalling unregistered plugin: {}", package_name);
 
-        if !Uv::is_installed(package_name, Some(&self.work_dir)).await {
+        if !uv::is_installed(package_name, Some(&self.work_dir)).await {
             return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 package_name
@@ -251,7 +251,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            Uv::remove(vec![&package_name], Some(&self.work_dir))?;
+            uv::remove(vec![&package_name], Some(&self.work_dir))?;
             ToolNonebot::parse(None)?.remove_plugins(vec![package_name.replace("-", "_")])?;
 
             let message = format!(
@@ -274,7 +274,7 @@ impl PluginManager {
     ) -> Result<()> {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
-        if !Uv::is_installed(&package_name, Some(&self.work_dir)).await {
+        if !uv::is_installed(&package_name, Some(&self.work_dir)).await {
             return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
@@ -294,7 +294,7 @@ impl PluginManager {
         }
 
         // Uninstall the package
-        Uv::remove(vec![&package_name], Some(&self.work_dir))?;
+        uv::remove(vec![&package_name], Some(&self.work_dir))?;
 
         ToolNonebot::parse(None)?.remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
@@ -308,7 +308,7 @@ impl PluginManager {
     }
 
     pub async fn get_installed_plugins(&self, outdated: bool) -> Result<Vec<Package>> {
-        let installed_packages = Uv::list(Some(&self.work_dir), outdated).await?;
+        let installed_packages = uv::list(Some(&self.work_dir), outdated).await?;
         let installed_plugins = installed_packages
             .into_iter()
             .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
@@ -437,7 +437,7 @@ impl PluginManager {
             return Ok(());
         }
 
-        Uv::add(
+        uv::add(
             outdated_plugins
                 .iter()
                 .map(|p| p.name.as_str())
@@ -451,9 +451,9 @@ impl PluginManager {
     /// Update a single plugin
     fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> Result<()> {
         if reinstall {
-            Uv::reinstall(package_name, Some(&self.work_dir))
+            uv::reinstall(package_name, Some(&self.work_dir))
         } else {
-            Uv::add(vec![package_name], true, None, Some(&self.work_dir))
+            uv::add(vec![package_name], true, None, Some(&self.work_dir))
         }
     }
 

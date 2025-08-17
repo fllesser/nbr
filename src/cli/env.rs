@@ -5,7 +5,7 @@
 
 use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
-use crate::uv::{Package, Uv};
+use crate::uv::{self, Package};
 use clap::ArgMatches;
 use colored::*;
 use serde::{Deserialize, Serialize};
@@ -186,8 +186,8 @@ impl EnvironmentChecker {
             .get_virtual_env()
             .map(|path| path.to_string_lossy().to_string());
 
-        let uv_version = Uv::get_self_version().await.ok();
-        let site_packages = Uv::list(Some(&self.work_dir), false)
+        let uv_version = uv::self_version().await.ok();
+        let site_packages = uv::list(Some(&self.work_dir), false)
             .await
             .unwrap_or_default();
 
@@ -202,7 +202,7 @@ impl EnvironmentChecker {
 
     /// Get NoneBot information
     async fn get_nonebot_info(&self, python_info: &PythonInfo) -> Result<NoneBotInfo> {
-        let package = Uv::show_package_info("nonebot2", Some(&self.work_dir)).await?;
+        let package = uv::show_package_info("nonebot2", Some(&self.work_dir)).await?;
         // Check if NoneBot is installed
         let version = package.version;
         let location = package.location.unwrap_or("Unknown".to_string());

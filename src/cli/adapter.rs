@@ -6,7 +6,7 @@
 use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, ToolNonebot};
 use crate::utils::terminal_utils;
-use crate::uv::Uv;
+use crate::uv;
 use clap::ArgMatches;
 use colored::*;
 use dialoguer::theme::ColorfulTheme;
@@ -184,7 +184,7 @@ impl AdapterManager {
             .collect::<Vec<&str>>();
         // check if the adapter is already installed
 
-        Uv::add(adapter_packages, false, None, Some(&self.work_dir))?;
+        uv::add(adapter_packages, false, None, Some(&self.work_dir))?;
 
         // Add to configuration
         let adapters = selected_adapters
@@ -223,7 +223,7 @@ impl AdapterManager {
     }
 
     pub async fn get_installed_adapters(&self) -> Result<HashSet<String>> {
-        let installed_adapters = Uv::list(Some(&self.work_dir), false).await?;
+        let installed_adapters = uv::list(Some(&self.work_dir), false).await?;
         let installed_adapters_set = installed_adapters
             .into_iter()
             .filter(|a| a.name.contains("nonebot-adapter-"))
@@ -281,7 +281,7 @@ impl AdapterManager {
             .filter(|a| installed_adapters_package_set.contains(*a))
             .collect::<Vec<&str>>();
 
-        Uv::remove(adapter_packages, Some(&self.work_dir))?;
+        uv::remove(adapter_packages, Some(&self.work_dir))?;
 
         let message = format!(
             "{} {}",

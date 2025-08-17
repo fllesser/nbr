@@ -15,7 +15,7 @@ use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 use crate::config::NbConfig;
 use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool, ToolNonebot};
-use crate::uv::Uv;
+use crate::uv;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Template {
@@ -246,7 +246,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_gitignore(&options.output_dir)?;
 
     // Install dependencies
-    Uv::sync(Some(&options.output_dir), Some(&options.python_version))?;
+    uv::sync(Some(&options.output_dir), Some(&options.python_version))?;
 
     Ok(())
 }
