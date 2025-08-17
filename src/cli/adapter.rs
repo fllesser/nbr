@@ -14,7 +14,7 @@ use dialoguer::{Confirm, MultiSelect};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use tracing::debug;
+use tracing::{debug, error, info, warn};
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -154,7 +154,7 @@ impl AdapterManager {
             .collect();
 
         if selected_adapters.is_empty() {
-            println!("All selected adapters are already installed");
+            info!("All selected adapters are already installed");
             return Ok(());
         }
 
@@ -173,7 +173,7 @@ impl AdapterManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("{}", "❌ Installation operation cancelled.".bright_red());
+            error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
 
@@ -198,19 +198,16 @@ impl AdapterManager {
         // Add adapters to configuration
         ToolNonebot::parse(None)?.add_adapters(adapters)?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully installed adapters:".bright_green().bold(),
+        info!(
+            "✓ Successfully installed adapters: {}",
             selected_adapters
                 .iter()
                 .map(|a| a.name.clone())
                 .collect::<Vec<String>>()
                 .join(", ")
-                .yellow()
+                .cyan()
                 .bold()
         );
-
-        println!("{}", message);
 
         // Show configuration instructions
         // if let Some(ref adapter) = adapter_info {
@@ -283,12 +280,10 @@ impl AdapterManager {
 
         uv::remove(adapter_packages, Some(&self.work_dir))?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully uninstalled adapters:".bright_green().bold(),
-            selected_adapters.to_vec().join(", ").yellow().bold()
+        info!(
+            "✓ Successfully uninstalled adapters: {}",
+            selected_adapters.to_vec().join(", ").cyan().bold()
         );
-        println!("{}", message);
 
         Ok(())
     }
@@ -299,17 +294,17 @@ impl AdapterManager {
 
         let adapters_map = self.fetch_regsitry_adapters().await?;
         if show_all {
-            println!("{}", "All Adapters:".bright_green().bold());
+            info!("All Adapters:");
             adapters_map.iter().for_each(|(_, adapter)| {
                 self.display_adapter(adapter);
             });
         } else {
             if nonebot.adapters.is_empty() {
-                println!("{}", "No adapters installed.".bright_yellow());
+                warn!("No adapters installed.");
                 return Ok(());
             }
 
-            println!("{}", "Installed Adapters:".bright_green().bold());
+            info!("Installed Adapters:");
             nonebot.adapters.iter().for_each(|ia| {
                 let adapter = adapters_map.get(ia.name.as_str()).unwrap();
                 self.display_adapter(adapter);

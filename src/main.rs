@@ -5,11 +5,13 @@ use colored::*;
 mod cli;
 mod config;
 mod error;
+mod log;
 mod pyproject;
 mod utils;
 mod uv;
 
 use cli::*;
+use tracing::warn;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const BANNER: &str = r#"
@@ -245,57 +247,6 @@ fn build_cli() -> Command {
                 .help("Enable verbose output")
                 .action(clap::ArgAction::Count),
         )
-        .arg(
-            Arg::new("quiet")
-                .long("quiet")
-                .short('q')
-                .help("Suppress output")
-                .action(clap::ArgAction::SetTrue)
-                .conflicts_with("verbose"),
-        )
-}
-
-fn setup_logging(verbose_level: u8, quiet: bool) -> Result<()> {
-    use fmt::format::FmtSpan;
-    use tracing_subscriber::{EnvFilter, fmt, prelude::*};
-
-    if quiet {
-        return Ok(());
-    }
-
-    let filter = match verbose_level {
-        0 => "INFO",
-        1 => "DEBUG",
-        _ => "TRACE",
-    };
-
-    // Custom time format: MM-DD HH:MM:SS
-    let timer = fmt::time::UtcTime::new(
-        time::format_description::parse("[month]-[day] [hour]:[minute]:[second]")
-            .expect("failed to create time formatter"),
-    );
-
-    // Configure the formatter with colors
-    let fmt_layer = fmt::layer()
-        .with_target(true) // Keep target (like "nbr" in your example)
-        .with_timer(timer.clone())
-        .with_ansi(true)
-        .with_level(true)
-        .with_span_events(FmtSpan::NONE)
-        .event_format(
-            fmt::format()
-                .with_level(true)
-                .with_target(true)
-                .with_timer(timer)
-                .compact(),
-        );
-
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(filter)))
-        .init();
-
-    Ok(())
 }
 
 #[tokio::main]
@@ -303,9 +254,8 @@ async fn main() -> Result<()> {
     let matches = build_cli().get_matches();
 
     let verbose = matches.get_count("verbose");
-    let quiet = matches.get_flag("quiet");
 
-    setup_logging(verbose, quiet)?;
+    log::init_logging(verbose);
 
     // Check if uv is installed
     uv::self_version().await?;
@@ -317,15 +267,11 @@ async fn main() -> Result<()> {
         Some(("adapter", sub_matches)) => adapter::handle_adapter(sub_matches).await?,
         Some(("generate", sub_matches)) => generate::handle_generate(sub_matches).await?,
         Some(("init", _sub_matches)) => {
-            println!("init command is not implemented yet");
+            warn!("init command is not implemented yet");
         }
         Some(("env", sub_matches)) => env::handle_env(sub_matches).await?,
         Some(("cache", sub_matches)) => cache::handle_cache(sub_matches).await?,
-        _ => {
-            println!("{}", BANNER.bright_cyan());
-            println!("{}", "Welcome to NoneBot CLI!".bright_green());
-            println!("{}", "Use --help for more information.".bright_blue());
-        }
+        _ => unreachable!(),
     }
 
     Ok(())
@@ -333,7 +279,6 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use tracing::level_filters::LevelFilter;
 
     use super::*;
 
@@ -346,16 +291,5 @@ mod tests {
     #[test]
     fn test_version() {
         assert!(!VERSION.is_empty());
-    }
-
-    #[test]
-    fn test_verbose_level() {
-        let cmd = build_cli();
-        let matches = cmd.get_matches_from(vec!["nbr", "--verbose"]);
-        let verbose_level = matches.get_count("verbose");
-
-        setup_logging(verbose_level, false).unwrap();
-
-        assert_eq!(tracing::level_filters::STATIC_MAX_LEVEL, LevelFilter::INFO);
     }
 }

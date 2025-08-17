@@ -9,6 +9,7 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fs;
 use std::path::{Path, PathBuf};
+use tracing::{error, info};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
@@ -55,7 +56,7 @@ pub struct ProjectOptions {
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
-    println!("{}", "🎉 Creating NoneBot project...".bright_green());
+    info!("🎉 Creating NoneBot project...");
 
     let adapter_manager = AdapterManager::default();
 
@@ -74,7 +75,7 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
             .map_err(|e| NbrError::io(e.to_string()))?;
 
         if !should_continue {
-            println!("{}", "❌ Operation cancelled.".bright_red());
+            error!("{}", "Create operation cancelled.");
             return Ok(());
         }
     }
@@ -82,15 +83,10 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     // Create the project
     create_project(&options).await?;
 
-    println!("\n{}", "✨ Project created successfully !".green().bold());
-    println!("{}\n", "🚀 Next steps:".green().bold());
-    println!(
-        "     {}",
-        format!("cd {}", options.output_dir.display())
-            .green()
-            .bold()
-    );
-    println!("     {}\n", "nbr run".green().bold());
+    info!("\n✨ Project created successfully !");
+    info!("🚀 Next steps:");
+    info!("     {}", format!("cd {}", options.name));
+    info!("     {}", "nbr run");
     // Show additional setup instructions
     // show_setup_instructions(&options).await?;
 

@@ -93,7 +93,7 @@ impl BotRunner {
             .map_err(|e| NbrError::io(format!("Failed to watch directory: {}", e)))?;
 
         self.watcher = Some(watcher);
-        println!("{}", "File watcher setup for auto-reload".bright_green());
+        info!("File watcher setup for auto-reload");
         Ok(())
     }
 
@@ -114,7 +114,9 @@ impl BotRunner {
 
             println!(
                 " {}",
-                "Received interrupt signal, shutting down...".bright_yellow()
+                "⚠️  Received interrupt signal, shutting down..."
+                    .yellow()
+                    .bold()
             );
             if let Ok(mut process) = process_handle.lock()
                 && let Some(mut child) = process.take()
@@ -143,13 +145,10 @@ impl BotRunner {
             .map_err(|e| NbrError::io(format!("Failed to wait for process: {}", e)))?;
 
         if exit_status.success() {
-            println!("{}", "Bot process exited successfully".green().bold());
+            info!("Bot process exited successfully");
         } else {
             let exit_code = exit_status.code().unwrap_or(-1);
-            println!(
-                "{}",
-                format!("❌ Bot process failed with exit code: {}", exit_code).bright_red()
-            );
+            error!("Bot process failed with exit code: {}", exit_code);
         }
         Ok(())
     }
@@ -169,10 +168,7 @@ impl BotRunner {
                         *current = Some(process);
                     }
 
-                    println!(
-                        "{}",
-                        "Bot started successfully with auto-reload enabled".green()
-                    );
+                    info!("Bot started successfully with auto-reload enabled");
                     let mut restart_count = 0;
 
                     // Wait for file changes or process exit
@@ -196,14 +192,11 @@ impl BotRunner {
                     }
                     last_restart = now;
 
-                    println!("{}", "Restarting bot...".bright_yellow());
+                    warn!("Restarting bot...");
                     sleep(Duration::from_millis(500)).await;
                 }
                 Err(e) => {
-                    println!(
-                        "{}",
-                        format!("Failed to start bot process: {}", e).bright_red()
-                    );
+                    error!("Failed to start bot process: {}", e);
                     sleep(Duration::from_secs(2)).await;
                 }
             }
@@ -235,14 +228,14 @@ impl BotRunner {
                     if let Some(process) = process_guard.as_mut() {
                         match process.try_wait() {
                             Ok(Some(status)) => {
-                                info!("Bot process exited with status: {:?}", status);
+                                info!("Bot process exited with status: {}", status);
                                 return Ok(false); // Process exited, don't reload
                             }
                             Ok(None) => {
                                 // Process still running
                             }
                             Err(e) => {
-                                error!("Error checking process status: {}", e);
+                                error!("checking process status: {}", e);
                                 return Ok(false);
                             }
                         }
@@ -362,7 +355,7 @@ impl BotRunner {
             // Wait for process to exit
             match process.wait() {
                 Ok(status) => {
-                    debug!("Process exited with status: {:?}", status);
+                    debug!("Process exited with status: {}", status);
                 }
                 Err(e) => {
                     warn!("Error waiting for process to exit: {}", e);
@@ -401,20 +394,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     // Create and run bot
     let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
-    println!("{}", "Starting NoneBot Application...".bright_green());
-    println!(
-        "{} {}",
-        "Using Python:".bright_blue(),
-        runner.python_path.bright_green()
-    );
-
-    if reload {
-        println!(
-            "{} {}",
-            "Auto-reload:".bright_blue(),
-            "enabled".bright_green()
-        );
-    }
+    info!("Using Python: {}", runner.python_path.blue().bold());
 
     runner.run().await
 }
@@ -425,16 +405,6 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
 
     if bot_path.exists() {
         return Ok(bot_path);
-    }
-
-    // Try common bot file names
-    let common_names = ["bot.py", "app.py", "main.py", "run.py"];
-    for name in &common_names {
-        let path = work_dir.join(name);
-        if path.exists() {
-            info!("Found bot file: {}", path.display());
-            return Ok(path);
-        }
     }
 
     // 询问用户是否创建bot文件
@@ -448,9 +418,7 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
 
     if !need_create_bot_file {
         return Err(NbrError::not_found(format!(
-            "Bot file '{}' not found. Tried: {}",
-            bot_file,
-            common_names.join(", ")
+            "Bot file '{bot_file}' not found. ",
         )));
     }
 

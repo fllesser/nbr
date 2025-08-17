@@ -200,7 +200,7 @@ impl Package {
         };
         println!(
             "  {} {} {}",
-            self.name.bright_blue(),
+            self.name.blue().bold(),
             installed_version,
             available_version
         );

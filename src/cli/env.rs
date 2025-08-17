@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use sysinfo::System;
+use tracing::{info, warn};
 
 /// Environment information structure
 #[derive(Debug, Clone)]
@@ -125,18 +126,9 @@ impl EnvironmentChecker {
         let issues = self.check_for_issues(&env_info);
 
         if issues.is_empty() {
-            println!(
-                "{}",
-                "✓ Environment is healthy!, you can run `nbr run` to start your bot"
-                    .bright_green()
-                    .bold()
-            );
+            info!("✓ Environment is healthy!, you can run `nbr run` to start your bot");
         } else {
-            println!(
-                "{}",
-                "⚠ Environment issues detected:".bright_yellow().bold()
-            );
-            println!();
+            warn!("Environment issues detected:\n");
 
             for (i, issue) in issues.iter().enumerate() {
                 println!(
@@ -146,8 +138,7 @@ impl EnvironmentChecker {
                 );
             }
 
-            println!();
-            println!("{}", "Recommendations:".bright_blue().bold());
+            info!("\nRecommendations:");
             self.show_recommendations(&issues);
         }
 
@@ -416,7 +407,7 @@ impl EnvironmentChecker {
         // println!();
 
         // Python Environment
-        println!("{}", "Python Environment:".bright_green().bold());
+        info!("Python Environment:");
         println!(
             "  {} {}, {}",
             "Version:".bright_black(),
@@ -462,7 +453,7 @@ impl EnvironmentChecker {
 
         // NoneBot Information
         if let Some(ref nonebot) = env_info.nonebot_info {
-            println!("{}", "NoneBot:".bright_green().bold());
+            info!("NoneBot:");
             println!(
                 "  {} {}",
                 "Version:".bright_black(),
@@ -508,7 +499,7 @@ impl EnvironmentChecker {
                 }
             }
         } else {
-            println!("{}", "NoneBot:".bright_green().bold());
+            info!("NoneBot:");
             println!(
                 "  {} {}",
                 "Status:".bright_black(),
@@ -519,7 +510,7 @@ impl EnvironmentChecker {
 
         // Project Information
         if let Some(ref project) = env_info.project_info {
-            println!("{}", "Project:".bright_green().bold());
+            info!("Project:");
             println!(
                 "  {} {}",
                 "Name:".bright_black(),
@@ -580,7 +571,7 @@ impl EnvironmentChecker {
                 }
             }
         } else {
-            println!("{}", "Project:".bright_green().bold());
+            info!("Project:");
             println!(
                 "  {} {}",
                 "Status:".bright_black(),
@@ -590,7 +581,7 @@ impl EnvironmentChecker {
         println!();
 
         // System Resources
-        println!("{}", "System Resources:".bright_green().bold());
+        info!("System Resources:");
         println!(
             "  {} {} cores",
             "CPU:".bright_black(),
@@ -642,7 +633,7 @@ impl EnvironmentChecker {
 
         // Environment Variables
         if !env_info.env_vars.is_empty() {
-            println!("{}", "Environment Variables:".bright_green().bold());
+            info!("Environment Variables:");
             for (key, value) in &env_info.env_vars {
                 println!(
                     "  {} {}",
