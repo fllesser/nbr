@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
-use tracing::debug;
+use tracing::{debug, error, info, warn};
 
 // "module_name": "nonebot_plugin_status",
 // "project_link": "nonebot-plugin-status",
@@ -132,7 +132,7 @@ impl PluginManager {
         {
             uv::add_from_github(repo_url, Some(&self.work_dir))?;
         } else {
-            println!("{}", "❌ Installation operation cancelled.".bright_red());
+            error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
 
@@ -143,12 +143,10 @@ impl PluginManager {
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully installed plugin:".bright_green().bold(),
+        info!(
+            "✓ Successfully installed plugin: {}",
             repo_name.yellow().bold()
         );
-        println!("{}", message);
         Ok(())
     }
 
@@ -163,7 +161,7 @@ impl PluginManager {
         {
             uv::add(vec![package_name], false, None, Some(&self.work_dir))?;
         } else {
-            println!("{}", "❌ Installation operation cancelled.".bright_red());
+            error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
 
@@ -171,12 +169,10 @@ impl PluginManager {
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully installed plugin:".bright_green().bold(),
+        info!(
+            "✓ Successfully installed plugin: {}",
             package_name.yellow().bold()
         );
-        println!("{}", message);
         Ok(())
     }
 
@@ -198,7 +194,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("{}", "❌ Installation operation cancelled.".bright_red());
+            error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
         // Install the plugin
@@ -212,12 +208,10 @@ impl PluginManager {
         // Add to configuration
         ToolNonebot::parse(None)?.add_plugins(vec![registry_plugin.module_name.clone()])?;
 
-        let message = format!(
-            "{} {}",
-            "✓ Successfully installed plugin:".bright_green().bold(),
+        info!(
+            "✓ Successfully installed plugin: {}",
             package_name.yellow().bold()
         );
-        println!("{}", message);
 
         Ok(())
     }
@@ -254,14 +248,12 @@ impl PluginManager {
             uv::remove(vec![&package_name], Some(&self.work_dir))?;
             ToolNonebot::parse(None)?.remove_plugins(vec![package_name.replace("-", "_")])?;
 
-            let message = format!(
-                "{} {}",
-                "✓ Successfully uninstalled plugin:".bright_green().bold(),
+            info!(
+                "✓ Successfully uninstalled plugin: {}",
                 package_name.yellow().bold()
             );
-            println!("{}", message);
         } else {
-            println!("{}", "❌ Uninstallation operation cancelled.".bright_red());
+            error!("Uninstallation operation cancelled.");
             return Ok(());
         }
 
@@ -289,7 +281,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("{}", "❌ Uninstallation operation cancelled.".bright_red());
+            error!("{}", "Uninstallation operation cancelled.");
             return Ok(());
         }
 
@@ -298,10 +290,9 @@ impl PluginManager {
 
         ToolNonebot::parse(None)?.remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
-        println!(
-            "{} Successfully uninstalled plugin: {}",
-            "✓".bright_green(),
-            package_name.bright_blue()
+        info!(
+            "✓ Successfully uninstalled plugin: {}",
+            package_name.yellow().bold()
         );
 
         Ok(())
@@ -328,11 +319,11 @@ impl PluginManager {
         }
 
         if installed_plugins.is_empty() {
-            println!("{}", "No plugins installed.".bright_yellow());
+            warn!("No plugins installed.");
             return Ok(());
         }
 
-        println!("{}", "Installed Plugins:".bright_green().bold());
+        info!("Installed Plugins:");
         installed_plugins.iter().for_each(|p| p.display_info());
 
         Ok(())
@@ -360,19 +351,11 @@ impl PluginManager {
         spinner.finish_and_clear();
 
         if results.is_empty() {
-            println!(
-                "{}",
-                format!("No plugins found for '{}'.", query).bright_yellow()
-            );
+            warn!("No plugins found for '{}'.", query);
             return Ok(());
         }
 
-        println!(
-            "{} {}",
-            "Found".bright_green(),
-            format!("{} plugin(s):", results.len()).bright_white()
-        );
-        println!();
+        info!("Found {} plugin(s):", results.len());
 
         for (index, result) in results.iter().enumerate() {
             if index >= limit {
@@ -412,13 +395,10 @@ impl PluginManager {
         let outdated_plugins = self.get_installed_plugins(true).await?;
 
         if outdated_plugins.is_empty() {
-            println!("{}", "No plugins need to update.".bright_yellow());
+            info!("No plugins need to update.");
             return Ok(());
         }
-        println!(
-            "Fount {} outdated plugins:",
-            outdated_plugins.len().to_string().bright_yellow()
-        );
+        info!("Fount {} outdated plugins:", outdated_plugins.len());
         outdated_plugins
             .iter()
             .for_each(|plugin| plugin.display_info());
@@ -433,7 +413,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            println!("{}", "❌ Update operation cancelled.".bright_red());
+            error!("{}", "Update operation cancelled.");
             return Ok(());
         }
 

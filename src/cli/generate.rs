@@ -13,7 +13,7 @@ use dialoguer::{Confirm, Select};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use tracing::info;
+use tracing::error;
 
 /// Bot file templates
 const BOT_TEMPLATES: &[(&str, &str)] = &[("general", "Basic bot template with minimal setup")];
@@ -57,7 +57,7 @@ impl GenerateHandler {
                 .interact()
                 .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            info!("File generation cancelled");
+            error!("{}", "File generation cancelled.");
             return Ok(());
         }
 

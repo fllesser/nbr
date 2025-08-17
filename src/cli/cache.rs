@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, warn};
 
 /// Cache types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -176,7 +176,7 @@ impl CacheManager {
                 .interact()
                 .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
             {
-                info!("Cache clearing cancelled by user");
+                error!("{}", "Cache clearing cancelled by user.");
                 return Ok(());
             }
         }
