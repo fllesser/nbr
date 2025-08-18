@@ -139,7 +139,7 @@ impl PluginManager {
 
         // 确定是否安装 github 插件
         if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Do you want to install this plugin from github")
+            .with_prompt("Would you like to install this plugin from github")
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -172,7 +172,7 @@ impl PluginManager {
         debug!("Installing unregistered plugin: {}", package_name);
 
         if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Do you want to install this unregistered plugin from PyPI?")
+            .with_prompt("Would you like to install this unregistered plugin from PyPI?")
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -211,7 +211,7 @@ impl PluginManager {
         self.display_plugin_info(registry_plugin);
 
         if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Do you want to install this plugin")
+            .with_prompt("Would you like to install this plugin")
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -262,9 +262,7 @@ impl PluginManager {
         }
 
         if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!(
-                "Are you sure you want to uninstall '{package_name}'",
-            ))
+            .with_prompt(format!("Would you like to uninstall '{package_name}'",))
             .default(false)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -301,9 +299,7 @@ impl PluginManager {
         }
         // Confirm uninstallation
         if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!(
-                "Are you sure you want to uninstall '{package_name}'"
-            ))
+            .with_prompt(format!("Would you like to uninstall '{package_name}'"))
             .default(false)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -420,45 +416,63 @@ impl PluginManager {
 
     /// Update all plugins
     async fn update_all_plugins(&self) -> Result<()> {
-        let outdated_plugins = self.get_installed_plugins(true).await?;
+        // let outdated_plugins = self.get_installed_plugins(true).await?;
 
-        if outdated_plugins.is_empty() {
-            info!("No plugins need to update.");
-            return Ok(());
-        }
-        info!("Fount {} outdated plugins:", outdated_plugins.len());
-        outdated_plugins
-            .iter()
-            .for_each(|plugin| plugin.display_info());
+        // if outdated_plugins.is_empty() {
+        //     info!("No plugins need to update.");
+        //     return Ok(());
+        // }
+        // info!("Fount {} outdated plugins:", outdated_plugins.len());
+        // outdated_plugins
+        //     .iter()
+        //     .for_each(|plugin| plugin.display_info());
 
-        // 确认更新
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!(
-                "Do you want to update these {} outdated plugins",
-                outdated_plugins.len()
-            ))
-            .default(true)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
-        {
-            error!("{}", "Update operation cancelled.");
-            return Ok(());
-        }
+        // // 确认更新
+        // if !Confirm::with_theme(&ColorfulTheme::default())
+        //     .with_prompt(format!(
+        //         "Would you like to update these {} outdated plugins",
+        //         outdated_plugins.len()
+        //     ))
+        //     .default(true)
+        //     .interact()
+        //     .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+        // {
+        //     error!("{}", "Update operation cancelled.");
+        //     return Ok(());
+        // }
 
-        for plugin in outdated_plugins {
-            uv::reinstall(plugin.name.as_str())?;
-        }
+        // let results = outdated_plugins
+        //     .iter()
+        //     .filter_map(|p| match uv::reinstall(&p.name) {
+        //         Ok(_) => Some(p.name.as_str()),
+        //         Err(e) => {
+        //             error!("Failed to update plugin[{}]: {}", p.name, e.to_string());
+        //             None
+        //         }
+        //     })
+        //     .collect::<Vec<&str>>();
 
+        // if !results.is_empty() {
+        //     info!(
+        //         "Successfully updated plugins: {}",
+        //         results.join(", ").cyan().bold()
+        //     );
+        // }``
+
+        // uv sync --upgrade byd 梭哈算了
+        uv::sync(None).arg("--upgrade").run()?;
         Ok(())
     }
 
     /// Update a single plugin
     fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> Result<()> {
         if reinstall {
-            uv::reinstall(package_name)
+            uv::reinstall(package_name)?;
         } else {
-            uv::add(vec![package_name]).upgrade(true).run()
+            uv::add(vec![package_name]).upgrade(true).run()?;
         }
+        info!("Successfully updated plugin: {}", package_name);
+        Ok(())
     }
 
     /// Get latest package version from PyPI

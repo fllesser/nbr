@@ -410,7 +410,7 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
     // 询问用户是否创建bot文件
     let need_create_bot_file = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt(format!(
-            "Bot file '{bot_file}' not found. Do you want to create it"
+            "Bot file '{bot_file}' not found. Would you like to create it"
         ))
         .default(false)
         .interact()

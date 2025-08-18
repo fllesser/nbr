@@ -159,7 +159,7 @@ impl AdapterManager {
         }
 
         let prompt = format!(
-            "Do you want to install [{}] ?",
+            "Would you like to install [{}] ?",
             selected_adapters
                 .iter()
                 .map(|a| a.name.clone().cyan().bold().to_string())
