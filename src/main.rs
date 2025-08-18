@@ -266,9 +266,7 @@ async fn main() -> Result<()> {
         Some(("run", sub_matches)) => run::handle_run(sub_matches).await?,
         Some(("plugin", sub_matches)) => plugin::handle_plugin(sub_matches).await?,
         Some(("adapter", sub_matches)) => adapter::handle_adapter(sub_matches).await?,
-        Some(("generate", _sub_matches)) => {
-            warn!("generate command is not implemented yet");
-        }
+        Some(("generate", sub_matches)) => generate::handle_generate(sub_matches).await?,
         Some(("init", _sub_matches)) => {
             warn!("init command is not implemented yet");
         }

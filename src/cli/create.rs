@@ -233,9 +233,6 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     let package_name = options.name.replace("-", "_");
     // Create structure
     create_project_structure(&options.output_dir, &package_name)?;
-
-    // Generate files
-    generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(options)?;
     generate_env_files(&options)?;
     generate_readme_file(options)?;
@@ -300,13 +297,6 @@ fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn generate_bot_file(output_dir: &Path) -> Result<()> {
-    // let content = handlebars.render("bot.py", data)?;
-    let content = include_str!("nbfile/bot.py");
-    fs::write(output_dir.join("bot.py"), content)?;
-    Ok(())
-}
-
 fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     let mut pyproject = PyProjectConfig::default();
     pyproject.project.name = options.name.to_string();
@@ -361,7 +351,7 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
     };
     let file_name = format!(".env.{}", options.environment);
     let env_content = format!(
-        include_str!("nbfile/env-template"),
+        include_str!("templates/env_template"),
         driver, log_level, options.name,
     );
     fs::write(
@@ -377,7 +367,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
     let project_name = options.name.clone();
 
     let readme = format!(
-        include_str!("nbfile/readme.template"),
+        include_str!("templates/readme_template"),
         project_name, project_name, project_name, project_name, project_name
     );
 
@@ -386,7 +376,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_gitignore(output_dir: &Path) -> Result<()> {
-    let gitignore = include_str!("nbfile/gitignore");
+    let gitignore = include_str!("templates/gitignore");
 
     fs::write(output_dir.join(".gitignore"), gitignore)?;
     Ok(())
@@ -395,7 +385,7 @@ fn generate_gitignore(output_dir: &Path) -> Result<()> {
 fn create_example_plugin(output_dir: &Path) -> Result<()> {
     let plugins_dir = output_dir.join("src/plugins");
 
-    let hello_plugin = include_str!("nbfile/hello.py");
+    let hello_plugin = include_str!("templates/hello.py");
 
     fs::write(plugins_dir.join("hello.py"), hello_plugin)?;
     Ok(())
