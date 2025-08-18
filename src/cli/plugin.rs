@@ -493,7 +493,7 @@ impl PluginManager {
         if let Some(plugins) = self.registry_plugins.get() {
             return Ok(plugins);
         }
-
+        let spinner = terminal_utils::create_spinner("Fetching plugins from registry...");
         let plugins_json_url = "https://registry.nonebot.dev/plugins.json";
         let response = self
             .client
@@ -502,6 +502,7 @@ impl PluginManager {
             .await
             .map_err(NbrError::Network)?;
 
+        spinner.finish_and_clear();
         if !response.status().is_success() {
             return Err(NbrError::not_found("Plugin registry not found"));
         }
