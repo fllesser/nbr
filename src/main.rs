@@ -14,6 +14,7 @@ use cli::*;
 use tracing::warn;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+// nbr banner
 const BANNER: &str = r#"
 d8b   db  .d88b.  d8b   db d88888b d8888b.  .d88b.  d888888b
 888o  88 .8P  Y8. 888o  88 88'     88  `8D .8P  Y8. `~~88~~'
@@ -265,12 +266,16 @@ async fn main() -> Result<()> {
         Some(("run", sub_matches)) => run::handle_run(sub_matches).await?,
         Some(("plugin", sub_matches)) => plugin::handle_plugin(sub_matches).await?,
         Some(("adapter", sub_matches)) => adapter::handle_adapter(sub_matches).await?,
-        Some(("generate", sub_matches)) => generate::handle_generate(sub_matches).await?,
+        Some(("generate", _sub_matches)) => {
+            warn!("generate command is not implemented yet");
+        }
         Some(("init", _sub_matches)) => {
             warn!("init command is not implemented yet");
         }
         Some(("env", sub_matches)) => env::handle_env(sub_matches).await?,
-        Some(("cache", sub_matches)) => cache::handle_cache(sub_matches).await?,
+        Some(("cache", _sub_matches)) => {
+            warn!("cache command is not implemented yet");
+        }
         _ => unreachable!(),
     }
 

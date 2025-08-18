@@ -200,6 +200,16 @@ impl<'a> CommonBuilder<'a> {
         }
     }
 
+    pub fn arg(mut self, arg: &'a str) -> Self {
+        self.args.push(arg);
+        self
+    }
+
+    pub fn args(mut self, args: Vec<&'a str>) -> Self {
+        self.args.extend(args);
+        self
+    }
+
     /// Set the working directory
     pub fn working_dir(mut self, working_dir: &'a Path) -> Self {
         self.working_dir = Some(working_dir);
