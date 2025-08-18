@@ -242,8 +242,9 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_gitignore(&options.output_dir)?;
 
     // Install dependencies
-    uv::sync(Some(&options.output_dir), Some(&options.python_version))?;
-
+    uv::sync(Some(&options.python_version))
+        .working_dir(&options.output_dir)
+        .run()?;
     Ok(())
 }
 
@@ -342,8 +343,7 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         })
         .collect();
 
-    ToolNonebot::parse(Some(options.output_dir.clone().join("pyproject.toml")))?
-        .add_adapters(adapters)?;
+    ToolNonebot::parse(Some(&options.output_dir))?.add_adapters(adapters)?;
     Ok(())
 }
 
@@ -414,7 +414,7 @@ async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
     println!("3. Run 'nb run' to start your bot");
     println!(
         "\n{}",
-        "💡 Need help? Check the README.md file for more information.".bright_blue()
+        "💡 Need help? Check the README.md file for more information.".cyan()
     );
 
     Ok(())

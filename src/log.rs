@@ -1,4 +1,5 @@
 use ansi_term::Colour;
+use colored::Colorize;
 use tracing_core::Event;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FormatEvent, FormatFields};
@@ -22,27 +23,27 @@ where
         let level = event.metadata().level();
 
         // 根据级别设置颜色
-        let (level_style, msg_style) = match *level {
-            tracing::Level::ERROR => (Colour::Red.bold(), Colour::Red.bold()),
-            tracing::Level::WARN => (Colour::Yellow.bold(), Colour::Yellow.bold()),
-            tracing::Level::INFO => (Colour::Green.bold(), Colour::Green.bold()),
-            tracing::Level::DEBUG => (Colour::Blue.bold(), Colour::Blue.bold()),
-            tracing::Level::TRACE => (Colour::Purple.bold(), Colour::Purple.bold()),
+        let msg_style = match *level {
+            tracing::Level::ERROR => Colour::Red.bold(),
+            tracing::Level::WARN => Colour::Yellow.bold(),
+            tracing::Level::INFO => Colour::Green.bold(),
+            tracing::Level::DEBUG => Colour::Blue.normal(),
+            tracing::Level::TRACE => Colour::Purple.normal(),
         };
 
         match *level {
             tracing::Level::INFO => {}
             tracing::Level::ERROR => {
-                write!(writer, "{} ", level_style.paint(format!("❌")))?;
+                write!(writer, "{} ", "❌")?;
             }
             tracing::Level::WARN => {
-                write!(writer, "{} ", level_style.paint(format!("⚠️ ")))?;
+                write!(writer, "{} ", "⚠️ ")?;
             }
             tracing::Level::DEBUG => {
-                write!(writer, "{} ", level_style.paint(format!("🐛")))?;
+                write!(writer, "{} ", "[DEBUG]".blue().bold())?;
             }
             tracing::Level::TRACE => {
-                write!(writer, "{} ", level_style.paint(format!("🔍")))?;
+                write!(writer, "{} ", "[TRACE]".purple().bold())?;
             }
         }
 
@@ -106,7 +107,7 @@ mod tests {
     fn test_log() {
         init_logging(1);
 
-        tracing::info!("test {} {}", "info".yellow(), "info".blue());
+        tracing::info!("test {} {}", "info".yellow(), "info".cyan());
         tracing::debug!("test {}", 123);
         tracing::trace!("test {}", 123);
         tracing::warn!("test {}", 123);

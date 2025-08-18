@@ -209,8 +209,8 @@ impl InitHandler {
         }
 
         println!();
-        println!("For more help: {}", "nb --help".bright_blue());
-        println!("Documentation: {}", "https://nonebot.dev/".bright_blue());
+        println!("For more help: {}", "nb --help".cyan());
+        println!("Documentation: {}", "https://nonebot.dev/".cyan());
     }
 }
 
