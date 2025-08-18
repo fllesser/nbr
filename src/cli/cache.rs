@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 /// Cache types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -139,12 +139,12 @@ impl CacheManager {
         }
 
         if total_entries == 0 {
-            println!("{}", "No cache entries found to clear.".bright_yellow());
+            warn!("No cache entries found to clear.");
             return Ok(());
         }
 
         // Show what will be cleared
-        println!("{}", "Cache Clearing Summary:".bright_blue().bold());
+        info!("Cache Clearing Summary:");
         for cache_type in &cache_types {
             if let Some(entries) = stats.entries_by_type.get(cache_type)
                 && !entries.is_empty()
@@ -152,7 +152,7 @@ impl CacheManager {
                 let type_size: u64 = entries.iter().map(|e| e.size).sum();
                 println!(
                     "  {} {} entries ({})",
-                    "•".bright_blue(),
+                    "•".cyan(),
                     format!("{}: {}", cache_type.description(), entries.len()).bright_white(),
                     fs_utils::format_file_size(type_size).bright_yellow()
                 );

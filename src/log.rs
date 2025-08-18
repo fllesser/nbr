@@ -106,7 +106,7 @@ mod tests {
     fn test_log() {
         init_logging(1);
 
-        tracing::info!("test {} {}", "info".yellow(), "info".blue());
+        tracing::info!("test {} {}", "info".yellow(), "info".cyan());
         tracing::debug!("test {}", 123);
         tracing::trace!("test {}", 123);
         tracing::warn!("test {}", 123);

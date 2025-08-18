@@ -86,8 +86,12 @@ pub struct ToolNonebot {
 
 #[allow(dead_code)]
 impl ToolNonebot {
-    pub fn parse(toml_path: Option<PathBuf>) -> NbrResult<Self> {
-        let toml_path = toml_path.unwrap_or_else(|| Path::new("pyproject.toml").to_path_buf());
+    pub fn parse(work_dir: Option<&Path>) -> NbrResult<Self> {
+        let toml_path = if let Some(work_dir) = work_dir {
+            work_dir.join("pyproject.toml")
+        } else {
+            Path::new("pyproject.toml").to_path_buf()
+        };
 
         let content = std::fs::read_to_string(toml_path.clone())
             .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
@@ -218,7 +222,7 @@ mod tests {
     fn test_add_adapters() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let mut tool_nonebot = ToolNonebot::parse(Some(toml_path)).unwrap();
+        let mut tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_adapters(vec![Adapter {
                 name: "OneBot V12".to_string(),
@@ -231,7 +235,7 @@ mod tests {
     fn test_add_plugins() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let mut tool_nonebot = ToolNonebot::parse(Some(toml_path)).unwrap();
+        let mut tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_plugins(vec!["nonebot-plugin-status".to_string()])
             .unwrap();
@@ -241,7 +245,7 @@ mod tests {
     fn test_parse_toml_to_nonebot() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let tool_nonebot = ToolNonebot::parse(Some(toml_path)).unwrap();
+        let tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
         let nonebot = tool_nonebot.nonebot().unwrap();
         dbg!(nonebot);
     }

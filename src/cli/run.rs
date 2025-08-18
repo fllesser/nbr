@@ -394,7 +394,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     // Create and run bot
     let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
-    info!("Using Python: {}", runner.python_path.blue().bold());
+    info!("Using Python: {}", runner.python_path.cyan().bold());
 
     runner.run().await
 }

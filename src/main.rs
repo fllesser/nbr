@@ -9,6 +9,7 @@ mod log;
 mod pyproject;
 mod utils;
 mod uv;
+mod uv_old;
 
 use cli::*;
 use tracing::warn;

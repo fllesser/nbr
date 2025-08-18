@@ -144,7 +144,7 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            uv::add_from_github(repo_url, Some(&self.work_dir))?;
+            uv::add_from_github(repo_url)?;
         } else {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
@@ -155,7 +155,7 @@ impl PluginManager {
         let module_name = repo_name.replace("-", "_");
 
         // Add to configuration
-        ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
+        ToolNonebot::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
         info!(
             "✓ Successfully installed plugin: {}",
@@ -177,13 +177,10 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            uv::add(
-                vec![package_name],
-                false,
-                None,
-                Some(&self.work_dir),
-                Some(extras),
-            )?;
+            uv::add(vec![package_name])
+                .extras(extras)
+                .working_dir(&self.work_dir)
+                .run()?;
         } else {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
@@ -191,7 +188,7 @@ impl PluginManager {
 
         let module_name = package_name.replace("-", "_");
         // Add to configuration
-        ToolNonebot::parse(None)?.add_plugins(vec![module_name])?;
+        ToolNonebot::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
         info!(
             "✓ Successfully installed plugin: {}",
@@ -223,16 +220,17 @@ impl PluginManager {
             return Ok(());
         }
         // Install the plugin
-        uv::add(
-            vec![&package_name],
-            upgrade,
-            index_url,
-            Some(&self.work_dir),
-            Some(extras),
-        )?;
+
+        uv::add(vec![package_name])
+            .extras(extras)
+            .upgrade(upgrade)
+            .index_url_opt(index_url)
+            .working_dir(&self.work_dir)
+            .run()?;
 
         // Add to configuration
-        ToolNonebot::parse(None)?.add_plugins(vec![registry_plugin.module_name.clone()])?;
+        ToolNonebot::parse(Some(&self.work_dir))?
+            .add_plugins(vec![registry_plugin.module_name.clone()])?;
 
         info!(
             "✓ Successfully installed plugin: {}",
@@ -256,7 +254,7 @@ impl PluginManager {
     pub async fn uninstall_unregistered_plugin(&self, package_name: &str) -> Result<()> {
         debug!("Uninstalling unregistered plugin: {}", package_name);
 
-        if !uv::is_installed(package_name, Some(&self.work_dir)).await {
+        if !uv::is_installed(package_name).await {
             return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 package_name
@@ -271,8 +269,11 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            uv::remove(vec![&package_name], Some(&self.work_dir))?;
-            ToolNonebot::parse(None)?.remove_plugins(vec![package_name.replace("-", "_")])?;
+            uv::remove(vec![&package_name])
+                .working_dir(&self.work_dir)
+                .run()?;
+            ToolNonebot::parse(Some(&self.work_dir))?
+                .remove_plugins(vec![package_name.replace("-", "_")])?;
 
             info!(
                 "✓ Successfully uninstalled plugin: {}",
@@ -292,7 +293,7 @@ impl PluginManager {
     ) -> Result<()> {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
-        if !uv::is_installed(&package_name, Some(&self.work_dir)).await {
+        if !uv::is_installed(&package_name).await {
             return Err(NbrError::not_found(format!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
@@ -312,9 +313,10 @@ impl PluginManager {
         }
 
         // Uninstall the package
-        uv::remove(vec![&package_name], Some(&self.work_dir))?;
+        uv::remove(vec![&package_name]).run()?;
 
-        ToolNonebot::parse(None)?.remove_plugins(vec![registry_plugin.module_name.clone()])?;
+        ToolNonebot::parse(Some(&self.work_dir))?
+            .remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
         info!(
             "✓ Successfully uninstalled plugin: {}",
@@ -325,7 +327,7 @@ impl PluginManager {
     }
 
     pub async fn get_installed_plugins(&self, outdated: bool) -> Result<Vec<Package>> {
-        let installed_packages = uv::list(Some(&self.work_dir), outdated).await?;
+        let installed_packages = uv::list(outdated).await?;
         let installed_plugins = installed_packages
             .into_iter()
             .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
@@ -358,7 +360,7 @@ impl PluginManager {
     #[allow(dead_code)]
     pub async fn fix_nonebot_plugins(&self) -> Result<()> {
         let installed_plugins = self.get_installed_plugins(false).await?;
-        ToolNonebot::parse(None)?.reset_plugins(
+        ToolNonebot::parse(Some(&self.work_dir))?.reset_plugins(
             installed_plugins
                 .iter()
                 .map(|p| p.name.replace("-", "_"))
@@ -443,24 +445,19 @@ impl PluginManager {
             return Ok(());
         }
 
-        uv::add(
-            outdated_plugins
-                .iter()
-                .map(|p| p.name.as_str())
-                .collect::<Vec<&str>>(),
-            true,
-            None,
-            Some(&self.work_dir),
-            None,
-        )
+        for plugin in outdated_plugins {
+            uv::reinstall(plugin.name.as_str())?;
+        }
+
+        Ok(())
     }
 
     /// Update a single plugin
     fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> Result<()> {
         if reinstall {
-            uv::reinstall(package_name, Some(&self.work_dir))
+            uv::reinstall(package_name)
         } else {
-            uv::add(vec![package_name], true, None, Some(&self.work_dir), None)
+            uv::add(vec![package_name]).upgrade(true).run()
         }
     }
 
@@ -562,7 +559,7 @@ impl PluginManager {
 
     /// Display plugin information
     fn display_plugin_info(&self, plugin: &RegistryPlugin) {
-        println!("{}", plugin.name.bright_blue().bold());
+        println!("{}", plugin.name.cyan().bold());
         println!("  {}", plugin.desc);
         println!(
             "  {} {}",
@@ -602,7 +599,7 @@ impl PluginManager {
         println!(
             "{}. {} ({}) {}",
             index.to_string().bright_black(),
-            plugin.name.bright_blue().bold(),
+            plugin.name.cyan().bold(),
             plugin.project_link.bright_cyan(),
             format!("v{}", plugin.version).bright_green()
         );

@@ -162,7 +162,7 @@ impl AdapterManager {
             "Do you want to install [{}] ?",
             selected_adapters
                 .iter()
-                .map(|a| a.name.clone().bright_blue().bold().to_string())
+                .map(|a| a.name.clone().cyan().bold().to_string())
                 .collect::<Vec<String>>()
                 .join(", ")
         );
@@ -184,8 +184,9 @@ impl AdapterManager {
             .collect::<Vec<&str>>();
         // check if the adapter is already installed
 
-        uv::add(adapter_packages, false, None, Some(&self.work_dir), None)?;
-
+        uv::add(adapter_packages)
+            .working_dir(&self.work_dir)
+            .run()?;
         // Add to configuration
         let adapters = selected_adapters
             .iter()
@@ -196,7 +197,7 @@ impl AdapterManager {
             .collect::<Vec<Adapter>>();
 
         // Add adapters to configuration
-        ToolNonebot::parse(None)?.add_adapters(adapters)?;
+        ToolNonebot::parse(Some(&self.work_dir))?.add_adapters(adapters)?;
 
         info!(
             "✓ Successfully installed adapters: {}",
@@ -220,7 +221,7 @@ impl AdapterManager {
     }
 
     pub async fn get_installed_adapters(&self) -> Result<HashSet<String>> {
-        let installed_adapters = uv::list(Some(&self.work_dir), false).await?;
+        let installed_adapters = uv::list(false).await?;
         let installed_adapters_set = installed_adapters
             .into_iter()
             .filter(|a| a.name.contains("nonebot-adapter-"))
@@ -233,7 +234,9 @@ impl AdapterManager {
     /// Uninstall an adapter
     pub async fn uninstall_adapter(&self) -> Result<()> {
         // get installed adapters from configuration
-        let installed_adapters = ToolNonebot::parse(None)?.nonebot()?.adapters;
+        let installed_adapters = ToolNonebot::parse(Some(&self.work_dir))?
+            .nonebot()?
+            .adapters;
         let installed_adapters_names = installed_adapters
             .iter()
             .map(|a| a.name.clone())
@@ -257,7 +260,7 @@ impl AdapterManager {
         };
 
         // Remove from configuration
-        ToolNonebot::parse(None)?.remove_adapters(
+        ToolNonebot::parse(Some(&self.work_dir))?.remove_adapters(
             selected_adapters
                 .iter()
                 .map(|a| a.as_str())
@@ -278,7 +281,9 @@ impl AdapterManager {
             .filter(|a| installed_adapters_package_set.contains(*a))
             .collect::<Vec<&str>>();
 
-        uv::remove(adapter_packages, Some(&self.work_dir))?;
+        uv::remove(adapter_packages)
+            .working_dir(&self.work_dir)
+            .run()?;
 
         info!(
             "✓ Successfully uninstalled adapters: {}",
@@ -290,7 +295,7 @@ impl AdapterManager {
 
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
-        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
+        let nonebot = ToolNonebot::parse(Some(&self.work_dir))?.nonebot()?;
 
         let adapters_map = self.fetch_regsitry_adapters().await?;
         if show_all {
@@ -317,8 +322,8 @@ impl AdapterManager {
     pub fn display_adapter(&self, adapter: &RegistryAdapter) {
         println!(
             " {} {} ({} {})",
-            "•".bright_blue(),
-            adapter.name.bright_blue().bold(),
+            "•".cyan(),
+            adapter.name.cyan().bold(),
             adapter.project_link.bright_black(),
             format!("v{}", adapter.version).bright_green(),
         );
@@ -378,7 +383,7 @@ impl AdapterManager {
     /// Find installed adapter by name
     #[allow(dead_code)]
     fn find_installed_adapter(&self, name: &str) -> Result<Adapter> {
-        let nonebot = ToolNonebot::parse(None)?.nonebot()?;
+        let nonebot = ToolNonebot::parse(Some(&self.work_dir))?.nonebot()?;
 
         for adapter in &nonebot.adapters {
             if adapter.name == name
@@ -398,7 +403,7 @@ impl AdapterManager {
     /// Display adapter information
     #[allow(dead_code)]
     fn display_adapter_info(&self, adapter: &RegistryAdapter) {
-        println!("{}", adapter.name.bright_blue().bold());
+        println!("{}", adapter.name.cyan().bold());
         println!("  Package: {}", adapter.project_link);
         println!("  Module: {}", adapter.module_name);
         println!("  Desc: {}", adapter.desc);

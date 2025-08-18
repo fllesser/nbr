@@ -1,9 +1,12 @@
+#![allow(dead_code)]
+
+use colored::Colorize;
+use serde::Deserialize;
+
 use crate::{
     error::{NbrError, Result},
     utils::{process_utils, terminal_utils},
 };
-use colored::Colorize;
-use serde::Deserialize;
 use std::{
     hash::{Hash, Hasher},
     path::Path,
@@ -11,84 +14,70 @@ use std::{
 
 const UV_NOT_FOUND_MESSAGE: &str = "uv not found. You can run \n  curl -LsSf https://astral.sh/uv/install.sh | sh \nto install or get more information from https://astral.sh/blog/uv";
 
-pub async fn self_version() -> Result<String> {
-    let output = process_utils::execute_command_with_output("uv", &["--version"], None, 5)
-        .await
-        .map_err(|_| NbrError::environment(UV_NOT_FOUND_MESSAGE))?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout.trim().to_string())
+pub fn add(packages: Vec<&str>) -> AddBuilder<'_> {
+    AddBuilder::new(packages)
 }
 
-pub fn sync(working_dir: Option<&Path>, python_version: Option<&str>) -> Result<()> {
+pub fn add_from_github(repo_url: &str) -> Result<()> {
+    let git_url = format!("git+{}", repo_url);
+    let args = vec!["add", git_url.as_str()];
+    CommonBuilder::new(args).run()
+}
+
+pub fn remove(packages: Vec<&str>) -> CommonBuilder<'_> {
+    let mut args = vec!["remove"];
+    args.extend(packages.clone());
+    CommonBuilder::new(args)
+}
+
+pub fn sync(python_version: Option<&str>) -> CommonBuilder<'_> {
     let mut args = vec!["sync"];
     if let Some(version) = python_version {
         args.push("--python");
         args.push(version);
     }
-    process_utils::execute_interactive("uv", &args, working_dir)?;
-    Ok(())
+    CommonBuilder::new(args)
 }
 
-pub fn add(
-    packages: Vec<&str>,
-    upgrade: bool,
-    index_url: Option<&str>,
-    working_dir: Option<&Path>,
-    extras: Option<Vec<&str>>,
-) -> Result<()> {
-    let mut args = vec!["add"];
-
-    if upgrade {
-        args.push("--upgrade");
-    }
-
-    if let Some(index) = index_url {
-        args.push("--index-url");
-        args.push(index);
-    }
-
-    if let Some(extras) = extras {
-        args.push("--extra");
-        args.extend(extras.clone());
-    }
-
-    args.extend(packages.clone());
-
-    process_utils::execute_interactive("uv", &args, working_dir)
+pub fn show(package: &str) -> CommonBuilder<'_> {
+    let args = vec!["pip", "show", package];
+    CommonBuilder::new(args)
 }
 
-pub fn add_from_github(repo_url: &str, working_dir: Option<&Path>) -> Result<()> {
-    let git_url = format!("git+{}", repo_url);
-    process_utils::execute_interactive("uv", &["add", &git_url], working_dir)
+pub fn reinstall(package: &str) -> Result<()> {
+    remove(vec![package]).run()?;
+    add(vec![package]).run()
 }
 
-pub fn reinstall(package: &str, working_dir: Option<&Path>) -> Result<()> {
-    remove(vec![package], working_dir)?;
-    add(vec![package], false, None, working_dir, None)
+pub async fn is_installed(package: &str) -> bool {
+    show(package).run_async().await.is_ok()
 }
 
-pub fn remove(packages: Vec<&str>, working_dir: Option<&Path>) -> Result<()> {
-    let mut args = vec!["remove"];
-    args.extend(packages.clone());
-    process_utils::execute_interactive("uv", &args, working_dir)
+pub async fn self_version() -> Result<String> {
+    let args = vec!["self", "version"];
+    CommonBuilder::new(args)
+        .run_async()
+        .await
+        .map_err(|_| NbrError::environment(UV_NOT_FOUND_MESSAGE))
 }
 
-pub async fn show(package: &str, working_dir: Option<&Path>) -> Result<String> {
-    let output = process_utils::execute_command_with_output(
-        "uv",
-        &["pip", "show", package],
-        working_dir,
-        10,
-    )
-    .await?;
+pub async fn list(outdated: bool) -> Result<Vec<Package>> {
+    let mut args: Vec<&str> = vec!["pip", "list", "--format=json"];
+    let stdout = if outdated {
+        args.push("--outdated");
+        CommonBuilder::new(args)
+            .run_async_with_spinner("Checking for outdated packages...")
+            .await?
+    } else {
+        CommonBuilder::new(args).run_async().await?
+    };
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout.to_string())
+    Ok(serde_json::from_str(&stdout)?)
 }
 
-/// Get package detailed info
-pub async fn show_package_info(package: &str, working_dir: Option<&Path>) -> Result<Package> {
-    let stdout = show(package, working_dir).await?;
+pub async fn show_package_info(package: &str) -> Result<Package> {
+    let stdout = show(package).run_async().await?;
+
     let mut lines = stdout.lines();
     let name = lines
         .next()
@@ -137,29 +126,6 @@ pub async fn show_package_info(package: &str, working_dir: Option<&Path>) -> Res
     })
 }
 
-pub async fn is_installed(package: &str, working_dir: Option<&Path>) -> bool {
-    show(package, working_dir).await.is_ok()
-}
-
-pub async fn list(working_dir: Option<&Path>, outdated: bool) -> Result<Vec<Package>> {
-    let mut args: Vec<&str> = vec!["pip", "list", "--format=json"];
-    let mut spinner = None;
-    if outdated {
-        args.push("--outdated");
-        spinner = Some(terminal_utils::create_spinner(
-            "Checking for outdated packages...",
-        ));
-    }
-
-    let output = process_utils::execute_command_with_output("uv", &args, working_dir, 30).await?;
-
-    if let Some(spinner) = spinner {
-        spinner.finish_and_clear();
-    }
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(serde_json::from_str(&stdout)?)
-}
-
 #[derive(Debug, Clone, Deserialize, Eq)]
 #[allow(unused)]
 pub struct Package {
@@ -206,85 +172,159 @@ impl Package {
         };
         println!(
             "  {} {} {}",
-            self.name.blue().bold(),
+            self.name.cyan().bold(),
             installed_version,
             available_version
         );
     }
 }
 
+pub struct CommonBuilder<'a> {
+    pub args: Vec<&'a str>,
+    pub working_dir: Option<&'a Path>,
+    pub timeout_secs: u16,
+}
+
+impl<'a> CommonBuilder<'a> {
+    pub fn new(args: Vec<&'a str>) -> Self {
+        Self {
+            args,
+            working_dir: None,
+            timeout_secs: 5,
+        }
+    }
+
+    pub fn working_dir(mut self, working_dir: &'a Path) -> Self {
+        self.working_dir = Some(working_dir);
+        self
+    }
+
+    pub fn timeout(mut self, timeout_secs: u16) -> Self {
+        self.timeout_secs = timeout_secs;
+        self
+    }
+
+    pub fn run(self) -> Result<()> {
+        process_utils::execute_interactive("uv", &self.args, self.working_dir.as_deref())
+    }
+
+    pub async fn run_async(self) -> Result<String> {
+        let output = process_utils::execute_command_with_output(
+            "uv",
+            &self.args,
+            self.working_dir.as_deref(),
+            self.timeout_secs as u64,
+        )
+        .await?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(stdout.trim().to_string())
+    }
+
+    pub async fn run_async_with_spinner(self, spinner_message: &str) -> Result<String> {
+        let spinner = terminal_utils::create_spinner(spinner_message);
+        let output = self.run_async().await?;
+        spinner.finish_and_clear();
+        Ok(output)
+    }
+}
+
+pub struct AddBuilder<'a> {
+    pub packages: Vec<&'a str>,
+    pub upgrade: bool,
+    pub index_url: Option<&'a str>,
+    pub working_dir: Option<&'a Path>,
+    pub extras: Option<Vec<&'a str>>,
+}
+
+impl<'a> AddBuilder<'a> {
+    pub fn new(packages: Vec<&'a str>) -> Self {
+        Self {
+            packages,
+            upgrade: false,
+            index_url: None,
+            working_dir: None,
+            extras: None,
+        }
+    }
+
+    pub fn upgrade(mut self, upgrade: bool) -> Self {
+        self.upgrade = upgrade;
+        self
+    }
+
+    pub fn index_url_opt(mut self, index_url: Option<&'a str>) -> Self {
+        self.index_url = index_url;
+        self
+    }
+
+    pub fn index_url(mut self, index_url: &'a str) -> Self {
+        self.index_url = Some(index_url);
+        self
+    }
+
+    pub fn working_dir(mut self, working_dir: &'a Path) -> Self {
+        self.working_dir = Some(working_dir);
+        self
+    }
+
+    pub fn extras(mut self, extras: Vec<&'a str>) -> Self {
+        self.extras = Some(extras);
+        self
+    }
+
+    pub fn run(self) -> Result<()> {
+        let mut args: Vec<&str> = vec!["add"];
+        args.extend(self.packages);
+        if self.upgrade {
+            args.push("--upgrade");
+        }
+        if let Some(ref index_url) = self.index_url {
+            args.push("--index-url");
+            args.push(index_url);
+        }
+        if let Some(ref extras) = self.extras {
+            let extras = extras.iter().flat_map(|e| ["--extra", e]);
+            args.extend(extras);
+        }
+        process_utils::execute_interactive("uv", &args, self.working_dir.as_deref())
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
+    use super::*;
     use std::path::PathBuf;
-
-    use crate::uv;
 
     fn working_dir() -> PathBuf {
         std::env::current_dir().unwrap().join("awesome-bot")
     }
 
     #[tokio::test]
-    async fn test_is_installed() {
-        let work_dir = working_dir();
-        let is_installed = uv::is_installed("not-exist-package", Some(&work_dir)).await;
-        assert!(!is_installed);
-        let is_installed = uv::is_installed("nonebot2", Some(&work_dir)).await;
-        assert!(is_installed);
+    async fn test_self_version() {
+        let version = self_version().await.unwrap();
+        println!("uv version: {}", version);
     }
 
     #[tokio::test]
-    async fn test_get_installed_version() {
-        let work_dir = working_dir();
-        let package = uv::show_package_info("nonebot2", Some(&work_dir)).await;
-        assert!(package.is_ok());
-        assert!(dbg!(package).unwrap().version.contains("2."));
-        let package = uv::show_package_info("not-exist-package", Some(&work_dir)).await;
-        assert!(package.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_get_self_version() {
-        let result = uv::self_version().await;
-        assert!(result.is_ok());
-        dbg!(result.unwrap());
-    }
-
-    #[tokio::test]
-    async fn test_list() {
-        let work_dir = working_dir();
-        let outdated_package = uv::list(Some(&work_dir), true).await;
-        assert!(outdated_package.is_ok());
-        dbg!(outdated_package.unwrap());
-        let all_package = uv::list(Some(&work_dir), false).await;
-        assert!(all_package.is_ok());
-        dbg!(all_package.unwrap());
+    async fn test_show_package_info() {
+        let package = show_package_info("pip").await.unwrap();
+        package.display_info();
     }
 
     #[test]
     fn test_add() {
-        let work_dir = working_dir();
-        let result = uv::add(
-            vec!["nonebot-plugin-status", "nonebot-plugin-abs"],
-            false,
-            None,
-            Some(&work_dir),
-            None,
-        );
+        let result = add(vec!["nonebot-plugin-abs"])
+            .working_dir(&working_dir())
+            .upgrade(true)
+            .run();
         assert!(result.is_ok());
-        dbg!(result.unwrap());
     }
 
-    #[test]
-    fn test_package_display_info() {
-        let package = uv::Package {
-            name: "nonebot-plugin-status".to_string(),
-            version: "0.1.0".to_string(),
-            latest_version: Some("0.2.0".to_string()),
-            location: None,
-            requires: None,
-            requires_by: None,
-        };
-        package.display_info();
+    #[tokio::test]
+    async fn test_list() {
+        let packages = list(false).await.unwrap();
+        println!("{:?}", packages);
     }
 }

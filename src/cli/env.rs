@@ -178,9 +178,7 @@ impl EnvironmentChecker {
             .map(|path| path.to_string_lossy().to_string());
 
         let uv_version = uv::self_version().await.ok();
-        let site_packages = uv::list(Some(&self.work_dir), false)
-            .await
-            .unwrap_or_default();
+        let site_packages = uv::list(false).await.unwrap_or_default();
 
         Ok(PythonInfo {
             version,
@@ -193,7 +191,7 @@ impl EnvironmentChecker {
 
     /// Get NoneBot information
     async fn get_nonebot_info(&self, python_info: &PythonInfo) -> Result<NoneBotInfo> {
-        let package = uv::show_package_info("nonebot2", Some(&self.work_dir)).await?;
+        let package = uv::show_package_info("nonebot2").await?;
         // Check if NoneBot is installed
         let version = package.version;
         let location = package.location.unwrap_or("Unknown".to_string());
@@ -422,14 +420,14 @@ impl EnvironmentChecker {
         println!(
             "  {} {}",
             "Executable:".bright_black(),
-            env_info.python_info.executable.bright_cyan()
+            env_info.python_info.executable.bright_white()
         );
 
         if let Some(ref venv) = env_info.python_info.virtual_env {
             println!(
                 "  {} {}",
                 "Virtual Environment:".bright_black(),
-                venv.bright_green()
+                venv.bright_white()
             );
         } else {
             println!(
@@ -462,7 +460,7 @@ impl EnvironmentChecker {
             println!(
                 "  {} {}",
                 "Location:".bright_black(),
-                nonebot.location.bright_cyan()
+                nonebot.location.bright_white()
             );
             println!(
                 "  {} {}",
@@ -476,11 +474,11 @@ impl EnvironmentChecker {
             );
 
             if !nonebot.adapters.is_empty() {
-                println!("    {}", "Installed Adapters:".bright_blue());
+                println!("    {}", "Installed Adapters:".cyan());
                 for adapter in &nonebot.adapters {
                     println!(
                         "      {} {} ({})",
-                        "•".bright_blue(),
+                        "•".cyan(),
                         adapter.name.bright_white(),
                         adapter.version.bright_black()
                     );
@@ -488,11 +486,11 @@ impl EnvironmentChecker {
             }
 
             if !nonebot.plugins.is_empty() {
-                println!("    {}", "Installed Plugins:".bright_blue());
+                println!("    {}", "Installed Plugins:".cyan());
                 for plugin in &nonebot.plugins {
                     println!(
                         "      {} {} ({})",
-                        "•".bright_blue(),
+                        "•".cyan(),
                         plugin.name.bright_white(),
                         plugin.version.bright_black()
                     );
@@ -519,14 +517,14 @@ impl EnvironmentChecker {
             println!(
                 "  {} {}",
                 "Root Path:".bright_black(),
-                project.root_path.display().to_string().bright_cyan()
+                project.root_path.display().to_string().bright_white()
             );
 
             if let Some(ref bot_file) = project.bot_file {
                 println!(
                     "  {} {}",
                     "Bot File:".bright_black(),
-                    bot_file.display().to_string().bright_green()
+                    bot_file.display().to_string().bright_white()
                 );
             }
 
@@ -534,7 +532,7 @@ impl EnvironmentChecker {
                 println!(
                     "  {} {}",
                     "Plugins Directory:".bright_black(),
-                    plugins_dir.display().to_string().bright_green()
+                    plugins_dir.display().to_string().bright_white()
                 );
             }
 
@@ -542,7 +540,7 @@ impl EnvironmentChecker {
                 "  {} {}",
                 "Git Repository:".bright_black(),
                 if project.is_git_repo {
-                    "Yes".bright_green()
+                    "Yes".bright_white()
                 } else {
                     "No".bright_red()
                 }
@@ -552,7 +550,7 @@ impl EnvironmentChecker {
                 println!(
                     "  {} {}",
                     "Virtual Environment:".bright_black(),
-                    venv.display().to_string().bright_green()
+                    venv.display().to_string().bright_white()
                 );
             }
 
@@ -565,7 +563,7 @@ impl EnvironmentChecker {
                 for config in &project.config_files {
                     println!(
                         "    {} {}",
-                        "•".bright_blue(),
+                        "•".cyan(),
                         config.file_name().unwrap().to_string_lossy().bright_white()
                     );
                 }
@@ -617,7 +615,7 @@ impl EnvironmentChecker {
 
                 println!(
                     "    {} {:.1}% used ({:.1}/{:.1} GB) at {}",
-                    "•".bright_blue(),
+                    "•".cyan(),
                     match usage_color {
                         "bright_red" => disk.usage_percentage.to_string().bright_red(),
                         "bright_yellow" => disk.usage_percentage.to_string().bright_yellow(),
