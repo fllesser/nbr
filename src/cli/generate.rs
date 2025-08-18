@@ -10,7 +10,6 @@ use colored::Colorize;
 
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
-use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use tracing::{error, info};
@@ -52,19 +51,24 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
     let tool_nonebot = ToolNonebot::parse(Some(work_dir))?;
     let nonebot = tool_nonebot.nonebot()?;
 
-    let name_module_mapping = nonebot
+    let name_module_tuples = nonebot
         .adapters
         .iter()
-        .map(|adapter| (adapter.name.replace(" ", ""), adapter.module_name.clone()))
-        .collect::<HashMap<String, String>>();
+        .map(|adapter| {
+            (
+                adapter.name.replace(" ", ""),
+                adapter.module_name.to_owned(),
+            )
+        })
+        .collect::<Vec<(String, String)>>();
 
-    let adapters_import = name_module_mapping
+    let adapters_import = name_module_tuples
         .iter()
         .map(|(prefix, module)| format!("from {} import Adapter as {}Adapter", module, prefix))
         .reduce(|a, b| format!("{}\n{}", a, b))
         .unwrap_or_default();
 
-    let adapters_register = name_module_mapping
+    let adapters_register = name_module_tuples
         .iter()
         .map(|(prefix, _)| format!("driver.register_adapter({prefix}Adapter)"))
         .reduce(|a, b| format!("{}\n{}", a, b))

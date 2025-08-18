@@ -64,15 +64,16 @@ pub async fn self_version() -> Result<String> {
 }
 
 pub async fn list(outdated: bool) -> Result<Vec<Package>> {
-    let mut args: Vec<&str> = vec!["pip", "list", "--format=json"];
+    let args: Vec<&str> = vec!["pip", "list", "--format=json"];
+    let builder = CommonBuilder::new(args);
     let stdout = if outdated {
-        args.push("--outdated");
-        CommonBuilder::new(args)
+        builder
+            .arg("--outdated")
             .timeout(300)
             .run_async_with_spinner("Checking for outdated packages...")
             .await?
     } else {
-        CommonBuilder::new(args).run_async().await?
+        builder.run_async().await?
     };
 
     Ok(serde_json::from_str(&stdout)?)
