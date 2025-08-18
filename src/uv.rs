@@ -66,6 +66,7 @@ pub async fn list(outdated: bool) -> Result<Vec<Package>> {
     let stdout = if outdated {
         args.push("--outdated");
         CommonBuilder::new(args)
+            .timeout(300)
             .run_async_with_spinner("Checking for outdated packages...")
             .await?
     } else {
@@ -186,6 +187,7 @@ pub struct CommonBuilder<'a> {
 }
 
 impl<'a> CommonBuilder<'a> {
+    /// Create a new CommonBuilder
     pub fn new(args: Vec<&'a str>) -> Self {
         Self {
             args,
@@ -194,20 +196,24 @@ impl<'a> CommonBuilder<'a> {
         }
     }
 
+    /// Set the working directory
     pub fn working_dir(mut self, working_dir: &'a Path) -> Self {
         self.working_dir = Some(working_dir);
         self
     }
 
+    /// Set the timeout in seconds
     pub fn timeout(mut self, timeout_secs: u16) -> Self {
         self.timeout_secs = timeout_secs;
         self
     }
 
+    /// Run the command interactively
     pub fn run(self) -> Result<()> {
         process_utils::execute_interactive("uv", &self.args, self.working_dir.as_deref())
     }
 
+    /// Run the command asynchronously and return the stdout as a string
     pub async fn run_async(self) -> Result<String> {
         let output = process_utils::execute_command_with_output(
             "uv",
@@ -217,10 +223,10 @@ impl<'a> CommonBuilder<'a> {
         )
         .await?;
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.trim().to_string())
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     }
 
+    /// Run the command asynchronously and return the stdout as a string with a spinner
     pub async fn run_async_with_spinner(self, spinner_message: &str) -> Result<String> {
         let spinner = terminal_utils::create_spinner(spinner_message);
         let output = self.run_async().await?;
