@@ -302,7 +302,7 @@ fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
 
 fn generate_bot_file(output_dir: &Path) -> Result<()> {
     // let content = handlebars.render("bot.py", data)?;
-    let content = include_str!("nbfile/bot.py");
+    let content = include_str!("templates/bot.py");
     fs::write(output_dir.join("bot.py"), content)?;
     Ok(())
 }
@@ -361,7 +361,7 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
     };
     let file_name = format!(".env.{}", options.environment);
     let env_content = format!(
-        include_str!("nbfile/env-template"),
+        include_str!("templates/env_template"),
         driver, log_level, options.name,
     );
     fs::write(
@@ -377,7 +377,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
     let project_name = options.name.clone();
 
     let readme = format!(
-        include_str!("nbfile/readme.template"),
+        include_str!("templates/readme_template"),
         project_name, project_name, project_name, project_name, project_name
     );
 
@@ -386,7 +386,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_gitignore(output_dir: &Path) -> Result<()> {
-    let gitignore = include_str!("nbfile/gitignore");
+    let gitignore = include_str!("templates/gitignore");
 
     fs::write(output_dir.join(".gitignore"), gitignore)?;
     Ok(())
@@ -395,7 +395,7 @@ fn generate_gitignore(output_dir: &Path) -> Result<()> {
 fn create_example_plugin(output_dir: &Path) -> Result<()> {
     let plugins_dir = output_dir.join("src/plugins");
 
-    let hello_plugin = include_str!("nbfile/hello.py");
+    let hello_plugin = include_str!("templates/hello.py");
 
     fs::write(plugins_dir.join("hello.py"), hello_plugin)?;
     Ok(())

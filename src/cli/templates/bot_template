@@ -1,0 +1,17 @@
+import nonebot
+# Import Adapters 
+{}
+
+nonebot.init()
+driver = nonebot.get_driver()
+
+# Register Adapters 
+{}
+
+# Load Builtin Plugins
+nonebot.load_builtin_plugins({})
+
+nonebot.load_from_toml("pyproject.toml")
+
+if __name__ == "__main__":
+    nonebot.run()

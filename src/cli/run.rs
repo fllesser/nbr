@@ -423,7 +423,7 @@ fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
     }
 
     // 创建bot文件
-    let bot_file_content = include_str!("nbfile/bot.py");
+    let bot_file_content = include_str!("templates/bot.py");
     fs::write(&bot_path, bot_file_content)
         .map_err(|e| NbrError::io(format!("Failed to create bot file: {}", e)))?;
 
