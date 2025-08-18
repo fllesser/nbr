@@ -110,13 +110,27 @@ impl PluginManager {
         index_url: Option<&str>,
         upgrade: bool,
     ) -> Result<()> {
-        if package.starts_with("http") {
-            self.install_plugin_from_github(package).await
-        } else if let Ok(registry_plugin) = self.get_registry_plugin(package).await {
-            self.install_plugin_from_registry(registry_plugin, index_url, upgrade)
+        if package.starts_with("https") {
+            return self.install_plugin_from_github(package).await;
+        }
+
+        // nonebot-plugin-orm[default] -> nonebot-plugin-orm, default
+        // nonebot-plugin-orm -> nonebot-plugin-orm
+        // nonebot-plugin-orm[default, sqlalchemy] -> nonebot-plugin-orm, default, sqlalchemy
+        let package_and_extras = package.split('[').collect::<Vec<&str>>();
+        let package_name = package_and_extras[0];
+        let extras = if let Some(extras) = package_and_extras.get(1) {
+            let extras = extras.trim_end_matches(']');
+            extras.split(',').collect::<Vec<&str>>()
+        } else {
+            vec![]
+        };
+
+        if let Ok(registry_plugin) = self.get_registry_plugin(package_name).await {
+            self.install_plugin_from_registry(registry_plugin, index_url, extras, upgrade)
                 .await
         } else {
-            self.install_unregistered_plugin(package).await
+            self.install_unregistered_plugin(package_name, extras).await
         }
     }
 
@@ -150,7 +164,11 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn install_unregistered_plugin(&mut self, package_name: &str) -> Result<()> {
+    pub async fn install_unregistered_plugin(
+        &mut self,
+        package_name: &str,
+        extras: Vec<&str>,
+    ) -> Result<()> {
         debug!("Installing unregistered plugin: {}", package_name);
 
         if Confirm::with_theme(&ColorfulTheme::default())
@@ -159,7 +177,13 @@ impl PluginManager {
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            uv::add(vec![package_name], false, None, Some(&self.work_dir))?;
+            uv::add(
+                vec![package_name],
+                false,
+                None,
+                Some(&self.work_dir),
+                Some(extras),
+            )?;
         } else {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
@@ -181,6 +205,7 @@ impl PluginManager {
         &self,
         registry_plugin: &RegistryPlugin,
         index_url: Option<&str>,
+        extras: Vec<&str>,
         upgrade: bool,
     ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
@@ -203,6 +228,7 @@ impl PluginManager {
             upgrade,
             index_url,
             Some(&self.work_dir),
+            Some(extras),
         )?;
 
         // Add to configuration
@@ -425,6 +451,7 @@ impl PluginManager {
             true,
             None,
             Some(&self.work_dir),
+            None,
         )
     }
 
@@ -433,7 +460,7 @@ impl PluginManager {
         if reinstall {
             uv::reinstall(package_name, Some(&self.work_dir))
         } else {
-            uv::add(vec![package_name], true, None, Some(&self.work_dir))
+            uv::add(vec![package_name], true, None, Some(&self.work_dir), None)
         }
     }
 

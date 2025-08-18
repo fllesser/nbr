@@ -184,7 +184,7 @@ impl AdapterManager {
             .collect::<Vec<&str>>();
         // check if the adapter is already installed
 
-        uv::add(adapter_packages, false, None, Some(&self.work_dir))?;
+        uv::add(adapter_packages, false, None, Some(&self.work_dir), None)?;
 
         // Add to configuration
         let adapters = selected_adapters

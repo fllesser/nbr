@@ -34,6 +34,7 @@ pub fn add(
     upgrade: bool,
     index_url: Option<&str>,
     working_dir: Option<&Path>,
+    extras: Option<Vec<&str>>,
 ) -> Result<()> {
     let mut args = vec!["add"];
 
@@ -44,6 +45,11 @@ pub fn add(
     if let Some(index) = index_url {
         args.push("--index-url");
         args.push(index);
+    }
+
+    if let Some(extras) = extras {
+        args.push("--extra");
+        args.extend(extras.clone());
     }
 
     args.extend(packages.clone());
@@ -58,7 +64,7 @@ pub fn add_from_github(repo_url: &str, working_dir: Option<&Path>) -> Result<()>
 
 pub fn reinstall(package: &str, working_dir: Option<&Path>) -> Result<()> {
     remove(vec![package], working_dir)?;
-    add(vec![package], false, None, working_dir)
+    add(vec![package], false, None, working_dir, None)
 }
 
 pub fn remove(packages: Vec<&str>, working_dir: Option<&Path>) -> Result<()> {
@@ -263,6 +269,7 @@ mod tests {
             false,
             None,
             Some(&work_dir),
+            None,
         );
         assert!(result.is_ok());
         dbg!(result.unwrap());
