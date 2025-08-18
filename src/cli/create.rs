@@ -233,9 +233,6 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     let package_name = options.name.replace("-", "_");
     // Create structure
     create_project_structure(&options.output_dir, &package_name)?;
-
-    // Generate files
-    generate_bot_file(&options.output_dir)?;
     generate_pyproject_file(options)?;
     generate_env_files(&options)?;
     generate_readme_file(options)?;
@@ -297,13 +294,6 @@ fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
         base_dir.join(format!("src/{}/__init__.py", module_name)),
         "",
     )?;
-    Ok(())
-}
-
-fn generate_bot_file(output_dir: &Path) -> Result<()> {
-    // let content = handlebars.render("bot.py", data)?;
-    let content = include_str!("templates/bot.py");
-    fs::write(output_dir.join("bot.py"), content)?;
     Ok(())
 }
 

@@ -3,12 +3,11 @@
 //! This module handles running NoneBot applications with various options
 //! including auto-reload, custom host/port, and environment management.
 
+use crate::cli::generate::generate_bot_content;
 use crate::error::{NbrError, Result};
 use crate::utils::process_utils;
 use clap::ArgMatches;
 use colored::Colorize;
-use dialoguer::Confirm;
-use dialoguer::theme::ColorfulTheme;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -99,25 +98,12 @@ impl BotRunner {
 
     /// Start the bot process
     pub async fn run(&mut self) -> Result<()> {
-        // Validate bot file exists
-        if !self.bot_file.exists() {
-            return Err(NbrError::not_found(format!(
-                "Bot file not found: {}",
-                self.bot_file.display()
-            )));
-        }
-
         // Setup signal handling for graceful shutdown
         let process_handle = Arc::clone(&self.current_process);
         tokio::spawn(async move {
             let _ = signal::ctrl_c().await;
 
-            println!(
-                " {}",
-                "⚠️  Received interrupt signal, shutting down..."
-                    .yellow()
-                    .bold()
-            );
+            warn!("Received interrupt signal, shutting down...");
             if let Ok(mut process) = process_handle.lock()
                 && let Some(mut child) = process.take()
             {
@@ -193,7 +179,7 @@ impl BotRunner {
                     last_restart = now;
 
                     warn!("Restarting bot...");
-                    sleep(Duration::from_millis(500)).await;
+                    sleep(Duration::from_secs(2)).await;
                 }
                 Err(e) => {
                     error!("Failed to start bot process: {}", e);
@@ -223,24 +209,23 @@ impl BotRunner {
 
             loop {
                 // Check if process is still running
-                {
-                    let mut process_guard = self.current_process.lock().unwrap();
-                    if let Some(process) = process_guard.as_mut() {
-                        match process.try_wait() {
-                            Ok(Some(status)) => {
-                                info!("Bot process exited with status: {}", status);
-                                return Ok(false); // Process exited, don't reload
-                            }
-                            Ok(None) => {
-                                // Process still running
-                            }
-                            Err(e) => {
-                                error!("checking process status: {}", e);
-                                return Ok(false);
-                            }
+                let mut process_guard = self.current_process.lock().unwrap();
+                if let Some(process) = process_guard.as_mut() {
+                    match process.try_wait() {
+                        Ok(Some(status)) => {
+                            info!("Bot process exited with status: {}", status);
+                            return Ok(false); // Process exited, don't reload
+                        }
+                        Ok(None) => {
+                            // Process still running
+                        }
+                        Err(e) => {
+                            error!("checking process status: {}", e);
+                            return Ok(false);
                         }
                     }
                 }
+                drop(process_guard);
 
                 // Check for file changes
                 match watch_rx.try_recv() {
@@ -324,8 +309,30 @@ impl BotRunner {
         }
     }
 
-    /// Start the bot process
     fn start_bot_process(&self) -> Result<Child> {
+        let mut cmd = Command::new(self.python_path.clone());
+        if self.bot_file.exists() {
+            cmd.arg(&self.bot_file);
+        } else {
+            let bot_content = generate_bot_content(&self.work_dir)?;
+            cmd.arg("-c").arg(bot_content);
+        }
+        cmd.current_dir(&self.work_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit());
+
+        let process = cmd
+            .spawn()
+            .map_err(|e| NbrError::io(format!("Failed to start bot process: {}", e)))?;
+
+        debug!("Bot process started with PID: {:?}", process.id());
+        Ok(process)
+    }
+
+    /// Start the bot process
+    #[allow(unused)]
+    fn start_bot_process_old(&self) -> Result<Child> {
         let mut cmd = Command::new(self.python_path.clone());
         cmd.arg(&self.bot_file)
             .current_dir(&self.work_dir)
@@ -381,53 +388,18 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     let reload = matches.get_flag("reload");
     // Load configuration
     let work_dir = std::env::current_dir().unwrap();
-
     // Find bot file
-    let bot_file_path = find_bot_file(&work_dir, bot_file)?;
-
+    let bot_file_path = work_dir.join(bot_file);
     // Find Python executable
     let python_path = find_python_executable()?;
-
     // Verify Python environment
     // verify_python_environment(&python_path).await?;
-
     // Create and run bot
     let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
     info!("Using Python: {}", runner.python_path.cyan().bold());
 
     runner.run().await
-}
-
-/// Find bot entry file
-fn find_bot_file(work_dir: &Path, bot_file: &str) -> Result<PathBuf> {
-    let bot_path = work_dir.join(bot_file);
-
-    if bot_path.exists() {
-        return Ok(bot_path);
-    }
-
-    // 询问用户是否创建bot文件
-    let need_create_bot_file = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!(
-            "Bot file '{bot_file}' not found. Would you like to create it"
-        ))
-        .default(false)
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
-
-    if !need_create_bot_file {
-        return Err(NbrError::not_found(format!(
-            "Bot file '{bot_file}' not found. ",
-        )));
-    }
-
-    // 创建bot文件
-    let bot_file_content = include_str!("templates/bot.py");
-    fs::write(&bot_path, bot_file_content)
-        .map_err(|e| NbrError::io(format!("Failed to create bot file: {}", e)))?;
-
-    Ok(bot_path)
 }
 
 /// Find Python executabled
@@ -542,30 +514,8 @@ fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
+
     use tempfile::tempdir;
-
-    #[test]
-    fn test_find_bot_file() {
-        let temp_dir = tempdir().unwrap();
-        let bot_path = temp_dir.path().join("bot.py");
-        File::create(&bot_path).unwrap();
-
-        let result = find_bot_file(temp_dir.path(), "bot.py");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), bot_path);
-    }
-
-    #[test]
-    fn test_find_bot_file_fallback() {
-        let temp_dir = tempdir().unwrap();
-        let app_path = temp_dir.path().join("app.py");
-        File::create(&app_path).unwrap();
-
-        let result = find_bot_file(temp_dir.path(), "nonexistent.py");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), app_path);
-    }
 
     #[test]
     fn test_load_environment_variables() {
