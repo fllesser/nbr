@@ -63,13 +63,6 @@ pub struct RegistryPlugin {
     pub skip_test: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PluginPackageInfo {
-    pub package_name: String,
-    pub installed_version: String,
-    pub latest_version: String,
-}
-
 /// Plugin manager
 pub struct PluginManager {
     /// HTTP client for registry requests
