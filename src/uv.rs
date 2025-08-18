@@ -102,8 +102,10 @@ pub async fn show_package_info(package: &str) -> Result<Package> {
         lines
             .next()
             .unwrap()
-            .trim_start_matches("Requires: ")
-            .split(",")
+            .trim_start_matches("Requires:")
+            .trim()
+            .split(", ")
+            .filter(|s| !s.is_empty())
             .map(|s| s.to_owned())
             .collect::<Vec<String>>(),
     );
@@ -111,8 +113,10 @@ pub async fn show_package_info(package: &str) -> Result<Package> {
         lines
             .next()
             .unwrap()
-            .trim_start_matches("Required-by: ")
-            .split(",")
+            .trim_start_matches("Required-by:")
+            .trim()
+            .split(", ")
+            .filter(|s| !s.is_empty())
             .map(|s| s.to_owned())
             .collect::<Vec<String>>(),
     );
@@ -317,6 +321,7 @@ mod tests {
     async fn test_show_package_info() {
         let package = show_package_info("pip").await.unwrap();
         package.display_info();
+        dbg!(package);
     }
 
     #[test]
