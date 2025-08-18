@@ -2,6 +2,7 @@
 //!
 //! This module handles generating bot entry files and other project files
 //! with customizable templates and configurations.
+#![allow(dead_code)]
 
 use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
