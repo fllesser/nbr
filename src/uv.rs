@@ -12,8 +12,6 @@ use std::{
     path::Path,
 };
 
-const UV_NOT_FOUND_MESSAGE: &str = "uv not found. You can run \n  curl -LsSf https://astral.sh/uv/install.sh | sh \nto install or get more information from https://astral.sh/blog/uv";
-
 pub fn add(packages: Vec<&str>) -> AddBuilder<'_> {
     AddBuilder::new(packages)
 }
@@ -55,10 +53,14 @@ pub async fn is_installed(package: &str) -> bool {
 
 pub async fn self_version() -> Result<String> {
     let args = vec!["self", "version"];
-    CommonBuilder::new(args)
-        .run_async()
-        .await
-        .map_err(|_| NbrError::environment(UV_NOT_FOUND_MESSAGE))
+    CommonBuilder::new(args).run_async().await.map_err(|_| {
+        let message = concat!(
+            "uv not found. You can run\n\n",
+            "   curl -LsSf https://astral.sh/uv/install.sh | sh\n\n",
+            "to install or get more information from https://astral.sh/blog/uv",
+        );
+        NbrError::environment(message)
+    })
 }
 
 pub async fn list(outdated: bool) -> Result<Vec<Package>> {
