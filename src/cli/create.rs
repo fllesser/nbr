@@ -403,7 +403,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_pre_commit_config(output_dir: &Path) -> Result<()> {
-    let pre_commit_config = include_str!("templates/precommit_config");
+    let pre_commit_config = include_str!("templates/pre_commit_config");
     fs::write(
         output_dir.join(".pre-commit-config.yaml"),
         pre_commit_config,
@@ -419,14 +419,14 @@ fn generate_gitignore(output_dir: &Path) -> Result<()> {
 }
 
 fn append_ruff_config(output_dir: &Path) -> Result<()> {
-    let ruff_config = include_str!("templates/ruff_config");
-    append_content_to_pyproject(output_dir, ruff_config)?;
+    let content = include_str!("templates/pyproject/tool_ruff");
+    append_content_to_pyproject(output_dir, content)?;
     Ok(())
 }
 
 fn append_pyright_config(output_dir: &Path) -> Result<()> {
-    let pyright_config = include_str!("templates/pyright_config");
-    append_content_to_pyproject(output_dir, pyright_config)?;
+    let content = include_str!("templates/pyproject/tool_pyright");
+    append_content_to_pyproject(output_dir, content)?;
     Ok(())
 }
 
