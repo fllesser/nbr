@@ -14,9 +14,8 @@ use tracing::{error, info};
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
-use crate::config::NbConfig;
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, Nonebot, PyProjectConfig, Tool, ToolNonebot};
+use crate::pyproject::{Adapter, PyProjectConfig, ToolNonebot};
 use crate::uv;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -233,11 +232,11 @@ fn select_python_version() -> Result<String> {
 }
 
 fn select_dev_tools() -> Result<Vec<String>> {
-    let dev_tools = vec!["ruff", "basedpyright", "pylance"];
+    let dev_tools = vec!["ruff", "basedpyright", "pre-commit", "pylance"];
     let selected_dev_tools = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Which dev tool(s) would you like to use?")
         .items(&dev_tools)
-        .defaults(&[true; 2])
+        .defaults(&[true; 3])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
     let selected_dev_tools: Vec<String> = selected_dev_tools
@@ -288,37 +287,14 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     if options.dev_tools.contains(&"basedpyright".to_string()) {
         append_pyright_config(&options.output_dir)?;
     }
+    if options.dev_tools.contains(&"pre-commit".to_string()) {
+        generate_pre_commit_config(&options.output_dir)?;
+    }
 
     // Install dependencies
     uv::sync(Some(&options.python_version))
         .working_dir(&options.output_dir)
         .run()?;
-    Ok(())
-}
-
-#[allow(unused)]
-fn generate_nb_config_file(options: &ProjectOptions) -> Result<()> {
-    let nb_config = NbConfig {
-        tool: Tool {
-            nonebot: Nonebot {
-                adapters: options
-                    .adapters
-                    .iter()
-                    .map(|a| Adapter {
-                        name: a.name.clone(),
-                        module_name: a.module_name.clone(),
-                    })
-                    .collect(),
-                plugins: vec![],
-                plugin_dirs: vec![format!("src/plugins")],
-                builtin_plugins: options.plugins.clone(),
-            },
-        },
-    };
-    fs::write(
-        options.output_dir.join("nb.toml"),
-        toml::to_string_pretty(&nb_config)?,
-    )?;
     Ok(())
 }
 
@@ -423,6 +399,15 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
     );
 
     fs::write(options.output_dir.join("README.md"), readme)?;
+    Ok(())
+}
+
+fn generate_pre_commit_config(output_dir: &Path) -> Result<()> {
+    let pre_commit_config = include_str!("templates/precommit_config");
+    fs::write(
+        output_dir.join(".pre-commit-config.yaml"),
+        pre_commit_config,
+    )?;
     Ok(())
 }
 
