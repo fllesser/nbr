@@ -232,7 +232,7 @@ impl EnvironmentChecker {
         let mut plugins_dir = None;
 
         // Check for common config files
-        for config_name in &["pyproject.toml", ".env", ".env.prod"] {
+        for config_name in &["pyproject.toml", ".env", ".env.dev", ".env.prod"] {
             let config_path = self.work_dir.join(config_name);
             if config_path.exists() {
                 config_files.push(config_path);
@@ -281,16 +281,12 @@ impl EnvironmentChecker {
     }
 
     fn get_virtual_env(&self) -> Option<PathBuf> {
-        ["venv", ".venv", "env", ".env"]
-            .iter()
-            .find_map(|venv_name| {
-                let venv_path = self.work_dir.join(venv_name);
-                if venv_path.exists() && venv_path.is_dir() {
-                    Some(venv_path)
-                } else {
-                    None
-                }
-            })
+        let venv_path = self.work_dir.join(".venv");
+        if venv_path.exists() && venv_path.is_dir() {
+            Some(venv_path)
+        } else {
+            None
+        }
     }
     /// Get system information
     fn get_system_info(&self) -> SystemInfo {
@@ -702,18 +698,12 @@ impl EnvironmentChecker {
 
         // Check project structure
         if let Some(ref project) = env_info.project_info {
-            if project.bot_file.is_none() {
-                issues.push(
-                    "No bot entry file found (bot.py, app.py, main.py, or run.py)".to_string(),
-                );
-            }
-
             if !project
                 .config_files
                 .iter()
                 .any(|f| f.file_name().unwrap().to_string_lossy().starts_with(".env"))
             {
-                issues.push("No .env configuration file found".to_string());
+                issues.push("No .env.* file found".to_string());
             }
         }
 
@@ -758,7 +748,7 @@ impl EnvironmentChecker {
                 );
             } else if issue.contains(".env") {
                 println!(
-                    "  • Create environment configuration: {}",
+                    "  • Create environment file: {}",
                     "cp .env.example .env".bright_cyan()
                 );
                 println!("  • Or create a new project: {}", "nb create".bright_cyan());
