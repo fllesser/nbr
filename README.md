@@ -1,6 +1,6 @@
 <div align="center">
 
-[![nbr](https://socialify.git.ci/fllesser/nbr/image?issues=1&language=1&logo=https%3A%2F%2Fnonebot.dev%2Flogo.png&name=1&owner=1&stargazers=1&theme=Light)](https://github.com/fllesser/nbr)
+[![nbr](https://socialify.git.ci/fllesser/nbr/image?description=1&font=Bitter&language=1&logo=https%3A%2F%2Fnonebot.dev%2Flogo.png&name=1&owner=1&pattern=Circuit+Board&theme=Light)](https://github.com/fllesser/nbr)
 
 </div>
 
