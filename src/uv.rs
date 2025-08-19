@@ -47,6 +47,13 @@ pub fn reinstall(package: &str) -> Result<()> {
     add(vec![package]).run()
 }
 
+pub fn upgrade(packages: Vec<&str>) -> Result<()> {
+    let mut args = vec!["lock"];
+    args.extend(packages.iter().flat_map(|p| ["-P", p]));
+    CommonBuilder::new(args).run()?;
+    sync(None).run()
+}
+
 pub async fn is_installed(package: &str) -> bool {
     show(package).run_async().await.is_ok()
 }
