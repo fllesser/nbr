@@ -1,55 +1,54 @@
 # NoneBot CLI (Rust Implementation)
 
-A fast and efficient Rust implementation of the NoneBot command-line interface for managing NoneBot2 projects, plugins, and adapters.
+rust 实现的 NoneBot 命令行工具，用于管理 NoneBot2 项目、插件和适配器。
 
-### Note: This project is still under development, and some features may not be fully functional.
+### 注意：该项目仍在开发中，部分功能可能尚未完全实现。
 
-## 🚀 Features
+## 🚀 特性
 
-- **Fast Package Management**: Uses [uv](https://astral.sh/blog/uv) for lightning-fast Python package installation
-- **Project Management**: Initialize, create, and manage NoneBot2 projects
-- **Plugin Management**: Install, uninstall, and update NoneBot2 plugins
-- **Adapter Management**: Manage NoneBot2 adapters for different platforms
-- **Environment Checking**: Validate Python environment and dependencies
-- **Template Generation**: Generate boilerplate code for bots and plugins
+- **快速包管理**：使用 [uv](https://astral.sh/blog/uv) 进行闪电般的 Python 包安装
+- **项目管理**：初始化、创建和管理 NoneBot2 项目
+- **插件管理**：安装、卸载和更新 NoneBot2 插件
+- **适配器管理**：管理 NoneBot2 适配器
+- **环境检查**：验证 Python 环境
+- **模板生成**：生成 NoneBot2 项目和插件的样板代码
+- **兼容性**：兼容 [nb-cli](https://github.com/nonebot/nb-cli), 不会破坏原有结构
 
-## 📋 Prerequisites
+## 📋 先决条件
 
-### Required
-- **Rust** (1.85+) - for building the CLI tool
-- **Python** (3.10+) - for running NoneBot2 projects
-- **uv** (0.80+) - for Python package management
+### 必需
+- **uv** (0.8.3+) - 用于 Python 依赖管理
 
-### Install uv
+### 安装 uv
 <details>
-<summary>Use astral offical install script(recommended)</summary>
+<summary>使用 astral 官方安装脚本(推荐)</summary>
 
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
 </details>
 
-## 🛠 Installation
+## 🛠 安装
 
 <details>
-<summary>Install with cargo</summary>
+<summary>使用 cargo 安装</summary>
 
     cargo install nbr
 
 </details>
 
 <details>
-<summary>Install from releases</summary>
+<summary>从 releases 安装</summary>
 
-Only support Linux(x86_64), MacOS(arm64) and Windows(x86_64)
+仅支持 Linux(x86_64), MacOS(arm64) 和 Windows(x86_64)
 
 <details>
-<summary>Linux(x86_64)</summary>
+<summary>Linux(x86_64) 安装</summary>
 
-Download the latest release from GitHub
+从 GitHub Releases 下载最新版本
 
     curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
 
-Move the binary to your PATH
+将二进制文件移动到 PATH
 
     sudo mv nbr /usr/local/bin/
 </details>
@@ -57,11 +56,11 @@ Move the binary to your PATH
 <details>
 <summary>MacOS(arm64)</summary>
 
-Download the latest release from GitHub
+从 GitHub Releases 下载最新版本
 
     curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-macOS-arm64.tar.gz | tar -xzf -
 
-Move the binary to your PATH
+将二进制文件移动到 PATH
 
     sudo mv nbr /Users/{username}/.local/bin/
 </details>
@@ -69,11 +68,11 @@ Move the binary to your PATH
 <details>
 <summary>Windows(x86_64)</summary>
 
-Download the latest release from GitHub
+从 GitHub Releases 下载最新版本
 
     curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Windows-msvc-x86_64.zip | tar -xzf -
 
-Move the binary to your PATH
+将二进制文件移动到 PATH
 
     ...
 </details>
@@ -81,79 +80,80 @@ Move the binary to your PATH
 </details>
 
 <details>
-<summary>Install with repository</summary>
-Clone the repository
+<summary>安装仓库最新分支</summary>
+
+克隆仓库
 
     git clone https://github.com/fllesser/nbr.git
 
-Install globally
+全局安装
 
     cargo install --path .
 
 </details>
 
 
-## 📖 Usage
+## 📖 使用
 
 
 <details>
-<summary>Project Management</summary>
+<summary>项目管理</summary>
 
-Create a new NoneBot2 project, Option `-p` / `--python` to specify the Python version
+创建一个新的 NoneBot2 项目，选项 `-p` / `--python` 指定 Python 版本
 
     nbr create
 
-Run NoneBot2 project, Option `-r` / `--reload` to reload the project
+运行 NoneBot2 项目，选项 `-r` / `--reload` 重新加载项目
 
     nbr run
 
 </details>
 
 <details>
-<summary>Plugin Management</summary>
+<summary>插件管理</summary>
 
-Install a plugin
+安装一个插件
 
     nbr plugin install nonebot-plugin-emojilike
 
-Install a plugin with specific index
+安装一个插件，指定索引
 
     nbr plugin install nonebot-plugin-emojilike --index https://pypi.org/simple/
 
-Install a plugin from github repo
+从 github 仓库安装一个插件
 
     nbr plugin install https://github.com/fllesser/nonebot-plugin-abs@master
 
-Uninstall a plugin
+卸载一个插件
 
     nbr plugin uninstall nonebot-plugin-emojilike
 
-Update plugins, Option `-r` / `--reinstall` to reinstall this plugin
+更新一个插件，选项 `-r` / `--reinstall` 重新安装这个插件
 
     nbr plugin update <plugin>
 
-Update all plugins
+更新所有插件
 
     nbr plugin update --all
 
-List installed plugins, Option `--outdated` to list outdated plugins
+列出所有已安装的插件，选项 `--outdated` 列出过时的插件
 
     nbr plugin list
 
 </details>
 
 <details>
-<summary>Adapter Management</summary>
+<summary>适配器管理</summary>
 
-Install adapters
+安装适配器
 
     nbr adapter install
 
-Uninstall adapters
+卸载适配器
 
     nbr adapter uninstall
 
-List installed adapters, Option `-a` / `--all` to list all installed adapters
+列出所有已安装的适配器，选项 `-a` / `--all` 列出所有已安装的适配器
 
     nbr adapter list
 
@@ -161,64 +161,43 @@ List installed adapters, Option `-a` / `--all` to list all installed adapters
 
 
 <details>
-<summary>Environment Management</summary>
+<summary>环境管理</summary>
 
-Check environment status
+检查环境状态
 
     nbr env check
 
-Print environment information
+打印环境信息
 
     nbr env info
 
 </details>
 
 
-## 🏗 Development
+## 🤝 贡献
 
-### Project Structure
+1. Fork 仓库
+2. 创建一个功能分支 (`git checkout -b feature/amazing-feature`)
+3. 进行修改
+4. 运行测试 (`cargo test`)
+5. 提交修改 (`git commit -m 'Add amazing feature'`)
+6. 推送到分支 (`git push origin feature/amazing-feature`)
+7. 打开一个 Pull Request
 
-```
-src/
-├── cli/
-│   ├── adapter.rs      # Adapter management
-│   ├── create.rs       # Project creation
-│   ├── env.rs          # Environment checking
-│   ├── generate.rs     # Code generation
-│   ├── init.rs         # Project initialization
-│   ├── plugin.rs       # Plugin management
-│   └── run.rs          # Bot execution
-├── config.rs           # Configuration management
-├── error.rs            # Error handling
-├── main.rs             # CLI entry point
-└── utils.rs            # Utility functions
-```
+## 📝 许可证
 
-## 🤝 Contributing
+这个项目使用 MIT 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests (`cargo test`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+## 🙏 致谢
 
-## 📝 License
+- [NoneBot2](https://github.com/nonebot/nonebot2) - NoneBot2 框架
+- [uv](https://github.com/astral-sh/uv) - Python 依赖管理工具
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- [NoneBot2](https://github.com/nonebot/nonebot2) - The original NoneBot framework
-- [uv](https://github.com/astral-sh/uv) - Fast Python package installer
-
-## 📞 Support
+## 📞 支持
 
 - **Issues**: [GitHub Issues](https://github.com/fllesser/nbr/issues)
-- **Documentation**: [docs/](docs/)
 - **NoneBot Community**: [NoneBot Documentation](https://v2.nonebot.dev/)
 
 ---
 
-**Note**: This is a Rust reimplementation of the NoneBot CLI with enhanced performance through uv integration. For the original Python version, see the [official NoneBot CLI](https://github.com/nonebot/nb-cli).
+**注意**: 这是一个 Rust 实现的 NoneBot CLI。对于原始的 Python 版本，请参阅 [官方 NoneBot CLI](https://github.com/nonebot/nb-cli)。

@@ -87,6 +87,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
     );
     Ok(content)
 }
+
 /// Handle the generate command
 pub async fn handle_generate(matches: &ArgMatches) -> Result<()> {
     let force = matches.get_flag("force");
