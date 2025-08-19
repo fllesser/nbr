@@ -66,8 +66,7 @@ fn build_cli() -> Command {
                         .long("python")
                         .short('p')
                         .help("Specify Python version")
-                        .value_name("VERSION")
-                        .default_value("3.12"),
+                        .value_name("VERSION"),
                 ),
         )
         .subcommand(

@@ -262,13 +262,13 @@ impl From<anyhow::Error> for NbrError {
 }
 
 /// Helper trait for converting Results
-pub trait NbCliResultExt<T> {
+pub trait NbrResultExt<T> {
     fn with_context<F>(self, f: F) -> Result<T>
     where
         F: FnOnce() -> String;
 }
 
-impl<T, E> NbCliResultExt<T> for std::result::Result<T, E>
+impl<T, E> NbrResultExt<T> for std::result::Result<T, E>
 where
     E: Into<NbrError>,
 {

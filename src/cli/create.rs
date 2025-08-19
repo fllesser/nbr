@@ -7,7 +7,8 @@ use dialoguer::{Confirm, Input, MultiSelect, Select};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Display;
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing::{error, info};
 
@@ -53,6 +54,7 @@ pub struct ProjectOptions {
     pub plugins: Vec<String>,
     pub python_version: String,
     pub environment: String,
+    pub dev_tools: Vec<String>,
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
@@ -64,6 +66,24 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     let options = gather_project_options(matches, &adapter_manager).await?;
 
     // Check if directory already exists
+    if !check_directory_exists(&options)? {
+        return Ok(());
+    }
+
+    // Create the project
+    create_project(&options).await?;
+
+    info!("\n✨ Project created successfully !");
+    info!("🚀 Next steps:\n");
+    info!("     {}", format!("cd {}", options.name));
+    info!("     {}", "nbr run\n");
+    // Show additional setup instructions
+    // show_setup_instructions(&options).await?;
+
+    Ok(())
+}
+
+fn check_directory_exists(options: &ProjectOptions) -> Result<bool> {
     if options.output_dir.exists() && !options.force {
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(
@@ -76,46 +96,20 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
 
         if !should_continue {
             error!("{}", "Create operation cancelled.");
-            return Ok(());
+            return Ok(false);
         }
     }
-
-    // Create the project
-    create_project(&options).await?;
-
-    info!("\n✨ Project created successfully !");
-    info!("🚀 Next steps:");
-    info!("     {}", format!("cd {}", options.name));
-    info!("     {}", "nbr run");
-    // Show additional setup instructions
-    // show_setup_instructions(&options).await?;
-
-    Ok(())
+    Ok(true)
 }
 
 async fn gather_project_options(
     matches: &ArgMatches,
     adapter_manager: &AdapterManager,
 ) -> Result<ProjectOptions> {
-    let name = if let Some(name) = matches.get_one::<String>("name") {
-        name.to_owned()
-    } else {
-        Input::<String>::with_theme(&ColorfulTheme::default())
-            .with_prompt("Project name")
-            .default("awesome-bot".to_string())
-            .validate_with(|input: &String| -> Result<()> {
-                if input.contains(" ") {
-                    Err(NbrError::invalid_argument(
-                        "Project name cannot contain spaces".to_string(),
-                    ))
-                } else {
-                    Ok(())
-                }
-            })
-            .interact_text()
-            .context("Failed to get project name")?
-    };
-
+    let name = matches
+        .get_one::<String>("name")
+        .map(|s| s.to_owned())
+        .unwrap_or(input_project_name()?);
     // 选择模板
     let template = select_template()?;
     // 选择 Bot 创建目录，默认在当前目录下创建
@@ -128,13 +122,18 @@ async fn gather_project_options(
     // 选择驱动
     let drivers = select_drivers()?;
     // 指定 Python 版本
-    let python_version = matches.get_one::<String>("python").unwrap().to_owned();
+    let python_version = matches
+        .get_one::<String>("python")
+        .map(|s| s.to_owned())
+        .unwrap_or(select_python_version()?);
     // 选择适配器
     let adapters = adapter_manager.select_adapter().await?;
     // 选择内置插件
     let plugins = select_builtin_plugins()?;
     // 选择环境类型
     let environment = select_environment()?;
+    // 选择开发工具
+    let dev_tools = select_dev_tools()?;
 
     Ok(ProjectOptions {
         name,
@@ -146,14 +145,33 @@ async fn gather_project_options(
         plugins,
         python_version,
         environment,
+        dev_tools,
     })
+}
+
+fn input_project_name() -> Result<String> {
+    Input::<String>::with_theme(&ColorfulTheme::default())
+        .with_prompt("Project name")
+        .default("awesome-bot".to_string())
+        .validate_with(|input: &String| -> Result<()> {
+            if input.contains(" ") {
+                Err(NbrError::invalid_argument(
+                    "Project name cannot contain spaces".to_string(),
+                ))
+            } else {
+                Ok(())
+            }
+        })
+        .interact_text()
+        .context("Failed to get project name")
+        .map_err(|e| NbrError::io(e.to_string()))
 }
 
 fn select_environment() -> Result<String> {
     let env_types = vec!["dev", "prod"];
 
     let selected_env_type = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which environment")
+        .with_prompt("Which environment are you in now")
         .items(&env_types)
         .default(0)
         .interact()
@@ -203,11 +221,37 @@ fn select_template() -> Result<Template> {
     }
 }
 
+fn select_python_version() -> Result<String> {
+    let python_versions = vec!["3.10", "3.11", "3.12", "3.13", "3.14"];
+    let selected_python_version = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Which Python version would you like to use?")
+        .items(&python_versions)
+        .default(0)
+        .interact()
+        .map_err(|e| NbrError::io(e.to_string()))?;
+    Ok(python_versions[selected_python_version].to_string())
+}
+
+fn select_dev_tools() -> Result<Vec<String>> {
+    let dev_tools = vec!["ruff", "basedpyright", "pylance"];
+    let selected_dev_tools = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Which dev tool(s) would you like to use?")
+        .items(&dev_tools)
+        .defaults(&vec![true; 2])
+        .interact()
+        .map_err(|e| NbrError::io(e.to_string()))?;
+    let selected_dev_tools: Vec<String> = selected_dev_tools
+        .into_iter()
+        .map(|i| dev_tools[i].to_string())
+        .collect();
+    Ok(selected_dev_tools)
+}
+
 // 选择内置插件
 fn select_builtin_plugins() -> Result<Vec<String>> {
     let builtin_plugins = vec!["echo", "single_session"];
     let selected_plugins = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select builtin plugins")
+        .with_prompt("Which builtin plugin(s) would you like to use?")
         .items(&builtin_plugins)
         .defaults(&vec![true; builtin_plugins.len().min(1)])
         .interact()
@@ -237,6 +281,13 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_env_files(&options)?;
     generate_readme_file(options)?;
     generate_gitignore(&options.output_dir)?;
+
+    if options.dev_tools.contains(&"ruff".to_string()) {
+        append_ruff_config(&options.output_dir)?;
+    }
+    if options.dev_tools.contains(&"basedpyright".to_string()) {
+        append_pyright_config(&options.output_dir)?;
+    }
 
     // Install dependencies
     uv::sync(Some(&options.python_version))
@@ -351,7 +402,7 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
     };
     let file_name = format!(".env.{}", options.environment);
     let env_content = format!(
-        include_str!("templates/env_template"),
+        include_str!("templates/env"),
         driver, log_level, options.name,
     );
     fs::write(
@@ -367,7 +418,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
     let project_name = options.name.clone();
 
     let readme = format!(
-        include_str!("templates/readme_template"),
+        include_str!("templates/readme"),
         project_name, project_name, project_name, project_name, project_name
     );
 
@@ -379,6 +430,27 @@ fn generate_gitignore(output_dir: &Path) -> Result<()> {
     let gitignore = include_str!("templates/gitignore");
 
     fs::write(output_dir.join(".gitignore"), gitignore)?;
+    Ok(())
+}
+
+fn append_ruff_config(output_dir: &Path) -> Result<()> {
+    let ruff_config = include_str!("templates/ruff_config");
+    append_content_to_pyproject(output_dir, ruff_config)?;
+    Ok(())
+}
+
+fn append_pyright_config(output_dir: &Path) -> Result<()> {
+    let pyright_config = include_str!("templates/pyright_config");
+    append_content_to_pyproject(output_dir, pyright_config)?;
+    Ok(())
+}
+
+fn append_content_to_pyproject(output_dir: &Path, content: &str) -> Result<()> {
+    let mut file = OpenOptions::new()
+        .append(true) // 设置为追加模式
+        .create(true) // 如果文件不存在则创建
+        .open(output_dir.join("pyproject.toml"))?;
+    file.write(content.as_bytes())?;
     Ok(())
 }
 
@@ -430,7 +502,13 @@ mod tests {
             plugins: vec![],
             python_version: "3.10".to_string(),
             environment: "dev".to_string(),
+            dev_tools: vec![],
         };
         generate_env_files(&options).unwrap();
+    }
+
+    #[test]
+    fn test_generate_ruff_config() {
+        append_ruff_config(&PathBuf::from("awesome-bot")).unwrap();
     }
 }
