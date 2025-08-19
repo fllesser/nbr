@@ -23,9 +23,8 @@ pub enum NbrError {
     #[error("TOML serialization error: {0}")]
     TomlSerialize(#[from] toml::ser::Error),
 
-    #[error("Git error: {0}")]
-    Git(#[from] git2::Error),
-
+    // #[error("Git error: {0}")]
+    // Git(#[from] git2::Error),
     #[error("Template error: {message}")]
     Template { message: String },
 
@@ -112,9 +111,9 @@ impl NbrError {
     }
 
     /// Create a new git error from git2 error
-    pub fn git(err: git2::Error) -> Self {
-        Self::Git(err)
-    }
+    // pub fn git(err: git2::Error) -> Self {
+    //     Self::Git(err)
+    // }
 
     /// Create a new configuration error
     pub fn config<S: Into<String>>(message: S) -> Self {
@@ -202,7 +201,7 @@ impl NbrError {
             Self::Serialization(_) => false,
             // Self::Yaml(_) => false,
             Self::TomlDeserialize(_) | Self::TomlSerialize(_) => false,
-            Self::Git(_) => true,
+            //Self::Git(_) => true,
             Self::Template { .. } => true,
             Self::ProjectCreation { .. } => true,
             Self::Plugin { .. } => true,
@@ -229,7 +228,7 @@ impl NbrError {
             Self::Serialization(_) | Self::TomlDeserialize(_) | Self::TomlSerialize(_) => {
                 "serialization"
             }
-            Self::Git(_) => "git",
+            //Self::Git(_) => "git",
             Self::Template { .. } => "template",
             Self::ProjectCreation { .. } => "project",
             Self::Plugin { .. } => "plugin",
