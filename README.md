@@ -4,8 +4,6 @@
 
 </div>
 
-# NoneBot CLI (Rust Implementation)
-
 rust 实现的 NoneBot 命令行工具，用于管理 NoneBot2 项目、插件和适配器。
 
 ### 注意：该项目仍在开发中，部分功能可能尚未完全实现。
