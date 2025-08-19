@@ -4,18 +4,17 @@
 
 </div>
 
-rust 实现的 NoneBot 命令行工具，用于管理 NoneBot2 项目、插件和适配器。
+基于 [uv](https://astral.sh/blog/uv) 的 NoneBot 命令行工具，用于管理 NoneBot2 项目、插件和适配器。
 
 ### 注意：该项目仍在开发中，部分功能可能尚未完全实现。
 
 ## 🚀 特性
 
-- **快速包管理**：使用 [uv](https://astral.sh/blog/uv) 进行闪电般的 Python 包安装
+- **快速包管理**：使用 [uv](https://astral.sh/blog/uv) 管理依赖
 - **项目管理**：初始化、创建和管理 NoneBot2 项目
 - **插件管理**：安装、卸载和更新 NoneBot2 插件
 - **适配器管理**：管理 NoneBot2 适配器
-- **环境检查**：验证 Python 环境
-- **模板生成**：生成 NoneBot2 项目和插件的样板代码
+- **环境检查**：验证 Nonebot2 环境
 - **兼容性**：兼容 [nb-cli](https://github.com/nonebot/nb-cli), 不会破坏原有结构
 
 ## 📋 先决条件
