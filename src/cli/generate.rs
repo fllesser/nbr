@@ -82,7 +82,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
         .unwrap_or_default();
 
     let content = format!(
-        include_str!("templates/bot_template"),
+        include_str!("templates/bot"),
         adapters_import, adapters_register, builtin_plugins
     );
     Ok(content)

@@ -34,10 +34,10 @@ where
         match *level {
             tracing::Level::INFO => {}
             tracing::Level::ERROR => {
-                write!(writer, "{} ", "❌")?;
+                write!(writer, "❌ ")?;
             }
             tracing::Level::WARN => {
-                write!(writer, "{} ", "⚠️ ")?;
+                write!(writer, "⚠️  ")?;
             }
             tracing::Level::DEBUG => {
                 write!(writer, "{} ", "[DEBUG]".blue().bold())?;

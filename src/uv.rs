@@ -227,7 +227,7 @@ impl<'a> CommonBuilder<'a> {
 
     /// Run the command interactively
     pub fn run(self) -> Result<()> {
-        process_utils::execute_interactive("uv", &self.args, self.working_dir.as_deref())
+        process_utils::execute_interactive("uv", &self.args, self.working_dir)
     }
 
     /// Run the command asynchronously and return the stdout as a string
@@ -235,7 +235,7 @@ impl<'a> CommonBuilder<'a> {
         let output = process_utils::execute_command_with_output(
             "uv",
             &self.args,
-            self.working_dir.as_deref(),
+            self.working_dir,
             self.timeout_secs as u64,
         )
         .await?;
@@ -302,7 +302,7 @@ impl<'a> AddBuilder<'a> {
         if self.upgrade {
             args.push("--upgrade");
         }
-        if let Some(ref index_url) = self.index_url {
+        if let Some(index_url) = self.index_url {
             args.push("--index-url");
             args.push(index_url);
         }
@@ -310,7 +310,7 @@ impl<'a> AddBuilder<'a> {
             let extras = extras.iter().flat_map(|e| ["--extra", e]);
             args.extend(extras);
         }
-        process_utils::execute_interactive("uv", &args, self.working_dir.as_deref())
+        process_utils::execute_interactive("uv", &args, self.working_dir)
     }
 }
 

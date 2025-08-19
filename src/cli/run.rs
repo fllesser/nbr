@@ -209,24 +209,24 @@ impl BotRunner {
 
             loop {
                 // Check if process is still running
-                let mut process_guard = self.current_process.lock().unwrap();
-                if let Some(process) = process_guard.as_mut() {
-                    match process.try_wait() {
-                        Ok(Some(status)) => {
-                            info!("Bot process exited with status: {}", status);
-                            return Ok(false); // Process exited, don't reload
-                        }
-                        Ok(None) => {
-                            // Process still running
-                        }
-                        Err(e) => {
-                            error!("checking process status: {}", e);
-                            return Ok(false);
+                {
+                    let mut process_guard = self.current_process.lock().unwrap();
+                    if let Some(process) = process_guard.as_mut() {
+                        match process.try_wait() {
+                            Ok(Some(status)) => {
+                                info!("Bot process exited with status: {}", status);
+                                return Ok(false); // Process exited, don't reload
+                            }
+                            Ok(None) => {
+                                // Process still running
+                            }
+                            Err(e) => {
+                                error!("checking process status: {}", e);
+                                return Ok(false);
+                            }
                         }
                     }
                 }
-                drop(process_guard);
-
                 // Check for file changes
                 match watch_rx.try_recv() {
                     Ok(event) => {

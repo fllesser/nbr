@@ -1,0 +1,10 @@
+[tool.pyright]
+pythonVersion = "3.10"
+pythonPlatform = "All"
+defineConstant = { PYDANTIC_V2 = true }
+executionEnvironments = [
+  { root = "./src" },
+]
+typeCheckingMode = "standard"
+reportShadowedImports = false
+disableBytesTypePromotions = true
