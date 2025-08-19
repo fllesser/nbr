@@ -6,7 +6,7 @@
 
 use crate::config::{ConfigManager, NbConfig};
 use crate::error::{NbrError, Result};
-use crate::utils::{git_utils, string_utils};
+use crate::utils::string_utils;
 
 use colored::*;
 
@@ -94,26 +94,6 @@ impl InitHandler {
             work_dir,
             options,
         })
-    }
-
-    /// Initialize git repository
-    fn init_git_repository(&self) -> Result<()> {
-        info!("Initializing git repository...");
-
-        if git_utils::is_git_repository(&self.work_dir) {
-            warn!("Git repository already exists");
-            return Ok(());
-        }
-
-        git_utils::init_repository(&self.work_dir, false)?;
-
-        // Create initial commit
-        let git_dir = self.work_dir.join(".git");
-        if git_dir.exists() {
-            info!("Git repository initialized successfully");
-        }
-
-        Ok(())
     }
 
     /// Create virtual environment
