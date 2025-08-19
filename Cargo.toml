@@ -1,6 +1,6 @@
 [package]
 name = "nbr"
-version = "0.1.18"
+version = "0.2.0"
 edition = "2024"
 authors = ["fllesser <fllessive@gmail.com>"]
 description = "CLI for NoneBot2 - A Rust implementation"
