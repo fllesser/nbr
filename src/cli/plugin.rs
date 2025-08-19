@@ -409,51 +409,39 @@ impl PluginManager {
 
     /// Update all plugins
     async fn update_all_plugins(&self) -> Result<()> {
-        // let outdated_plugins = self.get_installed_plugins(true).await?;
+        let outdated_plugins = self.get_installed_plugins(true).await?;
 
-        // if outdated_plugins.is_empty() {
-        //     info!("No plugins need to update.");
-        //     return Ok(());
-        // }
-        // info!("Fount {} outdated plugins:", outdated_plugins.len());
-        // outdated_plugins
-        //     .iter()
-        //     .for_each(|plugin| plugin.display_info());
+        if outdated_plugins.is_empty() {
+            info!("No plugins need to update.");
+            return Ok(());
+        }
+        info!("Fount {} outdated plugins:", outdated_plugins.len());
+        outdated_plugins
+            .iter()
+            .for_each(|plugin| plugin.display_info());
 
-        // // 确认更新
-        // if !Confirm::with_theme(&ColorfulTheme::default())
-        //     .with_prompt(format!(
-        //         "Would you like to update these {} outdated plugins",
-        //         outdated_plugins.len()
-        //     ))
-        //     .default(true)
-        //     .interact()
-        //     .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
-        // {
-        //     error!("{}", "Update operation cancelled.");
-        //     return Ok(());
-        // }
+        // 确认更新
+        if !Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(format!(
+                "Would you like to update these {} outdated plugins",
+                outdated_plugins.len()
+            ))
+            .default(true)
+            .interact()
+            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+        {
+            error!("{}", "Update operation cancelled.");
+            return Ok(());
+        }
 
-        // let results = outdated_plugins
-        //     .iter()
-        //     .filter_map(|p| match uv::reinstall(&p.name) {
-        //         Ok(_) => Some(p.name.as_str()),
-        //         Err(e) => {
-        //             error!("Failed to update plugin[{}]: {}", p.name, e.to_string());
-        //             None
-        //         }
-        //     })
-        //     .collect::<Vec<&str>>();
+        let package_names: Vec<&str> = outdated_plugins.iter().map(|p| p.name.as_str()).collect();
+        uv::upgrade(package_names.clone())?;
 
-        // if !results.is_empty() {
-        //     info!(
-        //         "Successfully updated plugins: {}",
-        //         results.join(", ").cyan().bold()
-        //     );
-        // }``
+        info!(
+            "Successfully updated plugins: {}",
+            package_names.join(", ").cyan().bold()
+        );
 
-        // uv sync --upgrade byd 梭哈算了
-        uv::sync(None).arg("--upgrade").run()?;
         Ok(())
     }
 
@@ -462,38 +450,10 @@ impl PluginManager {
         if reinstall {
             uv::reinstall(package_name)?;
         } else {
-            uv::add(vec![package_name]).upgrade(true).run()?;
+            uv::upgrade(vec![package_name])?;
         }
         info!("Successfully updated plugin: {}", package_name);
         Ok(())
-    }
-
-    /// Get latest package version from PyPI
-    #[allow(dead_code)]
-    async fn get_latest_package_version(&self, package: &str) -> Result<String> {
-        let url = format!("https://pypi.org/pypi/{}/json", package);
-
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(NbrError::Network)?;
-
-        if !response.status().is_success() {
-            return Err(NbrError::not_found(format!(
-                "Package '{}' not found on PyPI",
-                package
-            )));
-        }
-
-        let json: serde_json::Value = response.json().await.map_err(NbrError::Network)?;
-
-        json.get("info")
-            .and_then(|info| info.get("version"))
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .ok_or_else(|| NbrError::not_found("Version field not found in PyPI response"))
     }
 
     pub async fn fetch_registry_plugins(&self) -> Result<&Vec<RegistryPlugin>> {
