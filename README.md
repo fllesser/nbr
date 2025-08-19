@@ -88,13 +88,7 @@ rust 实现的 NoneBot 命令行工具，用于管理 NoneBot2 项目、插件�
 <details>
 <summary>安装仓库最新分支</summary>
 
-克隆仓库
-
-    git clone https://github.com/fllesser/nbr.git
-
-全局安装
-
-    cargo install --path .
+    cargo install --git https://github.com/fllesser/nbr.git
 
 </details>
 
