@@ -1,3 +1,9 @@
+<div align="center">
+
+[![nbr](https://socialify.git.ci/fllesser/nbr/image?issues=1&language=1&logo=https%3A%2F%2Fnonebot.dev%2Flogo.png&name=1&owner=1&stargazers=1&theme=Light)](https://github.com/fllesser/nbr)
+
+</div>
+
 # NoneBot CLI (Rust Implementation)
 
 rust 实现的 NoneBot 命令行工具，用于管理 NoneBot2 项目、插件和适配器。
