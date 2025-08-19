@@ -115,7 +115,7 @@ async fn gather_project_options(
     // 选择 Bot 创建目录，默认在当前目录下创建
     let output_dir: PathBuf = matches
         .get_one::<String>("output")
-        .map(|s| PathBuf::from(s))
+        .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?.join(&name));
     // 是否强制创建
     let force = matches.get_flag("force");
@@ -185,7 +185,7 @@ fn select_drivers() -> Result<Vec<String>> {
         .with_prompt("Which driver(s) would you like to use")
         .items(&drivers)
         // 默认选择前三个
-        .defaults(&vec![true; 3])
+        .defaults(&[true; 3])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
 
@@ -237,7 +237,7 @@ fn select_dev_tools() -> Result<Vec<String>> {
     let selected_dev_tools = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Which dev tool(s) would you like to use?")
         .items(&dev_tools)
-        .defaults(&vec![true; 2])
+        .defaults(&[true; 2])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
     let selected_dev_tools: Vec<String> = selected_dev_tools
@@ -278,7 +278,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     // Create structure
     create_project_structure(&options.output_dir, &package_name)?;
     generate_pyproject_file(options)?;
-    generate_env_files(&options)?;
+    generate_env_files(options)?;
     generate_readme_file(options)?;
     generate_gitignore(&options.output_dir)?;
 
@@ -450,7 +450,7 @@ fn append_content_to_pyproject(output_dir: &Path, content: &str) -> Result<()> {
         .append(true) // 设置为追加模式
         .create(true) // 如果文件不存在则创建
         .open(output_dir.join("pyproject.toml"))?;
-    file.write(content.as_bytes())?;
+    file.write_all(content.as_bytes())?;
     Ok(())
 }
 
