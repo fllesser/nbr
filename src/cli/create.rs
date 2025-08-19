@@ -223,7 +223,7 @@ fn select_template() -> Result<Template> {
 fn select_python_version() -> Result<String> {
     let python_versions = vec!["3.10", "3.11", "3.12", "3.13", "3.14"];
     let selected_python_version = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which Python version would you like to use?")
+        .with_prompt("Which Python version would you like to use")
         .items(&python_versions)
         .default(0)
         .interact()
@@ -234,7 +234,7 @@ fn select_python_version() -> Result<String> {
 fn select_dev_tools() -> Result<Vec<String>> {
     let dev_tools = vec!["ruff", "basedpyright", "pre-commit", "pylance"];
     let selected_dev_tools = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which dev tool(s) would you like to use?")
+        .with_prompt("Which dev tool(s) would you like to use")
         .items(&dev_tools)
         .defaults(&[true; 3])
         .interact()
@@ -250,7 +250,7 @@ fn select_dev_tools() -> Result<Vec<String>> {
 fn select_builtin_plugins() -> Result<Vec<String>> {
     let builtin_plugins = vec!["echo", "single_session"];
     let selected_plugins = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which builtin plugin(s) would you like to use?")
+        .with_prompt("Which builtin plugin(s) would you like to use")
         .items(&builtin_plugins)
         .defaults(&vec![true; builtin_plugins.len().min(1)])
         .interact()
