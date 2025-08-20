@@ -697,14 +697,13 @@ impl EnvironmentChecker {
         }
 
         // Check project structure
-        if let Some(ref project) = env_info.project_info {
-            if !project
+        if let Some(ref project) = env_info.project_info
+            && !project
                 .config_files
                 .iter()
                 .any(|f| f.file_name().unwrap().to_string_lossy().starts_with(".env"))
-            {
-                issues.push("No .env.* file found".to_string());
-            }
+        {
+            issues.push("No .env.* file found".to_string());
         }
 
         issues

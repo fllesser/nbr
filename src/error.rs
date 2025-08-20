@@ -110,11 +110,6 @@ impl NbrError {
         Self::Io(std::io::Error::other(message.into()))
     }
 
-    /// Create a new git error from git2 error
-    // pub fn git(err: git2::Error) -> Self {
-    //     Self::Git(err)
-    // }
-
     /// Create a new configuration error
     pub fn config<S: Into<String>>(message: S) -> Self {
         Self::Config {

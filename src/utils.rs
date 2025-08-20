@@ -467,57 +467,6 @@ pub mod string_utils {
     }
 }
 
-/// Git utilities
-// pub mod git_utils {
-//     use super::*;
-//     use git2::{Repository, RepositoryInitOptions};
-
-//     /// Clone a Git repository
-//     pub fn clone_repository(url: &str, path: &Path, branch: Option<&str>) -> Result<()> {
-//         info!("Cloning repository {} to {:?}", url, path);
-
-//         let mut builder = git2::build::RepoBuilder::new();
-
-//         if let Some(branch) = branch {
-//             builder.branch(branch);
-//         }
-
-//         builder.clone(url, path).map_err(NbrError::git)?;
-
-//         info!("Repository cloned successfully");
-//         Ok(())
-//     }
-
-//     /// Initialize a new Git repository
-//     pub fn init_repository(path: &Path, bare: bool) -> Result<()> {
-//         let mut opts = RepositoryInitOptions::new();
-//         opts.bare(bare);
-
-//         Repository::init_opts(path, &opts).map_err(NbrError::git)?;
-
-//         info!("Initialized Git repository at {:?}", path);
-//         Ok(())
-//     }
-
-//     /// Check if a directory is a Git repository
-//     pub fn is_git_repository(path: &Path) -> bool {
-//         Repository::open(path).is_ok()
-//     }
-
-//     /// Get the current Git branch
-//     pub fn get_current_branch(repo_path: &Path) -> Result<String> {
-//         let repo = Repository::open(repo_path).map_err(NbrError::git)?;
-
-//         let head = repo.head().map_err(NbrError::git)?;
-
-//         let branch_name = head
-//             .shorthand()
-//             .ok_or_else(|| NbrError::unknown("Could not get branch name"))?;
-
-//         Ok(branch_name.to_string())
-//     }
-// }
-
 /// Terminal utilities
 pub mod terminal_utils {
     use super::*;

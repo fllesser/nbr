@@ -4,11 +4,7 @@
 //! creating necessary files and directory structure.
 #![allow(dead_code)]
 
-use crate::error::Result;
-use crate::utils::string_utils;
-
 use colored::Colorize;
-
 use std::path::PathBuf;
 
 /// Project initialization handler
@@ -59,21 +55,6 @@ impl Default for InitOptions {
 }
 
 impl InitHandler {
-    /// Create a new init handler
-    pub fn new(force: bool) -> Result<Self> {
-        let work_dir = std::env::current_dir()?;
-
-        let mut options = InitOptions::default();
-        options.force = force;
-
-        // Use directory name as default project name
-        if let Some(dir_name) = work_dir.file_name().and_then(|n| n.to_str()) {
-            options.name = string_utils::to_snake_case(dir_name);
-        }
-
-        Ok(Self { work_dir, options })
-    }
-
     /// Show completion message
     fn show_completion_message(&self) {
         println!();

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use tracing::debug;
 
 /// Main configuration structure
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Config {
     /// Cache configuration
     pub cache: CacheConfig,
@@ -90,15 +90,6 @@ impl Default for RegistryConfig {
             adapter_registry: "https://registry.nonebot.dev/adapters.json".to_string(),
             cache_enabled: true,
             timeout: 30,
-        }
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            cache: CacheConfig::default(),
-            registry: RegistryConfig::default(),
         }
     }
 }
