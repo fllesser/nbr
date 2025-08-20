@@ -4,7 +4,7 @@
 //! and listing adapters for NoneBot applications.
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, NbTomlEditor};
+use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::utils::terminal_utils;
 use crate::uv;
 use clap::ArgMatches;
@@ -56,6 +56,8 @@ pub struct AdapterManager {
     work_dir: PathBuf,
     /// Registry adapters
     registry_adapters: OnceLock<HashMap<String, RegistryAdapter>>,
+    /// Installed adapters
+    installed_adapters: OnceLock<Vec<Adapter>>,
 }
 
 impl Default for AdapterManager {
@@ -79,6 +81,7 @@ impl AdapterManager {
             client,
             work_dir,
             registry_adapters: OnceLock::new(),
+            installed_adapters: OnceLock::new(),
         })
     }
 
@@ -107,17 +110,51 @@ impl AdapterManager {
 
         let mut adapters_map = HashMap::new();
         for adapter in adapters {
-            adapters_map.insert(adapter.name.clone(), adapter);
+            adapters_map.insert(adapter.name.to_owned(), adapter);
         }
 
         self.registry_adapters.set(adapters_map).unwrap();
         Ok(self.registry_adapters.get().unwrap())
     }
 
-    pub async fn select_adapter(&self) -> Result<Vec<RegistryAdapter>> {
-        let registry_adapters = self.fetch_regsitry_adapters().await?;
+    /// Parse installed adapters from pyproject.toml
+    pub fn parse_installed_adapters(&self) -> Option<&Vec<Adapter>> {
+        if let Some(adapters) = self.installed_adapters.get() {
+            return Some(adapters);
+        }
 
+        let config = PyProjectConfig::parse(Some(&self.work_dir)).ok()?;
+        let adapters = config.nonebot()?.adapters.to_owned()?;
+        self.installed_adapters.set(adapters).unwrap();
+        self.installed_adapters.get()
+    }
+
+    /// Get installed adapters names from pyproject.toml
+    pub fn get_installed_adapters_names(&self) -> Vec<&str> {
+        let installed_adapters = self.parse_installed_adapters();
+        if let Some(adapters) = installed_adapters {
+            adapters
+                .iter()
+                .map(|a| a.name.as_str())
+                .collect::<Vec<&str>>()
+        } else {
+            vec![]
+        }
+    }
+
+    /// Select adapters from registry
+    pub async fn select_adapters(&self, filter_installed: bool) -> Result<Vec<RegistryAdapter>> {
+        // 获取 registry 中的 adapters
+        let registry_adapters = self.fetch_regsitry_adapters().await?;
         let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
+
+        // 过滤已安装的 adapters
+        if filter_installed {
+            let installed_adapters = self.get_installed_adapters_names();
+            adapter_names.retain(|name| !installed_adapters.contains(&name.as_str()));
+        }
+
+        // 排序
         adapter_names.sort();
 
         let selected_adapters = if !adapter_names.is_empty() {
@@ -143,18 +180,11 @@ impl AdapterManager {
     }
 
     /// Install an adapter
-    pub async fn install_adapter(&self, selected_adapters: Vec<RegistryAdapter>) -> Result<()> {
-        // get installed adapters
-        let installed_adapters_set = self.get_installed_adapters().await?;
-
-        // filter not installed adapters
-        let selected_adapters: Vec<RegistryAdapter> = selected_adapters
-            .into_iter()
-            .filter(|a| !installed_adapters_set.contains(&a.project_link))
-            .collect();
+    pub async fn install_adapters(&self) -> Result<()> {
+        let selected_adapters = self.select_adapters(true).await?;
 
         if selected_adapters.is_empty() {
-            info!("All selected adapters are already installed");
+            warn!("You haven't selected any adapters to install");
             return Ok(());
         }
 
@@ -182,7 +212,6 @@ impl AdapterManager {
             .iter()
             .map(|a| a.project_link.as_str())
             .collect::<Vec<&str>>();
-        // check if the adapter is already installed
 
         uv::add(adapter_packages)
             .working_dir(&self.work_dir)
@@ -220,7 +249,9 @@ impl AdapterManager {
         Ok(())
     }
 
-    pub async fn get_installed_adapters(&self) -> Result<HashSet<String>> {
+    /// Get installed adapters from virtual environment
+    #[allow(dead_code)]
+    pub async fn get_installed_adapters_from_venv(&self) -> Result<HashSet<String>> {
         let installed_adapters = uv::list(false).await?;
         let installed_adapters_set = installed_adapters
             .into_iter()
@@ -234,29 +265,25 @@ impl AdapterManager {
     /// Uninstall an adapter
     pub async fn uninstall_adapter(&self) -> Result<()> {
         // get installed adapters from configuration
-        let installed_adapters = NbTomlEditor::parse(Some(&self.work_dir))?
-            .nonebot()?
-            .adapters;
-        let installed_adapters_names = installed_adapters
-            .iter()
-            .map(|a| a.name.clone())
-            .collect::<Vec<String>>();
+        let installed_adapters = self.get_installed_adapters_names();
+        if installed_adapters.is_empty() {
+            warn!("You haven't installed any adapters");
+            return Ok(());
+        }
 
         // select adapters to uninstall
-        let selected_adapters: Vec<String> = if !installed_adapters_names.is_empty() {
+        let selected_adapters: Vec<String> = {
             let selections = MultiSelect::with_theme(&ColorfulTheme::default())
                 .with_prompt("Select installed adapter(s) to uninstall")
-                .items(&installed_adapters_names)
+                .items(&installed_adapters)
                 //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
                 .interact()
                 .map_err(|e| NbrError::io(e.to_string()))?;
 
             selections
                 .into_iter()
-                .map(|i| installed_adapters_names[i].to_string())
+                .map(|i| installed_adapters[i].to_string())
                 .collect()
-        } else {
-            return Err(NbrError::not_found("No adapters to uninstall"));
         };
 
         // Remove from configuration
@@ -274,13 +301,6 @@ impl AdapterManager {
             .map(|a| registry_adapters.get(a).unwrap().project_link.as_str())
             .collect::<Vec<&str>>();
 
-        // filter not installed adapters
-        let installed_adapters_package_set = self.get_installed_adapters().await?;
-        let adapter_packages = adapter_packages
-            .into_iter()
-            .filter(|a| installed_adapters_package_set.contains(*a))
-            .collect::<Vec<&str>>();
-
         uv::remove(adapter_packages)
             .working_dir(&self.work_dir)
             .run()?;
@@ -295,23 +315,23 @@ impl AdapterManager {
 
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
-        let nonebot = NbTomlEditor::parse(Some(&self.work_dir))?.nonebot()?;
-
+        let installed_adapters = self.get_installed_adapters_names();
         let adapters_map = self.fetch_regsitry_adapters().await?;
+
         if show_all {
             info!("All Adapters:");
             adapters_map.iter().for_each(|(_, adapter)| {
                 self.display_adapter(adapter);
             });
         } else {
-            if nonebot.adapters.is_empty() {
+            if installed_adapters.is_empty() {
                 warn!("No adapters installed.");
                 return Ok(());
             }
 
             info!("Installed Adapters:");
-            nonebot.adapters.iter().for_each(|ia| {
-                let adapter = adapters_map.get(ia.name.as_str()).unwrap();
+            installed_adapters.iter().for_each(|name| {
+                let adapter = adapters_map.get(*name).unwrap();
                 self.display_adapter(adapter);
             });
         }
@@ -380,26 +400,6 @@ impl AdapterManager {
         Some(template)
     }
 
-    /// Find installed adapter by name
-    #[allow(dead_code)]
-    fn find_installed_adapter(&self, name: &str) -> Result<Adapter> {
-        let nonebot = NbTomlEditor::parse(Some(&self.work_dir))?.nonebot()?;
-
-        for adapter in &nonebot.adapters {
-            if adapter.name == name
-                || adapter.name.to_lowercase().contains(&name.to_lowercase())
-                || name.to_lowercase().contains(&adapter.name.to_lowercase())
-            {
-                return Ok(adapter.clone());
-            }
-        }
-
-        Err(NbrError::not_found(format!(
-            "Adapter '{}' is not installed",
-            name
-        )))
-    }
-
     /// Display adapter information
     #[allow(dead_code)]
     fn display_adapter_info(&self, adapter: &RegistryAdapter) {
@@ -456,10 +456,7 @@ pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
     let adapter_manager = AdapterManager::new(None)?;
 
     match matches.subcommand() {
-        Some(("install", _)) => {
-            let selected_adapters = adapter_manager.select_adapter().await?;
-            adapter_manager.install_adapter(selected_adapters).await
-        }
+        Some(("install", _)) => adapter_manager.install_adapters().await,
         Some(("uninstall", _)) => adapter_manager.uninstall_adapter().await,
         Some(("list", sub_matches)) => {
             let show_all = sub_matches.get_flag("all");

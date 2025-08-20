@@ -90,10 +90,12 @@ impl PluginManager {
             .build()
             .map_err(NbrError::Network)?;
 
+        let registry_plugins = OnceLock::new();
+
         Ok(Self {
             client,
             work_dir,
-            registry_plugins: OnceLock::new(),
+            registry_plugins,
         })
     }
 

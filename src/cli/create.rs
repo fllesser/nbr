@@ -126,7 +126,7 @@ async fn gather_project_options(
         .map(|s| s.to_owned())
         .unwrap_or(select_python_version()?);
     // 选择适配器
-    let adapters = adapter_manager.select_adapter().await?;
+    let adapters = adapter_manager.select_adapters(false).await?;
     // 选择内置插件
     let plugins = select_builtin_plugins()?;
     // 选择环境类型
@@ -344,8 +344,9 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     pyproject.project.dependencies.extend(adapter_deps);
 
     // 补齐 tool.nonebot
-    pyproject.tool.nonebot.plugin_dirs = vec![format!("src/plugins")];
-    pyproject.tool.nonebot.builtin_plugins = options.plugins.clone();
+    let nonebot_mut = pyproject.tool.as_mut().unwrap().nonebot.as_mut().unwrap();
+    nonebot_mut.plugin_dirs = Some(vec![format!("src/plugins")]);
+    nonebot_mut.builtin_plugins = Some(options.plugins.clone());
 
     // 写入文件
     let content = toml::to_string(&pyproject)?;
@@ -435,7 +436,7 @@ fn append_content_to_pyproject(output_dir: &Path, content: &str) -> Result<()> {
         .append(true) // 设置为追加模式
         .create(true) // 如果文件不存在则创建
         .open(output_dir.join("pyproject.toml"))?;
-    file.write_all(content.as_bytes())?;
+    file.write_all(format!("\n{}", content).as_bytes())?;
     Ok(())
 }
 

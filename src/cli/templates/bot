@@ -9,7 +9,7 @@ driver = nonebot.get_driver()
 {}
 
 # Load Builtin Plugins
-nonebot.load_builtin_plugins({})
+{}
 
 nonebot.load_from_toml("pyproject.toml")
 
