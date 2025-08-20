@@ -1,3 +1,4 @@
+
 [tool.pyright]
 pythonVersion = "3.10"
 pythonPlatform = "All"
