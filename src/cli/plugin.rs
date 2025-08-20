@@ -4,7 +4,7 @@
 //! listing, searching, and updating plugins from various sources.
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::ToolNonebot;
+use crate::pyproject::NbTomlEditor;
 use crate::utils::terminal_utils;
 use crate::uv::{self, Package};
 use clap::ArgMatches;
@@ -90,10 +90,12 @@ impl PluginManager {
             .build()
             .map_err(NbrError::Network)?;
 
+        let registry_plugins = OnceLock::new();
+
         Ok(Self {
             client,
             work_dir,
-            registry_plugins: OnceLock::new(),
+            registry_plugins,
         })
     }
 
@@ -148,7 +150,7 @@ impl PluginManager {
         let module_name = repo_name.replace("-", "_");
 
         // Add to configuration
-        ToolNonebot::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
+        NbTomlEditor::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
         info!(
             "✓ Successfully installed plugin: {}",
@@ -181,7 +183,7 @@ impl PluginManager {
 
         let module_name = package_name.replace("-", "_");
         // Add to configuration
-        ToolNonebot::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
+        NbTomlEditor::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
         info!(
             "✓ Successfully installed plugin: {}",
@@ -222,7 +224,7 @@ impl PluginManager {
             .run()?;
 
         // Add to configuration
-        ToolNonebot::parse(Some(&self.work_dir))?
+        NbTomlEditor::parse(Some(&self.work_dir))?
             .add_plugins(vec![registry_plugin.module_name.clone()])?;
 
         info!(
@@ -263,7 +265,7 @@ impl PluginManager {
             uv::remove(vec![&package_name])
                 .working_dir(&self.work_dir)
                 .run()?;
-            ToolNonebot::parse(Some(&self.work_dir))?
+            NbTomlEditor::parse(Some(&self.work_dir))?
                 .remove_plugins(vec![package_name.replace("-", "_")])?;
 
             info!(
@@ -304,7 +306,7 @@ impl PluginManager {
         // Uninstall the package
         uv::remove(vec![&package_name]).run()?;
 
-        ToolNonebot::parse(Some(&self.work_dir))?
+        NbTomlEditor::parse(Some(&self.work_dir))?
             .remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
         info!(
@@ -349,7 +351,7 @@ impl PluginManager {
     #[allow(dead_code)]
     pub async fn fix_nonebot_plugins(&self) -> Result<()> {
         let installed_plugins = self.get_installed_plugins(false).await?;
-        ToolNonebot::parse(Some(&self.work_dir))?.reset_plugins(
+        NbTomlEditor::parse(Some(&self.work_dir))?.reset_plugins(
             installed_plugins
                 .iter()
                 .map(|p| p.name.replace("-", "_"))

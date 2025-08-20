@@ -4,7 +4,7 @@
 //! with customizable templates and configurations.
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::ToolNonebot;
+use crate::pyproject::PyProjectConfig;
 use clap::ArgMatches;
 use colored::Colorize;
 
@@ -48,11 +48,15 @@ pub async fn generate_bot_file(work_dir: &Path, force: bool) -> Result<()> {
 }
 
 pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
-    let tool_nonebot = ToolNonebot::parse(Some(work_dir))?;
-    let nonebot = tool_nonebot.nonebot()?;
+    let pyproject = PyProjectConfig::parse(Some(work_dir))?;
+    let nonebot = pyproject
+        .nonebot()
+        .ok_or(NbrError::not_found("No tool.nonebot in pyproject.toml"))?;
 
     let name_module_tuples = nonebot
         .adapters
+        .as_ref()
+        .unwrap_or(&vec![])
         .iter()
         .map(|adapter| {
             (
@@ -76,9 +80,12 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 
     let builtin_plugins = nonebot
         .builtin_plugins
+        .as_ref()
+        .unwrap_or(&vec![])
         .iter()
         .map(|plugin| format!("\"{}\"", plugin))
         .reduce(|a, b| format!("{}, {}", a, b))
+        .map(|s| format!("nonebot.load_builtin_plugins({})", s))
         .unwrap_or_default();
 
     let content = format!(

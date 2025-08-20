@@ -1,0 +1,7 @@
+[tool.nonebot]
+adapters = [
+    {}
+]
+plugins = []
+plugin_dirs = [{}]
+builtin_plugins = [{}]

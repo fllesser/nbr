@@ -1,31 +1,42 @@
 use crate::error::{NbrError, Result as NbrResult};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     vec,
 };
 
 use toml_edit::{Document, DocumentMut, InlineTable, Table};
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct PyProjectConfig {
     pub project: Project,
-    pub tool: Tool,
-    pub build_system: BuildSystem,
+    pub tool: Option<Tool>,
+    pub build_system: Option<BuildSystem>,
 }
 
+impl Default for PyProjectConfig {
+    fn default() -> Self {
+        Self {
+            project: Project::default(),
+            tool: Some(Tool::default()),
+            build_system: Some(BuildSystem::default()),
+        }
+    }
+}
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Project {
     pub name: String,
     pub version: String,
     pub description: String,
-    pub authors: Vec<String>,
-    pub dependencies: Vec<String>,
     pub requires_python: String,
-    pub readme: String,
+    pub dependencies: Vec<String>,
+
+    pub authors: Option<Vec<String>>,
+    pub readme: Option<String>,
+    pub urls: Option<HashMap<String, String>>,
 }
 
 impl Default for Project {
@@ -34,26 +45,47 @@ impl Default for Project {
             name: String::from("awesome-bot"),
             version: String::from("0.1.0"),
             description: String::from("your bot description"),
-            authors: vec![],
-            dependencies: vec![],
             requires_python: String::from(">=3.10"),
-            readme: String::from("README.md"),
+            dependencies: vec![],
+
+            authors: Some(vec![]),
+            readme: Some(String::from("README.md")),
+            urls: None,
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Tool {
-    pub nonebot: Nonebot,
+    pub nonebot: Option<Nonebot>,
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+impl Default for Tool {
+    fn default() -> Self {
+        Self {
+            nonebot: Some(Nonebot::default()),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Nonebot {
-    pub adapters: Vec<Adapter>,
-    pub plugins: Vec<String>,
-    pub plugin_dirs: Vec<String>,
-    pub builtin_plugins: Vec<String>,
+    pub adapters: Option<Vec<Adapter>>,
+    pub plugins: Option<Vec<String>>,
+    pub plugin_dirs: Option<Vec<String>>,
+    pub builtin_plugins: Option<Vec<String>>,
+}
+
+impl Default for Nonebot {
+    fn default() -> Self {
+        Self {
+            adapters: Some(vec![]),
+            plugins: Some(vec![]),
+            plugin_dirs: Some(vec![]),
+            builtin_plugins: Some(vec![]),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone, Eq, PartialEq, Hash)]
@@ -78,14 +110,70 @@ impl Default for BuildSystem {
     }
 }
 
+impl PyProjectConfig {
+    /// 解析 pyproject.toml 文件
+    ///
+    /// # Arguments
+    ///
+    /// * `work_dir` - 工作目录，如果为 None，则使用当前目录
+    ///
+    /// # Returns
+    ///
+    /// 返回解析后的 PyProjectConfig 结构体
+    pub fn parse(work_dir: Option<&Path>) -> NbrResult<Self> {
+        let toml_path = if let Some(work_dir) = work_dir {
+            work_dir.join("pyproject.toml")
+        } else {
+            Path::new("pyproject.toml").to_path_buf()
+        };
+
+        if !toml_path.exists() {
+            return Err(NbrError::config(format!(
+                "pyproject.toml not found in {}",
+                toml_path.display()
+            )));
+        }
+
+        let content = std::fs::read_to_string(toml_path)
+            .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
+
+        let pyproject: PyProjectConfig = toml::from_str(content.as_str()).map_err(|e| {
+            NbrError::config(format!(
+                "Failed to parse pyproject.toml to PyProjectConfig: {}",
+                e
+            ))
+        })?;
+
+        Ok(pyproject)
+    }
+
+    /// 解析当前目录的 pyproject.toml 文件
+    ///
+    /// # Returns
+    ///
+    /// 返回解析后的 PyProjectConfig 结构体
+    #[allow(unused)]
+    pub fn parse_current_dir() -> NbrResult<Self> {
+        Self::parse(None)
+    }
+
+    pub fn nonebot(&self) -> Option<&Nonebot> {
+        self.tool.as_ref().and_then(|tool| tool.nonebot.as_ref())
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct ToolNonebot {
+pub struct NbTomlEditor {
     toml_path: PathBuf,
     doc_mut: DocumentMut,
 }
 
-#[allow(dead_code)]
-impl ToolNonebot {
+impl NbTomlEditor {
+    #[allow(unused)]
+    pub fn parse_current_dir() -> NbrResult<Self> {
+        Self::parse(None)
+    }
+
     pub fn parse(work_dir: Option<&Path>) -> NbrResult<Self> {
         let toml_path = if let Some(work_dir) = work_dir {
             work_dir.join("pyproject.toml")
@@ -109,14 +197,7 @@ impl ToolNonebot {
         Ok(nonebot)
     }
 
-    /// 修改不会改变 pyproject.toml 文件
-    pub fn nonebot(&self) -> NbrResult<Nonebot> {
-        let nonebot = self.doc_mut["tool"]["nonebot"].as_table().unwrap();
-        let nonebot = toml::from_str(nonebot.to_string().as_str())?;
-        Ok(nonebot)
-    }
-
-    pub fn save(&self) -> NbrResult<()> {
+    fn save(&self) -> NbrResult<()> {
         std::fs::write(self.toml_path.clone(), self.doc_mut.to_string())?;
         Ok(())
     }
@@ -199,6 +280,7 @@ impl ToolNonebot {
     }
 
     /// 重置 tool.nonebot.adapters
+    #[allow(unused)]
     pub fn reset_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
         let nonebot_table = self.nonebot_table_mut()?;
         let adapters_array = nonebot_table.get_mut("adapters").unwrap();
@@ -222,7 +304,7 @@ mod tests {
     fn test_add_adapters() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let mut tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
+        let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_adapters(vec![Adapter {
                 name: "OneBot V12".to_string(),
@@ -235,7 +317,7 @@ mod tests {
     fn test_add_plugins() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let mut tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
+        let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_plugins(vec!["nonebot-plugin-status".to_string()])
             .unwrap();
@@ -245,8 +327,8 @@ mod tests {
     fn test_parse_toml_to_nonebot() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
-        let nonebot = tool_nonebot.nonebot().unwrap();
+        let pyproject = PyProjectConfig::parse(Some(&toml_path)).unwrap();
+        let nonebot = pyproject.nonebot().unwrap();
         dbg!(nonebot);
     }
 }

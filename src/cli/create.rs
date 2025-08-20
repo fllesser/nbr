@@ -15,7 +15,7 @@ use tracing::{error, info};
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, PyProjectConfig, ToolNonebot};
+use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::uv;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,7 +126,12 @@ async fn gather_project_options(
         .map(|s| s.to_owned())
         .unwrap_or(select_python_version()?);
     // 选择适配器
-    let adapters = adapter_manager.select_adapter().await?;
+    let adapters = adapter_manager
+        .select_adapters(false)
+        .await?
+        .into_iter()
+        .map(|a| a.to_owned())
+        .collect();
     // 选择内置插件
     let plugins = select_builtin_plugins()?;
     // 选择环境类型
@@ -344,8 +349,9 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     pyproject.project.dependencies.extend(adapter_deps);
 
     // 补齐 tool.nonebot
-    pyproject.tool.nonebot.plugin_dirs = vec![format!("src/plugins")];
-    pyproject.tool.nonebot.builtin_plugins = options.plugins.clone();
+    let nonebot_mut = pyproject.tool.as_mut().unwrap().nonebot.as_mut().unwrap();
+    nonebot_mut.plugin_dirs = Some(vec![format!("src/plugins")]);
+    nonebot_mut.builtin_plugins = Some(options.plugins.clone());
 
     // 写入文件
     let content = toml::to_string(&pyproject)?;
@@ -360,7 +366,7 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         })
         .collect();
 
-    ToolNonebot::parse(Some(&options.output_dir))?.add_adapters(adapters)?;
+    NbTomlEditor::parse(Some(&options.output_dir))?.add_adapters(adapters)?;
     Ok(())
 }
 
@@ -403,7 +409,7 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_pre_commit_config(output_dir: &Path) -> Result<()> {
-    let pre_commit_config = include_str!("templates/precommit_config");
+    let pre_commit_config = include_str!("templates/pre_commit_config");
     fs::write(
         output_dir.join(".pre-commit-config.yaml"),
         pre_commit_config,
@@ -419,14 +425,14 @@ fn generate_gitignore(output_dir: &Path) -> Result<()> {
 }
 
 fn append_ruff_config(output_dir: &Path) -> Result<()> {
-    let ruff_config = include_str!("templates/ruff_config");
-    append_content_to_pyproject(output_dir, ruff_config)?;
+    let content = include_str!("templates/pyproject/tool_ruff");
+    append_content_to_pyproject(output_dir, content)?;
     Ok(())
 }
 
 fn append_pyright_config(output_dir: &Path) -> Result<()> {
-    let pyright_config = include_str!("templates/pyright_config");
-    append_content_to_pyproject(output_dir, pyright_config)?;
+    let content = include_str!("templates/pyproject/tool_pyright");
+    append_content_to_pyproject(output_dir, content)?;
     Ok(())
 }
 
@@ -435,7 +441,7 @@ fn append_content_to_pyproject(output_dir: &Path, content: &str) -> Result<()> {
         .append(true) // 设置为追加模式
         .create(true) // 如果文件不存在则创建
         .open(output_dir.join("pyproject.toml"))?;
-    file.write_all(content.as_bytes())?;
+    file.write_all(format!("\n{}", content).as_bytes())?;
     Ok(())
 }
 

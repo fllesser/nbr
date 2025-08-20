@@ -20,11 +20,8 @@ use tracing::{debug, error, info, warn};
 /// Cache types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CacheType {
-    Templates,
     Plugins,
     Adapters,
-    Versions,
-    Downloads,
     All,
 }
 
@@ -32,11 +29,8 @@ impl CacheType {
     /// Get cache directory name
     pub fn dir_name(&self) -> &'static str {
         match self {
-            CacheType::Templates => "templates",
             CacheType::Plugins => "plugins",
             CacheType::Adapters => "adapters",
-            CacheType::Versions => "versions",
-            CacheType::Downloads => "downloads",
             CacheType::All => "",
         }
     }
@@ -44,11 +38,8 @@ impl CacheType {
     /// Get cache description
     pub fn description(&self) -> &'static str {
         match self {
-            CacheType::Templates => "Project templates and template registry",
             CacheType::Plugins => "Plugin registry and plugin information",
             CacheType::Adapters => "Adapter registry and adapter information",
-            CacheType::Versions => "Package version information and checks",
-            CacheType::Downloads => "Downloaded files and archives",
             CacheType::All => "All cached data",
         }
     }
@@ -303,13 +294,7 @@ impl CacheManager {
         let mut oldest_entry: Option<CacheEntry> = None;
         let mut largest_entry: Option<CacheEntry> = None;
 
-        let cache_types = [
-            CacheType::Templates,
-            CacheType::Plugins,
-            CacheType::Adapters,
-            CacheType::Versions,
-            CacheType::Downloads,
-        ];
+        let cache_types = [CacheType::Plugins, CacheType::Adapters];
 
         for cache_type in &cache_types {
             let type_dir = self.cache_dir.join(cache_type.dir_name());
@@ -406,11 +391,8 @@ impl CacheManager {
 
         for (cache_type, entries) in &stats.entries_by_type {
             let ttl_seconds = match cache_type {
-                CacheType::Templates => ttl_config.templates,
                 CacheType::Plugins => ttl_config.plugins,
                 CacheType::Adapters => ttl_config.adapters,
-                CacheType::Versions => ttl_config.versions,
-                CacheType::Downloads => ttl_config.plugins, // Use plugins TTL for downloads
                 CacheType::All => continue,
             };
 
@@ -539,13 +521,7 @@ impl CacheManager {
         println!();
 
         println!("{}", "Cache by Type:".bright_green().bold());
-        for cache_type in &[
-            CacheType::Templates,
-            CacheType::Plugins,
-            CacheType::Adapters,
-            CacheType::Versions,
-            CacheType::Downloads,
-        ] {
+        for cache_type in &[CacheType::Plugins, CacheType::Adapters] {
             if let Some(entries) = stats.entries_by_type.get(cache_type) {
                 let type_size: u64 = entries.iter().map(|e| e.size).sum();
                 let size_str = if type_size > 0 {
@@ -627,11 +603,8 @@ impl CacheManager {
 /// Parse cache type from string
 fn parse_cache_type(s: &str) -> Option<CacheType> {
     match s.to_lowercase().as_str() {
-        "templates" | "template" => Some(CacheType::Templates),
         "plugins" | "plugin" => Some(CacheType::Plugins),
         "adapters" | "adapter" => Some(CacheType::Adapters),
-        "versions" | "version" => Some(CacheType::Versions),
-        "downloads" | "download" => Some(CacheType::Downloads),
         "all" => Some(CacheType::All),
         _ => None,
     }
@@ -648,13 +621,7 @@ pub async fn handle_cache(matches: &ArgMatches) -> Result<()> {
                 for type_str in types_str {
                     if let Some(cache_type) = parse_cache_type(type_str) {
                         if cache_type == CacheType::All {
-                            types = vec![
-                                CacheType::Templates,
-                                CacheType::Plugins,
-                                CacheType::Adapters,
-                                CacheType::Versions,
-                                CacheType::Downloads,
-                            ];
+                            types = vec![CacheType::Plugins, CacheType::Adapters];
                             break;
                         } else {
                             types.push(cache_type);
@@ -692,7 +659,6 @@ mod tests {
 
     #[test]
     fn test_cache_type_parsing() {
-        assert_eq!(parse_cache_type("templates"), Some(CacheType::Templates));
         assert_eq!(parse_cache_type("plugins"), Some(CacheType::Plugins));
         assert_eq!(parse_cache_type("all"), Some(CacheType::All));
         assert_eq!(parse_cache_type("invalid"), None);
@@ -700,7 +666,6 @@ mod tests {
 
     #[test]
     fn test_cache_type_descriptions() {
-        assert!(!CacheType::Templates.description().is_empty());
         assert!(!CacheType::Plugins.description().is_empty());
         assert!(!CacheType::All.description().is_empty());
     }
@@ -711,12 +676,11 @@ mod tests {
             path: PathBuf::from("/tmp/test"),
             size: 1024,
             modified: UNIX_EPOCH,
-            cache_type: CacheType::Templates,
+            cache_type: CacheType::Plugins,
             name: "test".to_string(),
         };
 
         assert_eq!(entry.size, 1024);
-        assert_eq!(entry.cache_type, CacheType::Templates);
         assert_eq!(entry.name, "test");
     }
 }

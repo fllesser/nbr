@@ -5,11 +5,8 @@
 #![allow(dead_code)]
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::Tool;
-use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::debug;
@@ -17,109 +14,10 @@ use tracing::debug;
 /// Main configuration structure
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Global user configuration
-    pub user: UserConfig,
-    /// Project-specific configuration
-    pub nb_config: NbConfig,
-    /// Template registry configuration
-    pub templates: TemplateConfig,
     /// Cache configuration
     pub cache: CacheConfig,
     /// Registry configuration
     pub registry: RegistryConfig,
-}
-
-/// Global user configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserConfig {
-    /// Default Python executable path
-    pub python_path: Option<String>,
-    /// Default template to use for new projects
-    pub default_template: Option<String>,
-    /// Preferred package index
-    pub pypi_index: Option<String>,
-    /// Extra PyPI indices
-    pub extra_indices: Vec<String>,
-    /// User's preferred editor
-    pub editor: Option<String>,
-    /// Auto-reload preference
-    pub auto_reload: bool,
-    /// Default host for running bots
-    pub default_host: String,
-    /// Default port for running bots
-    pub default_port: u16,
-    /// Enable colored output
-    pub colored_output: bool,
-    /// Logging level
-    pub log_level: String,
-    /// Check for updates automatically
-    pub auto_update_check: bool,
-    /// Telemetry opt-in
-    pub telemetry_enabled: bool,
-    /// User information for templates
-    pub author: Option<AuthorInfo>,
-}
-
-/// Author information for code generation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthorInfo {
-    pub name: String,
-    pub email: Option<String>,
-    pub github_username: Option<String>,
-}
-
-/// Project-specific configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct NbConfig {
-    /// table tool.nonebot
-    pub tool: Tool,
-}
-
-/// Template configuration and registry
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TemplateConfig {
-    /// Official template registry URL
-    pub registry_url: String,
-    /// Custom template sources
-    pub custom_sources: Vec<TemplateSource>,
-    /// Cached template information
-    pub cache: HashMap<String, TemplateInfo>,
-    /// Template cache TTL in seconds
-    pub cache_ttl: u64,
-}
-
-/// Template source configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TemplateSource {
-    /// Source name/identifier
-    pub name: String,
-    /// Source URL (Git repository, archive, etc.)
-    pub url: String,
-    /// Source type (git, archive, local)
-    pub source_type: String,
-    /// Authentication info if needed
-    pub auth: Option<AuthConfig>,
-}
-
-/// Template information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TemplateInfo {
-    /// Template name
-    pub name: String,
-    /// Template description
-    pub description: String,
-    /// Template version
-    pub version: String,
-    /// Template author
-    pub author: String,
-    /// Supported adapters
-    pub adapters: Vec<String>,
-    /// Included plugins
-    pub plugins: Vec<String>,
-    /// Template tags
-    pub tags: Vec<String>,
-    /// Last updated timestamp
-    pub updated_at: DateTime<Utc>,
 }
 
 /// Cache configuration
@@ -140,14 +38,10 @@ pub struct CacheConfig {
 /// Cache TTL configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheTtlConfig {
-    /// Template cache TTL in seconds
-    pub templates: u64,
     /// Plugin registry cache TTL in seconds
     pub plugins: u64,
     /// Adapter registry cache TTL in seconds
     pub adapters: u64,
-    /// Version info cache TTL in seconds
-    pub versions: u64,
 }
 
 /// Cache cleanup policy
@@ -168,56 +62,10 @@ pub struct RegistryConfig {
     pub plugin_registry: String,
     /// Adapter registry URL
     pub adapter_registry: String,
-    /// Registry mirrors
-    pub mirrors: Vec<String>,
     /// Registry cache settings
     pub cache_enabled: bool,
     /// Registry timeout in seconds
     pub timeout: u64,
-}
-
-/// Authentication configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthConfig {
-    /// Authentication type (token, basic, ssh)
-    pub auth_type: String,
-    /// Token or password
-    pub token: Option<String>,
-    /// Username for basic auth
-    pub username: Option<String>,
-    /// SSH key path
-    pub ssh_key: Option<PathBuf>,
-}
-
-impl Default for UserConfig {
-    fn default() -> Self {
-        Self {
-            python_path: None,
-            default_template: Some("bootstrap".to_string()),
-            pypi_index: Some("https://pypi.org/simple/".to_string()),
-            extra_indices: vec![],
-            editor: None,
-            auto_reload: false,
-            default_host: "127.0.0.1".to_string(),
-            default_port: 8080,
-            colored_output: true,
-            log_level: "info".to_string(),
-            auto_update_check: true,
-            telemetry_enabled: false,
-            author: None,
-        }
-    }
-}
-
-impl Default for TemplateConfig {
-    fn default() -> Self {
-        Self {
-            registry_url: "https://registry.nonebot.dev/templates".to_string(),
-            custom_sources: vec![],
-            cache: HashMap::new(),
-            cache_ttl: 3600, // 1 hour
-        }
-    }
 }
 
 impl Default for CacheConfig {
@@ -227,10 +75,8 @@ impl Default for CacheConfig {
             directory: get_cache_dir(),
             max_size_mb: 100,
             ttl: CacheTtlConfig {
-                templates: 3600, // 1 hour
-                plugins: 1800,   // 30 minutes
-                adapters: 1800,  // 30 minutes
-                versions: 300,   // 5 minutes
+                plugins: 1800,  // 30 minutes
+                adapters: 1800, // 30 minutes
             },
             cleanup_policy: CacheCleanupPolicy::Both,
         }
@@ -242,7 +88,6 @@ impl Default for RegistryConfig {
         Self {
             plugin_registry: "https://registry.nonebot.dev/plugins.json".to_string(),
             adapter_registry: "https://registry.nonebot.dev/adapters.json".to_string(),
-            mirrors: vec![],
             cache_enabled: true,
             timeout: 30,
         }
@@ -252,9 +97,6 @@ impl Default for RegistryConfig {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            user: UserConfig::default(),
-            nb_config: NbConfig::load().unwrap_or_default(),
-            templates: TemplateConfig::default(),
             cache: CacheConfig::default(),
             registry: RegistryConfig::default(),
         }
@@ -269,45 +111,10 @@ pub struct ConfigManager {
     current_config: Config,
 }
 
-impl NbConfig {
-    pub fn load() -> Result<Self> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
-
-        let config_path = current_dir.join("nb.toml");
-        if config_path.exists() {
-            Self::parse(&config_path)
-        } else {
-            Ok(NbConfig::default())
-        }
-    }
-
-    fn parse(config_path: &Path) -> Result<Self> {
-        let content = fs::read_to_string(config_path)
-            .map_err(|e| NbrError::config(format!("Failed to read nb config: {}", e)))?;
-
-        let config: NbConfig = toml::from_str(&content)
-            .map_err(|e| NbrError::config(format!("Failed to parse nb config: {}", e)))?;
-
-        Ok(config)
-    }
-
-    fn save(&self, config_path: &Path) -> Result<()> {
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| NbrError::config(format!("Failed to serialize nb config: {}", e)))?;
-
-        fs::write(config_path, content)
-            .map_err(|e| NbrError::config(format!("Failed to write nb config: {}", e)))?;
-
-        Ok(())
-    }
-}
-
 impl ConfigManager {
     /// Create a new configuration manager
     pub fn new() -> Result<Self> {
-        let current_dir = std::env::current_dir()
-            .map_err(|e| NbrError::config(format!("Failed to get current directory: {}", e)))?;
+        let current_dir = Path::new(".").to_path_buf();
 
         let config_dir = get_config_dir();
         let cache_dir = get_cache_dir();
@@ -328,12 +135,8 @@ impl ConfigManager {
         })
     }
 
-    /// Save configuration to files
+    /// TODO: Save configuration to files
     pub fn save(&self) -> Result<()> {
-        // Save project config if it exists
-        self.config()
-            .nb_config
-            .save(&self.current_dir.join("nb.toml"))?;
         debug!("Configuration saved successfully");
         Ok(())
     }
@@ -346,24 +149,6 @@ impl ConfigManager {
     /// Get mutable reference to configuration
     pub fn config_mut(&mut self) -> &mut Config {
         &mut self.current_config
-    }
-
-    /// Update user configuration
-    pub fn update_user_config<F>(&mut self, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut UserConfig),
-    {
-        f(&mut self.config_mut().user);
-        Ok(())
-    }
-
-    /// Update project configuration
-    pub fn update_nb_config<F>(&mut self, f: F) -> Result<()>
-    where
-        F: FnOnce(&mut NbConfig),
-    {
-        f(&mut self.config_mut().nb_config);
-        Ok(())
     }
 
     /// Get configuration directories
@@ -419,35 +204,5 @@ fn get_cache_dir() -> PathBuf {
         // Fallback for systems without proper directory support
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
         Path::new(&home).join(".cache").join("nbr")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_config_defaults() {
-        let config = Config::default();
-        assert_eq!(config.user.default_host, "127.0.0.1");
-        assert_eq!(config.user.default_port, 8080);
-        assert!(config.user.colored_output);
-        assert!(config.cache.enabled);
-    }
-
-    #[test]
-    fn test_user_config_serialization() {
-        let config = UserConfig::default();
-        let toml_str = toml::to_string(&config).unwrap();
-        let deserialized: UserConfig = toml::from_str(&toml_str).unwrap();
-
-        assert_eq!(config.default_host, deserialized.default_host);
-        assert_eq!(config.default_port, deserialized.default_port);
-    }
-
-    #[tokio::test]
-    async fn test_config_manager_creation() {
-        let manager = ConfigManager::new();
-        assert!(manager.is_ok());
     }
 }

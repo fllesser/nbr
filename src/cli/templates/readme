@@ -7,8 +7,6 @@
 1. 安装依赖
 ```bash
 uv sync
-# 或者
-uv pip install -r requirements.txt
 ```
 
 2. 配置机器人
@@ -16,7 +14,7 @@ uv pip install -r requirements.txt
 
 3. 运行机器人
 ```bash
-nb run
+nbr run
 ```
 
 ## 配置说明
@@ -27,7 +25,7 @@ nb run
 - `LOG_LEVEL`: 日志级别 (DEBUG/INFO/WARNING/ERROR)
 - `DRIVER`: 驱动器配置
 - `SUPERUSERS`: 超级用户列表
-- `COMMAND_PREFIX`: 命令前缀
+- `COMMAND_START`: 命令前缀
 
 ### 适配器配置
 
@@ -38,19 +36,16 @@ nb run
 ### 添加插件
 
 - 在 `plugins/` 目录下添加你的插件文件
-- 或者使用 `nb plugin install <plugin_name>` 安装插件
+- 或者使用 `nbr plugin install <plugin_name>` 安装插件
 
 ### 项目结构
 
 ```
 {}/
-├── bot.py              # 机器人入口文件
-├── pyproject.toml      # 项目配置文件
-├── .env               # 开发环境配置
-├── .env.prod          # 生产环境配置
-├── src/plugins/           # 插件目录
-├── data/             # 数据目录
-├── resources/        # 资源文件目录
+├── pyproject.toml    # 项目配置文件
+├── .env              # 开发环境配置
+├── .env.prod         # 生产环境配置
+├── src/plugins/      # 插件目录
 └── tests/            # 测试文件目录
 ```
 
@@ -62,12 +57,6 @@ nb run
 docker build -t {} .
 docker run -d --name {} -p 8080:8080 {}
 ```
-
-### 使用 systemd (Linux)
-
-1. 复制 `nb-bot.service` 到 `/etc/systemd/system/`
-2. 启动服务：`sudo systemctl start nb-bot`
-3. 设置开机自启：`sudo systemctl enable nb-bot`
 
 ## 许可证
 
