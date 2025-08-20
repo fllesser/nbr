@@ -36,8 +36,6 @@ pub struct InitOptions {
     pub adapters: Vec<String>,
     /// Initial plugins to install
     pub plugins: Vec<String>,
-    /// Initialize git repository
-    pub init_git: bool,
     /// Create virtual environment
     pub create_venv: bool,
     /// Force overwrite existing files
@@ -52,10 +50,9 @@ impl Default for InitOptions {
             author_name: None,
             author_email: None,
             python_version: "3.10".to_string(),
-            adapters: vec!["console".to_string()],
-            plugins: vec![],
-            init_git: true,
-            create_venv: false,
+            adapters: vec!["OneBot V11".to_string()],
+            plugins: vec!["echo".to_string()],
+            create_venv: true,
             force: false,
         }
     }
@@ -93,13 +90,6 @@ impl InitHandler {
 
         println!("  • Configure your bot: {}", "vim .env".bright_cyan());
         println!("  • Run your bot: {}", "nbr run".bright_cyan());
-
-        if self.options.init_git {
-            println!(
-                "  • Make initial commit: {}",
-                "git add . && git commit -m \"Initial commit\"".bright_cyan()
-            );
-        }
 
         println!();
         println!("For more help: {}", "nbr --help".cyan());
