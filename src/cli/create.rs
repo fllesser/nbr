@@ -126,7 +126,12 @@ async fn gather_project_options(
         .map(|s| s.to_owned())
         .unwrap_or(select_python_version()?);
     // 选择适配器
-    let adapters = adapter_manager.select_adapters(false).await?;
+    let adapters = adapter_manager
+        .select_adapters(false)
+        .await?
+        .into_iter()
+        .map(|a| a.to_owned())
+        .collect();
     // 选择内置插件
     let plugins = select_builtin_plugins()?;
     // 选择环境类型

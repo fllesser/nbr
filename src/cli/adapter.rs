@@ -85,6 +85,7 @@ impl AdapterManager {
         })
     }
 
+    /// Fetch registry adapters from registry.nonebot.dev
     pub async fn fetch_regsitry_adapters(&self) -> Result<&HashMap<String, RegistryAdapter>> {
         if let Some(adapters) = self.registry_adapters.get() {
             return Ok(adapters);
@@ -143,7 +144,7 @@ impl AdapterManager {
     }
 
     /// Select adapters from registry
-    pub async fn select_adapters(&self, filter_installed: bool) -> Result<Vec<RegistryAdapter>> {
+    pub async fn select_adapters(&self, filter_installed: bool) -> Result<Vec<&RegistryAdapter>> {
         // 获取 registry 中的 adapters
         let registry_adapters = self.fetch_regsitry_adapters().await?;
         let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
@@ -175,7 +176,7 @@ impl AdapterManager {
 
         Ok(selected_adapters
             .iter()
-            .map(|name| registry_adapters.get(name).unwrap().clone())
+            .map(|name| registry_adapters.get(name).unwrap())
             .collect())
     }
 
@@ -211,6 +212,8 @@ impl AdapterManager {
         let adapter_packages = selected_adapters
             .iter()
             .map(|a| a.project_link.as_str())
+            .collect::<HashSet<&str>>() // 🐶 ob
+            .into_iter()
             .collect::<Vec<&str>>();
 
         uv::add(adapter_packages)
@@ -263,16 +266,16 @@ impl AdapterManager {
     }
 
     /// Uninstall an adapter
-    pub async fn uninstall_adapter(&self) -> Result<()> {
+    pub async fn uninstall_adapters(&self) -> Result<()> {
         // get installed adapters from configuration
-        let installed_adapters = self.get_installed_adapters_names();
+        let mut installed_adapters = self.get_installed_adapters_names();
         if installed_adapters.is_empty() {
             warn!("You haven't installed any adapters");
             return Ok(());
         }
 
         // select adapters to uninstall
-        let selected_adapters: Vec<String> = {
+        let selected_adapters: Vec<&str> = {
             let selections = MultiSelect::with_theme(&ColorfulTheme::default())
                 .with_prompt("Select installed adapter(s) to uninstall")
                 .items(&installed_adapters)
@@ -282,7 +285,7 @@ impl AdapterManager {
 
             selections
                 .into_iter()
-                .map(|i| installed_adapters[i].to_string())
+                .map(|i| installed_adapters[i])
                 .collect()
         };
 
@@ -290,20 +293,34 @@ impl AdapterManager {
         NbTomlEditor::parse(Some(&self.work_dir))?.remove_adapters(
             selected_adapters
                 .iter()
-                .map(|a| a.as_str())
+                .map(|name| *name)
                 .collect::<Vec<&str>>(),
         )?;
 
         // Uninstall the package
         let registry_adapters = self.fetch_regsitry_adapters().await?;
-        let adapter_packages = selected_adapters
-            .iter()
-            .map(|a| registry_adapters.get(a).unwrap().project_link.as_str())
-            .collect::<Vec<&str>>();
 
-        uv::remove(adapter_packages)
-            .working_dir(&self.work_dir)
-            .run()?;
+        let mut adapter_packages = selected_adapters
+            .iter()
+            .map(|name| registry_adapters.get(*name).unwrap().project_link.as_str())
+            .collect::<HashSet<&str>>() // 🐶 ob
+            .into_iter()
+            .collect::<Vec<&str>>();
+        // 特判 ob，沟槽的 ob，Onebot V11 和 Onebot V12 是同一个包
+        // 剩下的 installed_adapters 中，如果包含 ob，则不删除
+        installed_adapters.retain(|name| !selected_adapters.contains(name));
+        if installed_adapters
+            .iter()
+            .any(|name| name.starts_with("OneBot"))
+        {
+            adapter_packages.retain(|name| *name != "nonebot-adapter-onebot");
+        }
+
+        if !adapter_packages.is_empty() {
+            uv::remove(adapter_packages)
+                .working_dir(&self.work_dir)
+                .run()?;
+        }
 
         info!(
             "✓ Successfully uninstalled adapters: {}",
@@ -457,7 +474,7 @@ pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
 
     match matches.subcommand() {
         Some(("install", _)) => adapter_manager.install_adapters().await,
-        Some(("uninstall", _)) => adapter_manager.uninstall_adapter().await,
+        Some(("uninstall", _)) => adapter_manager.uninstall_adapters().await,
         Some(("list", sub_matches)) => {
             let show_all = sub_matches.get_flag("all");
             adapter_manager.list_adapters(show_all).await
