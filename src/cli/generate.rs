@@ -4,7 +4,7 @@
 //! with customizable templates and configurations.
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::ToolNonebot;
+use crate::pyproject::NbTomlEditor;
 use clap::ArgMatches;
 use colored::Colorize;
 
@@ -48,7 +48,7 @@ pub async fn generate_bot_file(work_dir: &Path, force: bool) -> Result<()> {
 }
 
 pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
-    let tool_nonebot = ToolNonebot::parse(Some(work_dir))?;
+    let tool_nonebot = NbTomlEditor::parse(Some(work_dir))?;
     let nonebot = tool_nonebot.nonebot()?;
 
     let name_module_tuples = nonebot

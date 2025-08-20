@@ -79,13 +79,13 @@ impl Default for BuildSystem {
 }
 
 #[derive(Debug, Clone)]
-pub struct ToolNonebot {
+pub struct NbTomlEditor {
     toml_path: PathBuf,
     doc_mut: DocumentMut,
 }
 
 #[allow(dead_code)]
-impl ToolNonebot {
+impl NbTomlEditor {
     pub fn parse(work_dir: Option<&Path>) -> NbrResult<Self> {
         let toml_path = if let Some(work_dir) = work_dir {
             work_dir.join("pyproject.toml")
@@ -222,7 +222,7 @@ mod tests {
     fn test_add_adapters() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let mut tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
+        let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_adapters(vec![Adapter {
                 name: "OneBot V12".to_string(),
@@ -235,7 +235,7 @@ mod tests {
     fn test_add_plugins() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let mut tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
+        let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_plugins(vec!["nonebot-plugin-status".to_string()])
             .unwrap();
@@ -245,7 +245,7 @@ mod tests {
     fn test_parse_toml_to_nonebot() {
         let current_dir = std::env::current_dir().unwrap();
         let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
-        let tool_nonebot = ToolNonebot::parse(Some(&toml_path)).unwrap();
+        let tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
         let nonebot = tool_nonebot.nonebot().unwrap();
         dbg!(nonebot);
     }

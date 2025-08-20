@@ -15,7 +15,7 @@ use tracing::{error, info};
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, PyProjectConfig, ToolNonebot};
+use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::uv;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -360,7 +360,7 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         })
         .collect();
 
-    ToolNonebot::parse(Some(&options.output_dir))?.add_adapters(adapters)?;
+    NbTomlEditor::parse(Some(&options.output_dir))?.add_adapters(adapters)?;
     Ok(())
 }
 

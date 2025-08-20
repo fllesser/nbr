@@ -4,7 +4,7 @@
 //! and listing adapters for NoneBot applications.
 
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, ToolNonebot};
+use crate::pyproject::{Adapter, NbTomlEditor};
 use crate::utils::terminal_utils;
 use crate::uv;
 use clap::ArgMatches;
@@ -197,7 +197,7 @@ impl AdapterManager {
             .collect::<Vec<Adapter>>();
 
         // Add adapters to configuration
-        ToolNonebot::parse(Some(&self.work_dir))?.add_adapters(adapters)?;
+        NbTomlEditor::parse(Some(&self.work_dir))?.add_adapters(adapters)?;
 
         info!(
             "✓ Successfully installed adapters: {}",
@@ -234,7 +234,7 @@ impl AdapterManager {
     /// Uninstall an adapter
     pub async fn uninstall_adapter(&self) -> Result<()> {
         // get installed adapters from configuration
-        let installed_adapters = ToolNonebot::parse(Some(&self.work_dir))?
+        let installed_adapters = NbTomlEditor::parse(Some(&self.work_dir))?
             .nonebot()?
             .adapters;
         let installed_adapters_names = installed_adapters
@@ -260,7 +260,7 @@ impl AdapterManager {
         };
 
         // Remove from configuration
-        ToolNonebot::parse(Some(&self.work_dir))?.remove_adapters(
+        NbTomlEditor::parse(Some(&self.work_dir))?.remove_adapters(
             selected_adapters
                 .iter()
                 .map(|a| a.as_str())
@@ -295,7 +295,7 @@ impl AdapterManager {
 
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
-        let nonebot = ToolNonebot::parse(Some(&self.work_dir))?.nonebot()?;
+        let nonebot = NbTomlEditor::parse(Some(&self.work_dir))?.nonebot()?;
 
         let adapters_map = self.fetch_regsitry_adapters().await?;
         if show_all {
@@ -383,7 +383,7 @@ impl AdapterManager {
     /// Find installed adapter by name
     #[allow(dead_code)]
     fn find_installed_adapter(&self, name: &str) -> Result<Adapter> {
-        let nonebot = ToolNonebot::parse(Some(&self.work_dir))?.nonebot()?;
+        let nonebot = NbTomlEditor::parse(Some(&self.work_dir))?.nonebot()?;
 
         for adapter in &nonebot.adapters {
             if adapter.name == name
