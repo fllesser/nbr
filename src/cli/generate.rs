@@ -73,7 +73,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let builtin_plugins = nonebot
+    let builtin_plugins_load = nonebot
         .builtin_plugins
         .as_ref()
         .unwrap_or(&vec![])
@@ -85,7 +85,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 
     let content = format!(
         include_str!("templates/bot"),
-        adapters_import, adapters_register, builtin_plugins
+        adapters_import, adapters_register, builtin_plugins_load
     );
     Ok(content)
 }
