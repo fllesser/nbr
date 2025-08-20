@@ -34,9 +34,15 @@ pub struct Project {
     pub requires_python: String,
     pub dependencies: Vec<String>,
 
-    pub authors: Option<Vec<String>>,
+    pub authors: Option<Vec<Author>>,
     pub readme: Option<String>,
     pub urls: Option<HashMap<String, String>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Author {
+    pub name: String,
+    pub email: String,
 }
 
 impl Default for Project {
@@ -137,14 +143,15 @@ impl PyProjectConfig {
         let content = std::fs::read_to_string(toml_path)
             .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
 
-        let pyproject: PyProjectConfig = toml::from_str(content.as_str()).map_err(|e| {
-            NbrError::config(format!(
-                "Failed to parse pyproject.toml to PyProjectConfig: {}",
-                e
-            ))
-        })?;
+        Self::parse_from_str(&content)
+    }
 
-        Ok(pyproject)
+    pub fn parse_from_str(content: &str) -> NbrResult<Self> {
+        toml::from_str(content).map_err(|e| {
+            NbrError::config(format!(
+                "Failed to parse pyproject.toml to PyProjectConfig: {e}"
+            ))
+        })
     }
 
     /// 解析当前目录的 pyproject.toml 文件
@@ -181,10 +188,21 @@ impl NbTomlEditor {
             Path::new("pyproject.toml").to_path_buf()
         };
 
-        let content = std::fs::read_to_string(toml_path.clone())
+        let mut content = std::fs::read_to_string(toml_path.clone())
             .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
 
-        let doc = Document::parse(content)
+        // 如果 pyproject.toml 中没有 [tool.nonebot] 表，则添加
+        if !content.contains("[tool.nonebot]") {
+            content.push_str(
+                format!(
+                    include_str!("cli/templates/pyproject/tool_nonebot"),
+                    "", "", ""
+                )
+                .as_str(),
+            );
+        }
+
+        let doc = Document::parse(&content)
             .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))?;
 
         let doc_mut = doc.into_mut();

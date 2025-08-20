@@ -441,7 +441,7 @@ fn append_content_to_pyproject(output_dir: &Path, content: &str) -> Result<()> {
         .append(true) // 设置为追加模式
         .create(true) // 如果文件不存在则创建
         .open(output_dir.join("pyproject.toml"))?;
-    file.write_all(format!("\n{}", content).as_bytes())?;
+    file.write_all(content.as_bytes())?;
     Ok(())
 }
 
