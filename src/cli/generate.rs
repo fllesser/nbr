@@ -58,17 +58,12 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
         .as_ref()
         .unwrap_or(&vec![])
         .iter()
-        .map(|adapter| {
-            (
-                adapter.name.replace(" ", ""),
-                adapter.module_name.to_owned(),
-            )
-        })
+        .map(|a| (a.name.replace(" ", ""), a.module_name.to_owned()))
         .collect::<Vec<_>>();
 
     let adapters_import = name_module_tuples
         .iter()
-        .map(|(prefix, module)| format!("from {} import Adapter as {}Adapter", module, prefix))
+        .map(|(prefix, module)| format!("from {module} import Adapter as {prefix}Adapter"))
         .collect::<Vec<_>>()
         .join("\n");
 
@@ -83,9 +78,9 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
         .as_ref()
         .unwrap_or(&vec![])
         .iter()
-        .map(|plugin| format!("\"{}\"", plugin))
-        .reduce(|a, b| format!("{}, {}", a, b))
-        .map(|s| format!("nonebot.load_builtin_plugins({})", s))
+        .map(|plugin| format!(r#""{plugin}""#))
+        .reduce(|a, b| format!("{a}, {b}"))
+        .map(|s| format!("nonebot.load_builtin_plugins({s})"))
         .unwrap_or_default();
 
     let content = format!(
