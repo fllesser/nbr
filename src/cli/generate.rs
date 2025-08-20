@@ -64,19 +64,19 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
                 adapter.module_name.to_owned(),
             )
         })
-        .collect::<Vec<(String, String)>>();
+        .collect::<Vec<_>>();
 
     let adapters_import = name_module_tuples
         .iter()
         .map(|(prefix, module)| format!("from {} import Adapter as {}Adapter", module, prefix))
-        .reduce(|a, b| format!("{}\n{}", a, b))
-        .unwrap_or_default();
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let adapters_register = name_module_tuples
         .iter()
         .map(|(prefix, _)| format!("driver.register_adapter({prefix}Adapter)"))
-        .reduce(|a, b| format!("{}\n{}", a, b))
-        .unwrap_or_default();
+        .collect::<Vec<_>>()
+        .join("\n");
 
     let builtin_plugins = nonebot
         .builtin_plugins
