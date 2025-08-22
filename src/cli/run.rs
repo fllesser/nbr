@@ -9,7 +9,7 @@ use crate::utils::process_utils;
 use clap::ArgMatches;
 use colored::Colorize;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -245,12 +245,13 @@ impl BotRunner {
             _ => return false,
         }
 
-        let file_names = HashSet::from(["pyproject.toml", ".env", ".env.dev", ".env.prod"]);
+        // 需要重载的文件名
+        let file_names = ["pyproject.toml", ".env", ".env.dev", ".env.prod"];
 
         for path in &event.paths {
             // 跳过隐藏文件和目录
             if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && file_names.contains(name)
+                && file_names.contains(&name)
             {
                 return true;
             }
