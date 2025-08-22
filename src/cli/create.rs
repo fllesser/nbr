@@ -283,13 +283,15 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_readme_file(options)?;
     generate_gitignore(&options.output_dir)?;
     generate_dev_tools_config(options)?;
-
-    // Install dependencies
-    uv::sync(Some(&options.python_version))
-        .working_dir(&options.output_dir)
-        .run()?;
-
+    install_dependencies(options)?;
     Ok(())
+}
+
+fn install_dependencies(options: &ProjectOptions) -> Result<()> {
+    uv::sync(Some(&options.python_version))
+        .arg("--all-groups")
+        .working_dir(&options.output_dir)
+        .run()
 }
 
 async fn create_simple_project(options: &ProjectOptions) -> Result<()> {

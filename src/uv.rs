@@ -78,7 +78,7 @@ pub async fn self_version() -> Result<String> {
 
 pub async fn list(outdated: bool) -> Result<Vec<Package>> {
     let args: Vec<&str> = vec!["pip", "list", "--format=json"];
-    let builder = CommonBuilder::new(args);
+    let mut builder = CommonBuilder::new(args);
     let stdout = if outdated {
         builder
             .arg("--outdated")
@@ -217,40 +217,53 @@ impl<'a> CommonBuilder<'a> {
     }
 
     /// 无任何输出
-    pub fn quiet(mut self) -> Self {
-        self.args.insert(0, "-q");
+    pub fn quiet(&mut self) -> &mut Self {
+        self.args.insert(0, "--quiet");
         self
     }
 
-    pub fn arg(mut self, arg: &'a str) -> Self {
+    pub fn arg(&mut self, arg: &'a str) -> &mut Self {
         self.args.push(arg);
         self
     }
 
-    pub fn args(mut self, args: Vec<&'a str>) -> Self {
+    pub fn args(&mut self, args: Vec<&'a str>) -> &mut Self {
         self.args.extend(args);
         self
     }
 
     /// Set the working directory
-    pub fn working_dir(mut self, working_dir: &'a Path) -> Self {
+    pub fn working_dir(&mut self, working_dir: &'a Path) -> &mut Self {
         self.working_dir = Some(working_dir);
         self
     }
 
     /// Set the timeout in seconds
-    pub fn timeout(mut self, timeout_secs: u16) -> Self {
+    pub fn timeout(&mut self, timeout_secs: u16) -> &mut Self {
         self.timeout_secs = timeout_secs;
         self
     }
 
-    /// Run the command interactively
-    pub fn run(self) -> Result<()> {
+    // pub fn run(&mut self, quiet: bool) -> Result<()> {
+    //     let spinner = if quiet {
+    //         self.quiet();
+    //         None
+    //     } else {
+    //         Some(terminal_utils::create_spinner("Executing uv command..."))
+    //     };
+    //     process_utils::execute_interactive("uv", &self.args, self.working_dir)?;
+    //     if let Some(spinner) = spinner {
+    //         spinner.finish_and_clear();
+    //     }
+    //     Ok(())
+    // }
+
+    pub fn run(&self) -> Result<()> {
         process_utils::execute_interactive("uv", &self.args, self.working_dir)
     }
 
     /// Run the command asynchronously and return the stdout as a string
-    pub async fn run_async(self) -> Result<String> {
+    pub async fn run_async(&self) -> Result<String> {
         let output = process_utils::execute_command_with_output(
             "uv",
             &self.args,
@@ -263,7 +276,7 @@ impl<'a> CommonBuilder<'a> {
     }
 
     /// Run the command asynchronously and return the stdout as a string with a spinner
-    pub async fn run_async_with_spinner(self, spinner_message: &str) -> Result<String> {
+    pub async fn run_async_with_spinner(&self, spinner_message: &str) -> Result<String> {
         let spinner = terminal_utils::create_spinner(spinner_message);
         let output = self.run_async().await?;
         spinner.finish_and_clear();
@@ -290,34 +303,34 @@ impl<'a> AddBuilder<'a> {
         }
     }
 
-    pub fn upgrade(mut self, upgrade: bool) -> Self {
+    pub fn upgrade(&mut self, upgrade: bool) -> &mut Self {
         self.upgrade = upgrade;
         self
     }
 
-    pub fn index_url_opt(mut self, index_url: Option<&'a str>) -> Self {
+    pub fn index_url_opt(&mut self, index_url: Option<&'a str>) -> &mut Self {
         self.index_url = index_url;
         self
     }
 
-    pub fn index_url(mut self, index_url: &'a str) -> Self {
+    pub fn index_url(&mut self, index_url: &'a str) -> &mut Self {
         self.index_url = Some(index_url);
         self
     }
 
-    pub fn working_dir(mut self, working_dir: &'a Path) -> Self {
+    pub fn working_dir(&mut self, working_dir: &'a Path) -> &mut Self {
         self.working_dir = Some(working_dir);
         self
     }
 
-    pub fn extras(mut self, extras: Vec<&'a str>) -> Self {
+    pub fn extras(&mut self, extras: Vec<&'a str>) -> &mut Self {
         self.extras = Some(extras);
         self
     }
 
-    pub fn run(self) -> Result<()> {
+    pub fn run(&self) -> Result<()> {
         let mut args: Vec<&str> = vec!["add"];
-        args.extend(self.packages);
+        args.extend(self.packages.clone());
         if self.upgrade {
             args.push("--upgrade");
         }
