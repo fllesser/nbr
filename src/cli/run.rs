@@ -10,7 +10,6 @@ use clap::ArgMatches;
 use colored::Colorize;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -200,11 +199,11 @@ impl BotRunner {
                 "pyo",
                 "__pycache__",
                 ".git",
+                ".gitignore",
                 ".pytest_cache",
+                ".pre-commit-config.yaml",
+                "README.md",
                 "node_modules",
-                ".venv",
-                "venv",
-                ".env",
             ]);
 
             loop {
@@ -309,6 +308,30 @@ impl BotRunner {
         }
     }
 
+    #[allow(unused)]
+    fn start_bot_process_with_uv(&self) -> Result<Child> {
+        let mut cmd = Command::new("uv");
+        cmd.arg("run").arg("--no-sync");
+        if self.bot_file.exists() {
+            cmd.arg(&self.bot_file);
+        } else {
+            cmd.arg("python")
+                .arg("-c")
+                .arg(generate_bot_content(&self.work_dir)?);
+        }
+        cmd.current_dir(&self.work_dir)
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit());
+
+        let process = cmd
+            .spawn()
+            .map_err(|e| NbrError::io(format!("Failed to start bot process: {}", e)))?;
+
+        debug!("Bot process started with PID: {}", process.id());
+        Ok(process)
+    }
+
     fn start_bot_process(&self) -> Result<Child> {
         let mut cmd = Command::new(self.python_path.clone());
         if self.bot_file.exists() {
@@ -326,25 +349,7 @@ impl BotRunner {
             .spawn()
             .map_err(|e| NbrError::io(format!("Failed to start bot process: {}", e)))?;
 
-        debug!("Bot process started with PID: {:?}", process.id());
-        Ok(process)
-    }
-
-    /// Start the bot process
-    #[allow(unused)]
-    fn start_bot_process_old(&self) -> Result<Child> {
-        let mut cmd = Command::new(self.python_path.clone());
-        cmd.arg(&self.bot_file)
-            .current_dir(&self.work_dir)
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit());
-
-        let process = cmd
-            .spawn()
-            .map_err(|e| NbrError::io(format!("Failed to start bot process: {}", e)))?;
-
-        debug!("Bot process started with PID: {:?}", process.id());
+        debug!("Bot process started with PID: {}", process.id());
         Ok(process)
     }
 
@@ -391,9 +396,7 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
     // Find bot file
     let bot_file_path = work_dir.join(bot_file);
     // Find Python executable
-    let python_path = find_python_executable()?;
-    // Verify Python environment
-    // verify_python_environment(&python_path).await?;
+    let python_path = find_python_executable(&work_dir)?;
     // Create and run bot
     let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
@@ -403,25 +406,16 @@ pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
 }
 
 /// Find Python executabled
-fn find_python_executable() -> Result<String> {
-    // Try to find Python in project virtual environment
-    let current_dir = env::current_dir()
-        .map_err(|e| NbrError::io(format!("Failed to get current directory: {}", e)))?;
+fn find_python_executable(work_dir: &Path) -> Result<String> {
+    #[cfg(target_os = "windows")]
+    let venv_path = work_dir.join(".venv").join("Scripts").join("python.exe");
 
-    let venv_paths = [
-        current_dir.join("venv").join("bin").join("python"),
-        current_dir.join("venv").join("Scripts").join("python.exe"),
-        current_dir.join(".venv").join("bin").join("python"),
-        current_dir.join(".venv").join("Scripts").join("python.exe"),
-    ];
+    #[cfg(not(target_os = "windows"))]
+    let venv_path = work_dir.join(".venv").join("bin").join("python");
 
-    for venv_path in &venv_paths {
-        if venv_path.exists() {
-            debug!("Using virtual environment Python: {}", venv_path.display());
-            return Ok(venv_path.to_string_lossy().to_string());
-        }
+    if venv_path.exists() {
+        return Ok(venv_path.to_string_lossy().to_string());
     }
-
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
         NbrError::not_found(

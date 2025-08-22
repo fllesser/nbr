@@ -12,6 +12,12 @@ use std::{
     path::Path,
 };
 
+/// Install pre-commit hooks
+pub fn pre_commit_install(output_dir: &Path) -> Result<()> {
+    let args = vec!["run", "pre-commit", "install"];
+    CommonBuilder::new(args).working_dir(output_dir).run()
+}
+
 pub fn add(packages: Vec<&str>) -> AddBuilder<'_> {
     AddBuilder::new(packages)
 }
@@ -208,6 +214,12 @@ impl<'a> CommonBuilder<'a> {
             working_dir: None,
             timeout_secs: 5,
         }
+    }
+
+    /// 无任何输出
+    pub fn quiet(mut self) -> Self {
+        self.args.insert(0, "-q");
+        self
     }
 
     pub fn arg(mut self, arg: &'a str) -> Self {
