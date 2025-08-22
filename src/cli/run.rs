@@ -9,7 +9,7 @@ use crate::utils::process_utils;
 use clap::ArgMatches;
 use colored::Colorize;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -91,7 +91,7 @@ impl BotRunner {
             .map_err(|e| NbrError::io(format!("Failed to watch directory: {}", e)))?;
 
         self.watcher = Some(watcher);
-        info!("File watcher setup for auto-reload");
+        debug!("File watcher setup for auto-reload");
         Ok(())
     }
 
@@ -192,120 +192,76 @@ impl BotRunner {
 
     /// Wait for reload trigger (file change or process exit)
     async fn wait_for_reload_trigger(&self) -> Result<bool> {
-        if let Some(ref watch_rx) = self.watch_rx {
-            let mut ignored_extensions = HashSet::new();
-            ignored_extensions.extend([
-                "pyc",
-                "pyo",
-                "__pycache__",
-                ".git",
-                ".gitignore",
-                ".pytest_cache",
-                ".pre-commit-config.yaml",
-                "README.md",
-                "node_modules",
-            ]);
+        let watch_rx = if let Some(watch_rx) = self.watch_rx.as_ref() {
+            watch_rx
+        } else {
+            return Ok(false);
+        };
 
-            loop {
-                // Check if process is still running
-                {
-                    let mut process_guard = self.current_process.lock().unwrap();
-                    if let Some(process) = process_guard.as_mut() {
-                        match process.try_wait() {
-                            Ok(Some(status)) => {
-                                info!("Bot process exited with status: {}", status);
-                                return Ok(false); // Process exited, don't reload
-                            }
-                            Ok(None) => {
-                                // Process still running
-                            }
-                            Err(e) => {
-                                error!("checking process status: {}", e);
-                                return Ok(false);
-                            }
+        loop {
+            // Check if process is still running
+            {
+                let mut process_guard = self.current_process.lock().unwrap();
+                if let Some(process) = process_guard.as_mut() {
+                    match process.try_wait() {
+                        Ok(Some(status)) => {
+                            info!("Bot process exited with status: {}", status);
+                            return Ok(false); // Process exited, don't reload
                         }
-                    }
-                }
-                // Check for file changes
-                match watch_rx.try_recv() {
-                    Ok(event) => {
-                        if self.should_reload_for_event(&event, &ignored_extensions) {
-                            info!("File change detected, reloading bot...");
-                            return Ok(true);
+                        Ok(None) => {
+                            // Process still running
                         }
-                    }
-                    Err(mpsc::TryRecvError::Empty) => {
-                        // No events, continue waiting
-                        sleep(Duration::from_millis(100)).await;
-                    }
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        error!("File watcher disconnected");
-                        return Ok(false);
+                        Err(e) => {
+                            error!("Checking bot process status: {}", e);
+                            return Ok(false);
+                        }
                     }
                 }
             }
-        }
-
-        // If no watch receiver, just wait for process to exit
-        loop {
-            let should_sleep = {
-                let mut process_guard = self.current_process.lock().unwrap();
-                match process_guard.as_mut() {
-                    Some(process) => match process.try_wait() {
-                        Ok(Some(_)) => return Ok(false),
-                        Ok(None) => true, // 需要 sleep
-                        Err(e) => {
-                            error!("Error checking process status: {}", e);
-                            return Ok(false);
-                        }
-                    },
-                    None => return Ok(false),
+            // Check for file changes
+            match watch_rx.try_recv() {
+                Ok(event) => {
+                    if self.should_reload_for_event(&event) {
+                        info!("File change detected, reloading bot...");
+                        return Ok(true);
+                    }
                 }
-            };
-
-            if should_sleep {
-                sleep(Duration::from_millis(100)).await;
+                Err(mpsc::TryRecvError::Empty) => {
+                    // No events, continue waiting
+                    sleep(Duration::from_millis(100)).await;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    error!("File watcher disconnected");
+                    return Ok(false);
+                }
             }
         }
     }
 
     /// Check if an event should trigger a reload
-    fn should_reload_for_event(&self, event: &Event, ignored_extensions: &HashSet<&str>) -> bool {
+    fn should_reload_for_event(&self, event: &Event) -> bool {
         match event.kind {
-            EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
-                for path in &event.paths {
-                    // Skip hidden files and directories
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                        && name.starts_with('.')
-                    {
-                        continue;
-                    }
-
-                    // Skip ignored extensions
-                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str())
-                        && ignored_extensions.contains(extension)
-                    {
-                        continue;
-                    }
-
-                    // Skip ignored directories
-                    if let Some(path_str) = path.to_str()
-                        && ignored_extensions.iter().any(|&ext| path_str.contains(ext))
-                    {
-                        continue;
-                    }
-
-                    // Only reload for Python files or config files
-                    if let Some(extension) = path.extension().and_then(|ext| ext.to_str())
-                        && matches!(extension, "py" | "toml" | "yaml" | "yml" | "json" | "env")
-                    {
-                        return true;
-                    }
-                }
-                false
-            }
-            _ => false,
+            EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {}
+            _ => return false,
         }
+
+        // 需要重载的文件名
+        let file_names = ["pyproject.toml", ".env", ".env.dev", ".env.prod"];
+
+        for path in &event.paths {
+            // 跳过隐藏文件和目录
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && file_names.contains(&name)
+            {
+                return true;
+            }
+
+            // Only reload for Python files
+            if path.extension().and_then(|ext| ext.to_str()) == Some("py") {
+                return true;
+            }
+        }
+        false
     }
 
     #[allow(unused)]
