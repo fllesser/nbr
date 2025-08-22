@@ -171,14 +171,13 @@ impl BotRunner {
                     if now.duration_since(last_restart) < RAPID_RESTART_THRESHOLD {
                         restart_count += 1;
                         if restart_count >= MAX_RAPID_RESTARTS {
-                            warn!("Too many rapid restarts, adding delay...");
+                            warn!("Too many rapid restarts, adding delay 5s...");
                             sleep(Duration::from_secs(5)).await;
                         }
                     }
                     last_restart = now;
 
-                    warn!("Restarting bot...");
-                    sleep(Duration::from_secs(2)).await;
+                    debug!("Starting bot process...");
                 }
                 Err(e) => {
                     error!("Failed to start bot process: {}", e);
@@ -192,11 +191,10 @@ impl BotRunner {
 
     /// Wait for reload trigger (file change or process exit)
     async fn wait_for_reload_trigger(&self) -> Result<bool> {
-        let watch_rx = if let Some(watch_rx) = self.watch_rx.as_ref() {
-            watch_rx
-        } else {
+        if self.watch_rx.is_none() {
             return Ok(false);
-        };
+        }
+        let watch_rx = self.watch_rx.as_ref().unwrap();
 
         loop {
             // Check if process is still running
@@ -208,9 +206,7 @@ impl BotRunner {
                             info!("Bot process exited with status: {}", status);
                             return Ok(false); // Process exited, don't reload
                         }
-                        Ok(None) => {
-                            // Process still running
-                        }
+                        Ok(None) => {} // Process still running
                         Err(e) => {
                             error!("Checking bot process status: {}", e);
                             return Ok(false);
@@ -223,12 +219,14 @@ impl BotRunner {
                 Ok(event) => {
                     if self.should_reload_for_event(&event) {
                         info!("File change detected, reloading bot...");
+                        // 清空未处理的事件
+                        while let Ok(_) = watch_rx.try_recv() {}
                         return Ok(true);
                     }
                 }
                 Err(mpsc::TryRecvError::Empty) => {
                     // No events, continue waiting
-                    sleep(Duration::from_millis(100)).await;
+                    sleep(Duration::from_millis(1000)).await;
                 }
                 Err(mpsc::TryRecvError::Disconnected) => {
                     error!("File watcher disconnected");
@@ -249,7 +247,6 @@ impl BotRunner {
         let file_names = ["pyproject.toml", ".env", ".env.dev", ".env.prod"];
 
         for path in &event.paths {
-            // 跳过隐藏文件和目录
             if let Some(name) = path.file_name().and_then(|n| n.to_str())
                 && file_names.contains(&name)
             {
@@ -313,7 +310,7 @@ impl BotRunner {
     fn kill_current_process(&self) {
         let mut process_guard = self.current_process.lock().unwrap();
         if let Some(mut process) = process_guard.take() {
-            info!("Stopping bot process...");
+            debug!("Stopping bot process...");
 
             // Try graceful shutdown first
             if let Err(e) = process.kill() {
