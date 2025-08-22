@@ -1,6 +1,5 @@
 use anyhow::Context;
 use clap::ArgMatches;
-use colored::*;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 
@@ -42,7 +41,7 @@ impl Display for Template {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ProjectOptions {
     pub name: String,
     pub template: Template,
@@ -244,7 +243,7 @@ fn select_dev_tools() -> Result<Vec<String>> {
         .defaults(&[true; 3])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
-    let selected_dev_tools: Vec<String> = selected_dev_tools
+    let selected_dev_tools = selected_dev_tools
         .into_iter()
         .map(|i| dev_tools[i].to_string())
         .collect();
@@ -278,28 +277,18 @@ async fn create_project(options: &ProjectOptions) -> Result<()> {
 }
 
 async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
-    let package_name = options.name.replace("-", "_");
-    // Create structure
-    create_project_structure(&options.output_dir, &package_name)?;
+    create_project_structure(options)?;
     generate_pyproject_file(options)?;
     generate_env_files(options)?;
     generate_readme_file(options)?;
     generate_gitignore(&options.output_dir)?;
-
-    if options.dev_tools.contains(&"ruff".to_string()) {
-        append_ruff_config(&options.output_dir)?;
-    }
-    if options.dev_tools.contains(&"basedpyright".to_string()) {
-        append_pyright_config(&options.output_dir)?;
-    }
-    if options.dev_tools.contains(&"pre-commit".to_string()) {
-        generate_pre_commit_config(&options.output_dir)?;
-    }
+    generate_dev_tools_config(options)?;
 
     // Install dependencies
     uv::sync(Some(&options.python_version))
         .working_dir(&options.output_dir)
         .run()?;
+
     Ok(())
 }
 
@@ -312,7 +301,10 @@ async fn create_simple_project(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
-fn create_project_structure(base_dir: &Path, module_name: &str) -> Result<()> {
+fn create_project_structure(options: &ProjectOptions) -> Result<()> {
+    let base_dir = &options.output_dir;
+    let module_name = options.name.replace("-", "_");
+
     let dirs = vec![
         base_dir.join("src/plugins"),
         base_dir.join(format!("src/{}", module_name)),
@@ -345,8 +337,19 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         .iter()
         .map(|a| format!("{}>={}", a.project_link, a.version))
         .collect::<HashSet<String>>(); // 沟槽的 onebot 12
-    // 补齐依赖
+
+    // 补齐 dependencies
     pyproject.project.dependencies.extend(adapter_deps);
+
+    // 补齐 dependency_groups.dev group
+    let mut dev_deps = vec![];
+    if options.dev_tools.contains(&"ruff".to_string()) {
+        dev_deps.push("ruff>=0.12.9".to_string());
+    }
+    if options.dev_tools.contains(&"pre-commit".to_string()) {
+        dev_deps.push("pre-commit>=4.3.0".to_string());
+    }
+    pyproject.dependency_groups.as_mut().unwrap().dev = Some(dev_deps);
 
     // 补齐 tool.nonebot
     let nonebot_mut = pyproject.tool.as_mut().unwrap().nonebot.as_mut().unwrap();
@@ -408,19 +411,25 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
+fn generate_dev_tools_config(options: &ProjectOptions) -> Result<()> {
+    if options.dev_tools.contains(&"ruff".to_string()) {
+        append_ruff_config(&options.output_dir)?;
+    }
+    if options.dev_tools.contains(&"basedpyright".to_string()) {
+        append_pyright_config(&options.output_dir)?;
+    }
+    if options.dev_tools.contains(&"pre-commit".to_string()) {
+        generate_pre_commit_config(&options.output_dir)?;
+    }
+    Ok(())
+}
+
 fn generate_pre_commit_config(output_dir: &Path) -> Result<()> {
     let pre_commit_config = include_str!("templates/pre_commit_config");
     fs::write(
         output_dir.join(".pre-commit-config.yaml"),
         pre_commit_config,
     )?;
-    Ok(())
-}
-
-fn generate_gitignore(output_dir: &Path) -> Result<()> {
-    let gitignore = include_str!("templates/gitignore");
-
-    fs::write(output_dir.join(".gitignore"), gitignore)?;
     Ok(())
 }
 
@@ -445,31 +454,16 @@ fn append_content_to_pyproject(output_dir: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn create_example_plugin(output_dir: &Path) -> Result<()> {
-    let plugins_dir = output_dir.join("src/plugins");
-
-    let hello_plugin = include_str!("templates/hello.py");
-
-    fs::write(plugins_dir.join("hello.py"), hello_plugin)?;
+fn generate_gitignore(output_dir: &Path) -> Result<()> {
+    let gitignore = include_str!("templates/gitignore");
+    fs::write(output_dir.join(".gitignore"), gitignore)?;
     Ok(())
 }
 
-#[allow(unused)]
-async fn show_setup_instructions(options: &ProjectOptions) -> Result<()> {
-    println!("\n{}", "📋 Setup Instructions:".bright_yellow());
-    println!("1. Configure your bot in the .env file");
-    if !options.adapters.is_empty() {
-        println!("2. Set up your adapters:");
-        for adapter in &options.adapters {
-            println!("   • {}: Configure {}", adapter.name, adapter.project_link);
-        }
-    }
-    println!("3. Run 'nb run' to start your bot");
-    println!(
-        "\n{}",
-        "💡 Need help? Check the README.md file for more information.".cyan()
-    );
-
+fn create_example_plugin(output_dir: &Path) -> Result<()> {
+    let plugins_dir = output_dir.join("src/plugins");
+    let hello_plugin = include_str!("templates/hello.py");
+    fs::write(plugins_dir.join("hello.py"), hello_plugin)?;
     Ok(())
 }
 

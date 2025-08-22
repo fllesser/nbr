@@ -12,6 +12,7 @@ use toml_edit::{Document, DocumentMut, InlineTable, Table};
 #[serde(rename_all = "kebab-case")]
 pub struct PyProjectConfig {
     pub project: Project,
+    pub dependency_groups: Option<DependencyGroups>,
     pub tool: Option<Tool>,
     pub build_system: Option<BuildSystem>,
 }
@@ -22,9 +23,17 @@ impl Default for PyProjectConfig {
             project: Project::default(),
             tool: Some(Tool::default()),
             build_system: Some(BuildSystem::default()),
+            dependency_groups: Some(DependencyGroups::default()),
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct DependencyGroups {
+    pub dev: Option<Vec<String>>,
+    pub test: Option<Vec<String>>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct Project {

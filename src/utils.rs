@@ -248,11 +248,7 @@ pub mod process_utils {
 
     /// Find Python executable
     pub fn find_python() -> Option<String> {
-        let candidates = if cfg!(windows) {
-            vec!["python", "python3", "py"]
-        } else {
-            vec!["python3", "python", "python3.11", "python3.10"]
-        };
+        let candidates = vec!["python", "python3", "py"];
 
         for candidate in candidates {
             if command_exists(candidate) {
@@ -268,7 +264,6 @@ pub mod process_utils {
                 }
             }
         }
-
         None
     }
 
