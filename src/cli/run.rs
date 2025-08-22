@@ -198,18 +198,6 @@ impl BotRunner {
             return Ok(false);
         };
 
-        let mut ignored_extensions = HashSet::new();
-        ignored_extensions.extend([
-            "pyc",
-            "pyo",
-            "__pycache__",
-            "git",
-            "gitignore",
-            "pytest_cache",
-            "md",
-            "node_modules",
-        ]);
-
         loop {
             // Check if process is still running
             {
@@ -233,7 +221,7 @@ impl BotRunner {
             // Check for file changes
             match watch_rx.try_recv() {
                 Ok(event) => {
-                    if self.should_reload_for_event(&event, &ignored_extensions) {
+                    if self.should_reload_for_event(&event) {
                         info!("File change detected, reloading bot...");
                         return Ok(true);
                     }
@@ -251,40 +239,24 @@ impl BotRunner {
     }
 
     /// Check if an event should trigger a reload
-    fn should_reload_for_event(&self, event: &Event, ignored_extensions: &HashSet<&str>) -> bool {
+    fn should_reload_for_event(&self, event: &Event) -> bool {
         match event.kind {
             EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {}
             _ => return false,
         }
+
+        let file_names = HashSet::from(["pyproject.toml", ".env", ".env.dev", ".env.prod"]);
+
         for path in &event.paths {
             // 跳过隐藏文件和目录
-            let name = path.file_name().and_then(|n| n.to_str());
-            if name.is_some() && name.unwrap().starts_with('.') {
-                continue;
-            }
-
-            // 文件扩展名
-            let extension = path.extension().and_then(|ext| ext.to_str());
-            if extension.is_none() {
-                continue;
-            }
-            let extension = extension.unwrap();
-
-            // 跳过忽略的扩展名
-            if ignored_extensions.contains(extension) {
-                continue;
-            }
-
-            // Skip ignored directories
-            if let Some(path_str) = path.to_str()
-                && ignored_extensions.iter().any(|&ext| path_str.contains(ext))
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && file_names.contains(name)
             {
-                continue;
+                return true;
             }
 
-            // Only reload for Python files or config files
-            if matches!(extension, "py" | "toml") {
-                debug!("File {} change detected, reloading bot...", path.display());
+            // Only reload for Python files
+            if path.extension().and_then(|ext| ext.to_str()) == Some("py") {
                 return true;
             }
         }
