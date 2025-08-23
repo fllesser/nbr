@@ -5,8 +5,8 @@ use colored::*;
 mod cli;
 mod config;
 mod error;
-mod log;
 mod pyproject;
+mod style;
 mod utils;
 mod uv;
 
@@ -255,7 +255,8 @@ async fn main() -> Result<()> {
 
     let verbose = matches.get_count("verbose");
 
-    log::init_logging(verbose);
+    style::log::init(verbose);
+    style::inquire_config::init();
 
     // Check if uv is installed
     uv::self_version().await?;

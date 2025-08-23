@@ -9,8 +9,9 @@ use crate::utils::terminal_utils;
 use crate::uv;
 use clap::ArgMatches;
 use colored::*;
+use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
-use dialoguer::{Confirm, MultiSelect};
+use inquire::MultiSelect;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -158,18 +159,11 @@ impl AdapterManager {
         // 排序
         adapter_names.sort();
 
+        // 添加多选框搜索功能
         let selected_adapters = if !adapter_names.is_empty() {
-            let selections = MultiSelect::with_theme(&ColorfulTheme::default())
-                .with_prompt("Which adapter(s) would you like to use")
-                .items(&adapter_names)
-                //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
-                .interact()
-                .map_err(|e| NbrError::io(e.to_string()))?;
-
-            selections
-                .into_iter()
-                .map(|i| adapter_names[i].to_string())
-                .collect()
+            MultiSelect::new("Which adapter(s) would you like to use", adapter_names)
+                .prompt()
+                .map_err(|e| NbrError::io(e.to_string()))?
         } else {
             vec!["OneBot V11".to_string()] // Default adapter
         };
@@ -276,7 +270,7 @@ impl AdapterManager {
 
         // select adapters to uninstall
         let selected_adapters: Vec<&str> = {
-            let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+            let selections = dialoguer::MultiSelect::with_theme(&ColorfulTheme::default())
                 .with_prompt("Select installed adapter(s) to uninstall")
                 .items(&installed_adapters)
                 //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
