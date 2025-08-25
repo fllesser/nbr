@@ -65,7 +65,7 @@
 
 将二进制文件移动到 PATH
 
-    sudo mv nbr /Users/{username}/.local/bin/
+    sudo mv nbr /Users/$USER/.local/bin/
 </details>
 
 <details>
