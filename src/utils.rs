@@ -554,4 +554,15 @@ mod tests {
         assert!(string_utils::validate_project_name("1invalid").is_err());
         assert!(string_utils::validate_project_name("invalid@project").is_err());
     }
+
+    #[tokio::test]
+    async fn test_download_file() {
+        let url =
+            "https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz";
+        let destination = Path::new("nbr.tar.gz");
+        let show_progress = true;
+        let result = net_utils::download_file(url, destination, show_progress).await;
+        fs::remove_file(destination).unwrap();
+        assert!(result.is_ok());
+    }
 }
