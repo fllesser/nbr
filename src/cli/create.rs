@@ -99,7 +99,7 @@ pub async fn handle_create(args: &CreateArgs) -> Result<()> {
     Ok(())
 }
 
-fn check_directory_exists(output_dir: &PathBuf) -> Result<()> {
+fn check_directory_exists(output_dir: &Path) -> Result<()> {
     if output_dir.exists() {
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(

@@ -48,7 +48,7 @@ pub enum PluginCommands {
     },
     Update {
         #[clap()]
-        name: String,
+        name: Option<String>,
         #[clap(short, long)]
         all: bool,
         #[clap(short, long)]
@@ -69,10 +69,10 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
                 .install_plugin(name, index.as_deref(), *upgrade)
                 .await
         }
-        PluginCommands::Uninstall { name } => plugin_manager.uninstall_plugin(&name).await,
+        PluginCommands::Uninstall { name } => plugin_manager.uninstall_plugin(name).await,
         PluginCommands::List { outdated } => plugin_manager.list_plugins(*outdated).await,
         PluginCommands::Search { query, limit } => {
-            plugin_manager.search_plugins(&query, *limit).await
+            plugin_manager.search_plugins(query, *limit).await
         }
         PluginCommands::Update {
             name,
@@ -80,7 +80,7 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
             reinstall,
         } => {
             plugin_manager
-                .update_plugins(Some(&name), *all, *reinstall)
+                .update_plugins(name.as_deref(), *all, *reinstall)
                 .await
         }
         PluginCommands::Create => {

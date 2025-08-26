@@ -219,7 +219,7 @@ impl BotRunner {
                     if self.should_reload_for_event(&event) {
                         info!("File change detected, reloading bot...");
                         // 清空未处理的事件
-                        while let Ok(_) = watch_rx.try_recv() {}
+                        while watch_rx.try_recv().is_ok() {}
                         return Ok(true);
                     }
                 }
