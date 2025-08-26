@@ -3,10 +3,10 @@
 //! This module handles environment management including showing system information,
 //! checking dependencies, and validating the current project setup.
 
+use crate::EnvCommands;
 use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{self, Package};
-use clap::ArgMatches;
 use colored::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -757,13 +757,12 @@ impl EnvironmentChecker {
 }
 
 /// Handle the env command
-pub async fn handle_env(matches: &ArgMatches) -> Result<()> {
+pub async fn handle_env(commands: &EnvCommands) -> Result<()> {
     let mut checker = EnvironmentChecker::new().await?;
 
-    match matches.subcommand() {
-        Some(("info", _)) => checker.show_info().await,
-        Some(("check", _)) => checker.check_environment().await,
-        _ => Err(NbrError::invalid_argument("Invalid env subcommand")),
+    match commands {
+        EnvCommands::Info => checker.show_info().await,
+        EnvCommands::Check => checker.check_environment().await,
     }
 }
 

@@ -6,7 +6,6 @@
 use crate::cli::generate::generate_bot_content;
 use crate::error::{NbrError, Result};
 use crate::utils::process_utils;
-use clap::ArgMatches;
 use colored::Colorize;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
@@ -337,13 +336,8 @@ impl Drop for BotRunner {
 }
 
 /// Handle the run command
-pub async fn handle_run(matches: &ArgMatches) -> Result<()> {
-    let bot_file = matches
-        .get_one::<String>("file")
-        .map(|s| s.as_str())
-        .unwrap_or("bot.py");
-
-    let reload = matches.get_flag("reload");
+pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
+    let bot_file = file.unwrap_or("bot.py".to_string());
     // Load configuration
     let work_dir = std::env::current_dir().unwrap();
     // Find bot file

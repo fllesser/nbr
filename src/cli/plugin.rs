@@ -7,7 +7,7 @@ use crate::error::{NbrError, Result};
 use crate::pyproject::NbTomlEditor;
 use crate::utils::terminal_utils;
 use crate::uv::{self, Package};
-use clap::ArgMatches;
+use clap::Subcommand;
 use colored::*;
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
@@ -21,6 +21,74 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
+
+#[derive(Subcommand)]
+pub enum PluginCommands {
+    Install {
+        #[clap()]
+        name: String,
+        #[clap(short, long)]
+        index: Option<String>,
+        #[clap(short, long)]
+        upgrade: bool,
+    },
+    Uninstall {
+        #[clap()]
+        name: String,
+    },
+    List {
+        #[clap(short, long)]
+        outdated: bool,
+    },
+    Search {
+        #[clap()]
+        query: String,
+        #[clap(short, long, default_value = "10")]
+        limit: usize,
+    },
+    Update {
+        #[clap()]
+        name: String,
+        #[clap(short, long)]
+        all: bool,
+        #[clap(short, long)]
+        reinstall: bool,
+    },
+    Create,
+}
+
+pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
+    let mut plugin_manager = PluginManager::new(None)?;
+    match commands {
+        PluginCommands::Install {
+            name,
+            index,
+            upgrade,
+        } => {
+            plugin_manager
+                .install_plugin(name, index.as_deref(), *upgrade)
+                .await
+        }
+        PluginCommands::Uninstall { name } => plugin_manager.uninstall_plugin(&name).await,
+        PluginCommands::List { outdated } => plugin_manager.list_plugins(*outdated).await,
+        PluginCommands::Search { query, limit } => {
+            plugin_manager.search_plugins(&query, *limit).await
+        }
+        PluginCommands::Update {
+            name,
+            all,
+            reinstall,
+        } => {
+            plugin_manager
+                .update_plugins(Some(&name), *all, *reinstall)
+                .await
+        }
+        PluginCommands::Create => {
+            warn!("Not implemented");
+            Ok(())
+        }
+    }
+}
 
 // "module_name": "nonebot_plugin_status",
 // "project_link": "nonebot-plugin-status",
@@ -594,50 +662,6 @@ impl PluginManager {
             "   Install Command: {}",
             format!("nbr plugin install {}", plugin.project_link).bright_yellow()
         );
-    }
-}
-
-/// Handle the plugin command
-pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
-    let mut plugin_manager = PluginManager::new(None)?;
-
-    match matches.subcommand() {
-        Some(("install", sub_matches)) => {
-            let name = sub_matches.get_one::<String>("name").unwrap();
-            let index_url = sub_matches.get_one::<String>("index");
-            let upgrade = sub_matches.get_flag("upgrade");
-
-            plugin_manager
-                .install_plugin(name, index_url.map(|s| s.as_str()), upgrade)
-                .await
-        }
-        Some(("uninstall", sub_matches)) => {
-            let name = sub_matches.get_one::<String>("name").unwrap();
-            plugin_manager.uninstall_plugin(name).await
-        }
-        Some(("list", sub_matches)) => {
-            let outdated = sub_matches.get_flag("outdated");
-            plugin_manager.list_plugins(outdated).await
-        }
-        Some(("search", sub_matches)) => {
-            let query = sub_matches.get_one::<String>("query").unwrap();
-            let limit: usize = sub_matches
-                .get_one::<String>("limit")
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(10);
-
-            plugin_manager.search_plugins(query, limit).await
-        }
-        Some(("update", sub_matches)) => {
-            let plugin_name = sub_matches.get_one::<String>("name");
-            let update_all = sub_matches.get_flag("all");
-            let reinstall = sub_matches.get_flag("reinstall");
-
-            plugin_manager
-                .update_plugins(plugin_name.map(|s| s.as_str()), update_all, reinstall)
-                .await
-        }
-        _ => Err(NbrError::invalid_argument("Invalid plugin subcommand")),
     }
 }
 

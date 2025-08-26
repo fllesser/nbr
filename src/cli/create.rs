@@ -1,15 +1,14 @@
 use anyhow::Context;
-use clap::ArgMatches;
+use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use tracing::{error, info};
+use tracing::info;
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
@@ -17,9 +16,35 @@ use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::uv;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Args)]
+pub struct CreateArgs {
+    #[clap()]
+    name: Option<String>,
+    #[clap(value_enum)]
+    template: Option<Template>,
+    #[clap(short, long)]
+    output: Option<String>,
+    #[clap(short, long)]
+    force: bool,
+    #[clap(short, long)]
+    python: Option<String>,
+    #[clap(long)]
+    drivers: Option<Vec<String>>,
+    #[clap(short, long)]
+    adapters: Option<Vec<String>>,
+    #[clap(long)]
+    plugins: Option<Vec<String>>,
+    #[clap(short, long)]
+    env: Option<String>,
+    #[clap(long)]
+    dev_tools: Option<Vec<String>>,
+}
+
+#[derive(ValueEnum, Clone)]
 pub enum Template {
+    #[clap(name = "bootstrap", help = "Basic NoneBot project template")]
     Bootstrap,
+    #[clap(name = "simple", help = "Simple bot template with basic plugins")]
     Simple,
 }
 
@@ -41,12 +66,10 @@ impl Display for Template {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
 pub struct ProjectOptions {
     pub name: String,
     pub template: Template,
     pub output_dir: PathBuf,
-    pub force: bool,
     pub drivers: Vec<String>,
     pub adapters: Vec<RegistryAdapter>,
     pub plugins: Vec<String>,
@@ -55,18 +78,13 @@ pub struct ProjectOptions {
     pub dev_tools: Vec<String>,
 }
 
-pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
+pub async fn handle_create(args: &CreateArgs) -> Result<()> {
     info!("🎉 Creating NoneBot project...");
 
     let adapter_manager = AdapterManager::default();
 
     // 补齐项目选项
-    let options = gather_project_options(matches, &adapter_manager).await?;
-
-    // Check if directory already exists
-    if !check_directory_exists(&options)? {
-        return Ok(());
-    }
+    let options = gather_project_options(args, &adapter_manager).await?;
 
     // Create the project
     create_project(&options).await?;
@@ -81,49 +99,47 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn check_directory_exists(options: &ProjectOptions) -> Result<bool> {
-    if options.output_dir.exists() && !options.force {
+fn check_directory_exists(output_dir: &PathBuf) -> Result<()> {
+    if output_dir.exists() {
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(
                 "Directory '{}' already exists. Continue?",
-                options.output_dir.display()
+                output_dir.display()
             ))
             .default(false)
             .interact()
             .map_err(|e| NbrError::io(e.to_string()))?;
 
         if !should_continue {
-            error!("{}", "Create operation cancelled.");
-            return Ok(false);
+            return Err(NbrError::Cancelled);
         }
     }
-    Ok(true)
+    Ok(())
 }
 
 async fn gather_project_options(
-    matches: &ArgMatches,
+    args: &CreateArgs,
     adapter_manager: &AdapterManager,
 ) -> Result<ProjectOptions> {
-    let name = matches
-        .get_one::<String>("name")
-        .map(|s| s.to_owned())
-        .unwrap_or(input_project_name()?);
-    // 选择模板
-    let template = select_template()?;
-    // 选择 Bot 创建目录，默认在当前目录下创建
-    let output_dir: PathBuf = matches
-        .get_one::<String>("output")
+    let name = args.name.clone().unwrap_or(input_project_name()?);
+
+    let output_dir = args
+        .output
+        .clone()
         .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?.join(&name));
-    // 是否强制创建
-    let force = matches.get_flag("force");
-    // 选择驱动
-    let drivers = select_drivers()?;
+
+    if !args.force {
+        // 如果 output_dir 已经存在，则提示用户是否继续
+        check_directory_exists(&output_dir)?;
+    }
     // 指定 Python 版本
-    let python_version = matches
-        .get_one::<String>("python")
-        .map(|s| s.to_owned())
-        .unwrap_or(select_python_version()?);
+    let python_version = args.python.clone().unwrap_or(select_python_version()?);
+    // 选择模板
+    let template = args.template.clone().unwrap_or(select_template()?);
+    // 选择驱动
+    let drivers = args.drivers.clone().unwrap_or(select_drivers()?);
+
     // 选择适配器
     let adapters = adapter_manager
         .select_adapters(false)
@@ -142,7 +158,6 @@ async fn gather_project_options(
         name,
         template,
         output_dir,
-        force,
         drivers,
         adapters,
         plugins,
@@ -152,7 +167,7 @@ async fn gather_project_options(
     })
 }
 
-fn input_project_name() -> Result<String> {
+pub fn input_project_name() -> Result<String> {
     Input::<String>::with_theme(&ColorfulTheme::default())
         .with_prompt("Project name")
         .default("awesome-bot".to_string())
@@ -479,7 +494,6 @@ mod tests {
             name: "awesome-bot".to_string(),
             template: Template::Bootstrap,
             output_dir: PathBuf::from("awesome-bot"),
-            force: false,
             drivers: vec![
                 "FastAPI".to_string(),
                 "HTTPX".to_string(),
