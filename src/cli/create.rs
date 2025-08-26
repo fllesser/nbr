@@ -3,14 +3,13 @@ use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 
+use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 use std::collections::HashSet;
-use std::fmt::Display;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use strum::Display;
 use tracing::info;
-
-use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 
 use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
@@ -40,30 +39,23 @@ pub struct CreateArgs {
     dev_tools: Option<Vec<String>>,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Clone, Debug, Display)]
+#[clap(rename_all = "lowercase")]
 pub enum Template {
-    #[clap(name = "bootstrap", help = "Basic NoneBot project template")]
+    #[clap(help = "Basic NoneBot project template")]
     Bootstrap,
-    #[clap(name = "simple", help = "Simple bot template with basic plugins")]
+    #[clap(help = "Simple bot template with basic plugins")]
     Simple,
 }
 
-impl Template {
-    pub fn description(&self) -> &str {
-        match self {
-            Template::Bootstrap => "bootstrap - Basic NoneBot project template",
-            Template::Simple => "simple - Simple bot template with basic plugins",
-        }
-    }
-}
-
-impl Display for Template {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Template::Bootstrap => write!(f, "bootstrap"),
-            Template::Simple => write!(f, "simple"),
-        }
-    }
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "lowercase")]
+pub enum Driver {
+    FastAPI,
+    HTTPX,
+    WebSockets,
+    Quark,
+    AIOHTTP,
 }
 
 pub struct ProjectOptions {
@@ -145,18 +137,12 @@ async fn gather_project_options(
     };
     // 选择驱动
     let drivers = match args.drivers.clone() {
-        Some(drivers) => drivers,
+        Some(drivers) => drivers.into_iter().map(|d| d.to_string()).collect(),
         None => select_drivers()?,
     };
 
     let adapters = match args.adapters.clone() {
-        Some(adapters) => {
-            let adapter_map = adapter_manager.fetch_regsitry_adapters().await?;
-            adapters
-                .iter()
-                .map(|a| adapter_map.get(a).unwrap().to_owned())
-                .collect()
-        }
+        Some(_) => vec![],
         None => adapter_manager
             .select_adapters(false)
             .await?
@@ -216,10 +202,10 @@ fn select_environment() -> Result<String> {
 }
 
 fn select_drivers() -> Result<Vec<String>> {
-    let drivers = vec!["FastAPI", "HTTPX", "websockets", "Quark", "AIOHTTP"];
+    let drivers = Driver::value_variants();
     let selected_drivers = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Which driver(s) would you like to use")
-        .items(&drivers)
+        .items(drivers)
         // 默认选择前三个
         .defaults(&[true; 3])
         .interact()
@@ -238,15 +224,14 @@ fn select_drivers() -> Result<Vec<String>> {
 }
 
 fn select_template() -> Result<Template> {
-    let template_descriptions: Vec<String> = vec![
-        Template::Bootstrap.description().to_string(),
-        Template::Simple.description().to_string(),
+    let template_prompts = vec![
+        "bootstrap - Basic NoneBot project template",
+        "simple - Simple bot template with basic plugins",
     ];
-
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select a template")
         .default(0)
-        .items(&template_descriptions)
+        .items(&template_prompts)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
 
@@ -529,5 +514,17 @@ mod tests {
     #[test]
     fn test_generate_ruff_config() {
         append_ruff_config(&PathBuf::from("awesome-bot")).unwrap();
+    }
+
+    #[test]
+    fn test_select_template() {
+        let template = select_template().unwrap();
+        println!("{:?}", template);
+    }
+
+    #[test]
+    fn test_select_drivers() {
+        let drivers = select_drivers().unwrap();
+        println!("{:?}", drivers);
     }
 }
