@@ -31,7 +31,44 @@ fn build_cli() -> Command {
         .about("CLI for NoneBot2 - Rust implementation")
         .before_help(BANNER.bright_cyan().to_string())
         .arg_required_else_help(true)
-        .subcommand(create::build_create_command())
+        .subcommand(
+            Command::new("create")
+                .about("Create a new NoneBot project")
+                .arg(
+                    Arg::new("name")
+                        .help("Project name")
+                        .required(false)
+                        .index(1),
+                )
+                .arg(
+                    Arg::new("template")
+                        .long("template")
+                        .short('t')
+                        .help("Template to use")
+                        .value_name("TEMPLATE"),
+                )
+                .arg(
+                    Arg::new("output")
+                        .long("output")
+                        .short('o')
+                        .help("Output directory")
+                        .value_name("DIR"),
+                )
+                .arg(
+                    Arg::new("force")
+                        .long("force")
+                        .short('f')
+                        .help("Force creation even if directory exists")
+                        .action(clap::ArgAction::SetTrue),
+                )
+                .arg(
+                    Arg::new("python")
+                        .long("python")
+                        .short('p')
+                        .help("Specify Python version")
+                        .value_name("VERSION"),
+                ),
+        )
         .subcommand(
             Command::new("run")
                 .about("Run the bot in current folder")
