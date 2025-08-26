@@ -1,5 +1,5 @@
 use anyhow::Context;
-use clap::ArgMatches;
+use clap::{Arg, ArgMatches, Command};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 
@@ -53,6 +53,63 @@ pub struct ProjectOptions {
     pub python_version: String,
     pub environment: String,
     pub dev_tools: Vec<String>,
+}
+
+pub fn build_create_command() -> Command {
+    let args = vec![
+        Arg::new("name")
+            .help("Project name")
+            .required(false)
+            .index(1),
+        Arg::new("template")
+            .long("template")
+            .short('t')
+            .help("Template to use")
+            .value_name("TEMPLATE"),
+        Arg::new("output")
+            .long("output")
+            .short('o')
+            .help("Output directory")
+            .value_name("DIR"),
+        Arg::new("force")
+            .long("force")
+            .short('f')
+            .help("Force creation even if directory exists")
+            .action(clap::ArgAction::SetTrue),
+        Arg::new("python")
+            .long("python")
+            .short('p')
+            .help("Specify Python version")
+            .value_name("VERSION"),
+        Arg::new("drivers")
+            .long("drivers")
+            .short('d')
+            .help("Specify drivers")
+            .value_name("DRIVERS"),
+        Arg::new("adapters")
+            .long("adapters")
+            .short('a')
+            .help("Specify adapters")
+            .value_name("ADAPTERS"),
+        Arg::new("plugins")
+            .long("plugins")
+            .short('p')
+            .help("Specify plugins")
+            .value_name("PLUGINS"),
+        Arg::new("env")
+            .long("env")
+            .short('e')
+            .help("Specify environment")
+            .value_name("ENV"),
+        Arg::new("dev-tools")
+            .long("dev-tools")
+            .short('D')
+            .help("Specify dev tools")
+            .value_name("DEV_TOOLS"),
+    ];
+    Command::new("create")
+        .about("Create a new NoneBot project")
+        .args(args)
 }
 
 pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
