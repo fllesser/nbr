@@ -16,11 +16,11 @@ use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::uv;
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 pub struct CreateArgs {
     #[clap()]
     name: Option<String>,
-    #[clap(value_enum)]
+    #[clap(short, long, value_enum)]
     template: Option<Template>,
     #[clap(short, long)]
     output: Option<String>,
@@ -40,7 +40,7 @@ pub struct CreateArgs {
     dev_tools: Option<Vec<String>>,
 }
 
-#[derive(ValueEnum, Clone)]
+#[derive(ValueEnum, Clone, Debug)]
 pub enum Template {
     #[clap(name = "bootstrap", help = "Basic NoneBot project template")]
     Bootstrap,
@@ -80,12 +80,9 @@ pub struct ProjectOptions {
 
 pub async fn handle_create(args: &CreateArgs) -> Result<()> {
     info!("🎉 Creating NoneBot project...");
-
     let adapter_manager = AdapterManager::default();
-
-    // 补齐项目选项
+    // 补齐项目参数
     let options = gather_project_options(args, &adapter_manager).await?;
-
     // Create the project
     create_project(&options).await?;
 
@@ -121,32 +118,53 @@ async fn gather_project_options(
     args: &CreateArgs,
     adapter_manager: &AdapterManager,
 ) -> Result<ProjectOptions> {
-    let name = args.name.clone().unwrap_or(input_project_name()?);
+    let name = match args.name.clone() {
+        Some(name) => name,
+        None => input_project_name()?,
+    };
 
     let output_dir = args
         .output
         .clone()
         .map(PathBuf::from)
-        .unwrap_or(std::env::current_dir()?.join(&name));
+        .unwrap_or_else(|| std::env::current_dir().unwrap().join(&name));
 
     if !args.force {
         // 如果 output_dir 已经存在，则提示用户是否继续
         check_directory_exists(&output_dir)?;
     }
     // 指定 Python 版本
-    let python_version = args.python.clone().unwrap_or(select_python_version()?);
+    let python_version = match args.python.clone() {
+        Some(version) => version,
+        None => select_python_version()?,
+    };
     // 选择模板
-    let template = args.template.clone().unwrap_or(select_template()?);
+    let template = match args.template.clone() {
+        Some(template) => template,
+        None => select_template()?,
+    };
     // 选择驱动
-    let drivers = args.drivers.clone().unwrap_or(select_drivers()?);
+    let drivers = match args.drivers.clone() {
+        Some(drivers) => drivers,
+        None => select_drivers()?,
+    };
 
-    // 选择适配器
-    let adapters = adapter_manager
-        .select_adapters(false)
-        .await?
-        .into_iter()
-        .map(|a| a.to_owned())
-        .collect();
+    let adapters = match args.adapters.clone() {
+        Some(adapters) => {
+            let adapter_map = adapter_manager.fetch_regsitry_adapters().await?;
+            adapters
+                .iter()
+                .map(|a| adapter_map.get(a).unwrap().to_owned())
+                .collect()
+        }
+        None => adapter_manager
+            .select_adapters(false)
+            .await?
+            .into_iter()
+            .map(|a| a.to_owned())
+            .collect(),
+    };
+
     // 选择内置插件
     let plugins = select_builtin_plugins()?;
     // 选择环境类型
