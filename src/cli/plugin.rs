@@ -58,34 +58,23 @@ pub enum PluginCommands {
 }
 
 pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
-    let mut plugin_manager = PluginManager::new(None)?;
+    let mut manager = PluginManager::new(None)?;
     match commands {
         PluginCommands::Install {
             name,
             index,
             upgrade,
-        } => {
-            plugin_manager
-                .install_plugin(name, index.as_deref(), *upgrade)
-                .await
-        }
-        PluginCommands::Uninstall { name } => plugin_manager.uninstall_plugin(name).await,
-        PluginCommands::List { outdated } => plugin_manager.list_plugins(*outdated).await,
-        PluginCommands::Search { query, limit } => {
-            plugin_manager.search_plugins(query, *limit).await
-        }
+        } => manager.install(name, index.as_deref(), *upgrade).await,
+        PluginCommands::Uninstall { name } => manager.uninstall(name).await,
+        PluginCommands::List { outdated } => manager.list(*outdated).await,
+        PluginCommands::Search { query, limit } => manager.search_plugins(query, *limit).await,
         PluginCommands::Update {
             name,
             all,
             reinstall,
-        } => {
-            plugin_manager
-                .update_plugins(name.as_deref(), *all, *reinstall)
-                .await
-        }
+        } => manager.update(name.as_deref(), *all, *reinstall).await,
         PluginCommands::Create => {
-            warn!("Not implemented");
-            Ok(())
+            unimplemented!()
         }
     }
 }
@@ -167,14 +156,14 @@ impl PluginManager {
         })
     }
 
-    pub async fn install_plugin(
+    pub async fn install(
         &mut self,
         package: &str,
         index_url: Option<&str>,
         upgrade: bool,
     ) -> Result<()> {
         if package.starts_with("https") {
-            return self.install_plugin_from_github(package).await;
+            return self.install_from_github(package).await;
         }
 
         // nonebot-plugin-orm[default] -> nonebot-plugin-orm, default
@@ -190,14 +179,14 @@ impl PluginManager {
         };
 
         if let Ok(registry_plugin) = self.get_registry_plugin(package_name).await {
-            self.install_plugin_from_registry(registry_plugin, index_url, extras, upgrade)
+            self.install_from_registry(registry_plugin, index_url, extras, upgrade)
                 .await
         } else {
             self.install_unregistered_plugin(package_name, extras).await
         }
     }
 
-    pub async fn install_plugin_from_github(&mut self, repo_url: &str) -> Result<()> {
+    pub async fn install_from_github(&mut self, repo_url: &str) -> Result<()> {
         debug!("Installing plugin from github: {}", repo_url);
 
         // 确定是否安装 github 插件
@@ -261,7 +250,7 @@ impl PluginManager {
     }
 
     /// Install a plugin
-    pub async fn install_plugin_from_registry(
+    pub async fn install_from_registry(
         &self,
         registry_plugin: &RegistryPlugin,
         index_url: Option<&str>,
@@ -269,7 +258,6 @@ impl PluginManager {
         upgrade: bool,
     ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
-        debug!("Installing plugin: {package_name}");
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
 
@@ -304,11 +292,11 @@ impl PluginManager {
     }
 
     /// Uninstall a plugin
-    pub async fn uninstall_plugin(&self, name: &str) -> Result<()> {
+    pub async fn uninstall(&self, name: &str) -> Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
         if let Ok(registry_plugin) = self.get_registry_plugin(name).await {
-            self.uninstall_plugin_from_registry(registry_plugin).await
+            self.uninstall_registry_plugin(registry_plugin).await
         } else {
             self.uninstall_unregistered_plugin(name).await
         }
@@ -348,10 +336,7 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn uninstall_plugin_from_registry(
-        &self,
-        registry_plugin: &RegistryPlugin,
-    ) -> Result<()> {
+    pub async fn uninstall_registry_plugin(&self, registry_plugin: &RegistryPlugin) -> Result<()> {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !uv::is_installed(&package_name).await {
@@ -394,7 +379,7 @@ impl PluginManager {
         Ok(installed_plugins)
     }
 
-    pub async fn list_plugins(&self, show_outdated: bool) -> Result<()> {
+    pub async fn list(&self, show_outdated: bool) -> Result<()> {
         // 获取所有插件
         let mut installed_plugins = self.get_installed_plugins(false).await?;
         // 获取需要更新的插件
@@ -457,7 +442,7 @@ impl PluginManager {
     }
 
     /// Update plugins
-    pub async fn update_plugins(
+    pub async fn update(
         &mut self,
         plugin_name: Option<&str>,
         update_all: bool,
