@@ -24,6 +24,7 @@ use tracing::{debug, error, info, warn};
 
 #[derive(Subcommand)]
 pub enum PluginCommands {
+    #[clap(about = "Install a plugin")]
     Install {
         #[clap()]
         name: String,
@@ -32,28 +33,38 @@ pub enum PluginCommands {
         #[clap(short, long)]
         upgrade: bool,
     },
+    #[clap(about = "Uninstall a plugin")]
     Uninstall {
         #[clap()]
         name: String,
     },
+    #[clap(about = "List installed plugins, show outdated plugins if --outdated is set")]
     List {
-        #[clap(short, long)]
+        #[clap(short, long, help = "Show outdated plugins")]
         outdated: bool,
     },
+    #[clap(about = "Search plugins in registry")]
     Search {
-        #[clap()]
+        #[clap(help = "Search keyword")]
         query: String,
-        #[clap(short, long, default_value = "10")]
+        #[clap(
+            short,
+            long,
+            default_value = "10",
+            help = "Limit the number of search results"
+        )]
         limit: usize,
     },
+    #[clap(about = "Update plugin(s)")]
     Update {
-        #[clap()]
+        #[clap(help = "Plugin name")]
         name: Option<String>,
-        #[clap(short, long)]
+        #[clap(short, long, help = "Update all plugins")]
         all: bool,
-        #[clap(short, long)]
+        #[clap(short, long, help = "Reinstall the plugin")]
         reinstall: bool,
     },
+    #[clap(about = "Create a new plugin")]
     Create,
 }
 

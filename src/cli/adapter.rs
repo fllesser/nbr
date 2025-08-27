@@ -465,10 +465,13 @@ impl AdapterManager {
 
 #[derive(Subcommand)]
 pub enum AdapterCommands {
+    #[clap(about = "Install adapters")]
     Install,
+    #[clap(about = "Uninstall adapters")]
     Uninstall,
+    #[clap(about = "List installed adapters, show all adapters if --all is set")]
     List {
-        #[clap(short, long)]
+        #[clap(short, long, help = "Show all adapters")]
         all: bool,
     },
 }

@@ -87,13 +87,17 @@ pub enum NbrCommands {
 
 #[derive(Subcommand)]
 pub enum EnvCommands {
+    #[clap(about = "Show environment information")]
     Info,
+    #[clap(about = "Check environment")]
     Check,
 }
 
 #[derive(Subcommand)]
 pub enum CacheCommands {
+    #[clap(about = "Clear cache")]
     Clear,
+    #[clap(about = "Show cache information")]
     Info,
 }
 
