@@ -27,19 +27,19 @@ pub struct CreateArgs {
     force: bool,
     #[clap(short, long)]
     python: Option<String>,
-    #[clap(long)]
-    drivers: Option<Vec<String>>,
-    #[clap(short, long)]
+    #[clap(long, value_enum, num_args = 1.., value_delimiter = ',')]
+    drivers: Option<Vec<Driver>>,
+    #[clap(short, long, num_args = 0.., value_delimiter = ',')]
     adapters: Option<Vec<String>>,
-    #[clap(long)]
-    plugins: Option<Vec<String>>,
-    #[clap(short, long)]
-    env: Option<String>,
-    #[clap(long)]
-    dev_tools: Option<Vec<String>>,
+    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
+    plugins: Option<Vec<BuiltinPlugin>>,
+    #[clap(short, long, value_enum)]
+    env: Option<Environment>,
+    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
+    dev_tools: Option<Vec<DevTool>>,
 }
 
-#[derive(ValueEnum, Clone, Debug, Display)]
+#[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lowercase")]
 pub enum Template {
     #[clap(help = "Basic NoneBot project template")]
@@ -58,6 +58,32 @@ pub enum Driver {
     AIOHTTP,
 }
 
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum Environment {
+    Dev,
+    Prod,
+}
+
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum BuiltinPlugin {
+    Echo,
+    SingleSession,
+}
+
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum DevTool {
+    Ruff,
+    Basedpyright,
+    PreCommit,
+    Pylance,
+}
+
 pub struct ProjectOptions {
     pub name: String,
     pub template: Template,
@@ -70,14 +96,13 @@ pub struct ProjectOptions {
     pub dev_tools: Vec<String>,
 }
 
-pub async fn handle_create(args: &CreateArgs) -> Result<()> {
+pub async fn handle_create(args: CreateArgs) -> Result<()> {
     info!("🎉 Creating NoneBot project...");
     let adapter_manager = AdapterManager::default();
     // 补齐项目参数
     let options = gather_project_options(args, &adapter_manager).await?;
     // Create the project
     create_project(&options).await?;
-
     info!("\n✨ Project created successfully !");
     info!("🚀 Next steps:\n");
     info!("     {}", format!("cd {}", options.name));
@@ -107,7 +132,7 @@ fn check_directory_exists(output_dir: &Path) -> Result<()> {
 }
 
 async fn gather_project_options(
-    args: &CreateArgs,
+    args: CreateArgs,
     adapter_manager: &AdapterManager,
 ) -> Result<ProjectOptions> {
     let name = match args.name.clone() {
@@ -117,7 +142,6 @@ async fn gather_project_options(
 
     let output_dir = args
         .output
-        .clone()
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap().join(&name));
 
@@ -126,22 +150,22 @@ async fn gather_project_options(
         check_directory_exists(&output_dir)?;
     }
     // 指定 Python 版本
-    let python_version = match args.python.clone() {
+    let python_version = match args.python {
         Some(version) => version,
         None => select_python_version()?,
     };
     // 选择模板
-    let template = match args.template.clone() {
+    let template = match args.template {
         Some(template) => template,
         None => select_template()?,
     };
     // 选择驱动
-    let drivers = match args.drivers.clone() {
+    let drivers = match args.drivers {
         Some(drivers) => drivers.into_iter().map(|d| d.to_string()).collect(),
         None => select_drivers()?,
     };
 
-    let adapters = match args.adapters.clone() {
+    let adapters = match args.adapters {
         Some(_) => vec![],
         None => adapter_manager
             .select_adapters(false)
@@ -152,11 +176,20 @@ async fn gather_project_options(
     };
 
     // 选择内置插件
-    let plugins = select_builtin_plugins()?;
+    let plugins = match args.plugins {
+        Some(plugins) => plugins.into_iter().map(|p| p.to_string()).collect(),
+        None => select_builtin_plugins()?,
+    };
     // 选择环境类型
-    let environment = select_environment()?;
+    let environment = match args.env {
+        Some(env) => env.to_string(),
+        None => select_environment()?,
+    };
     // 选择开发工具
-    let dev_tools = select_dev_tools()?;
+    let dev_tools = match args.dev_tools {
+        Some(dev_tools) => dev_tools.into_iter().map(|d| d.to_string()).collect(),
+        None => select_dev_tools()?,
+    };
 
     Ok(ProjectOptions {
         name,
@@ -190,11 +223,11 @@ pub fn input_project_name() -> Result<String> {
 }
 
 fn select_environment() -> Result<String> {
-    let env_types = vec!["dev", "prod"];
+    let env_types = Environment::value_variants();
 
     let selected_env_type = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Which environment are you in now")
-        .items(&env_types)
+        .items(env_types)
         .default(0)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
@@ -270,10 +303,10 @@ fn select_dev_tools() -> Result<Vec<String>> {
 
 // 选择内置插件
 fn select_builtin_plugins() -> Result<Vec<String>> {
-    let builtin_plugins = vec!["echo", "single_session"];
+    let builtin_plugins = BuiltinPlugin::value_variants();
     let selected_plugins = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Which builtin plugin(s) would you like to use")
-        .items(&builtin_plugins)
+        .items(builtin_plugins)
         .defaults(&vec![true; builtin_plugins.len().min(1)])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?

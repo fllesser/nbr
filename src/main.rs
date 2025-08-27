@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
     uv::self_version().await?;
 
     match cli.commands {
-        NbrCommands::Create(create_args) => create::handle_create(&create_args).await?,
+        NbrCommands::Create(create_args) => create::handle_create(create_args).await?,
         NbrCommands::Run { file, reload } => run::handle_run(file, reload).await?,
         NbrCommands::Plugin { plugin_commands } => plugin::handle_plugin(&plugin_commands).await?,
         NbrCommands::Adapter { adapter_commands } => {
