@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
@@ -139,7 +139,7 @@ impl Default for PluginManager {
 impl PluginManager {
     /// Create a new plugin manager
     pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
-        let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
+        let work_dir = work_dir.unwrap_or_else(|| Path::new(".").to_path_buf());
 
         let client = Client::builder()
             .timeout(Duration::from_secs(15))
@@ -675,7 +675,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_installed_plugins() {
-        let work_dir = std::env::current_dir().unwrap().join("awesome-bot");
+        let work_dir = Path::new("awesome-bot").to_path_buf();
         let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
         let installed_plugins = plugin_manager.get_installed_plugins(true).await.unwrap();
         dbg!(installed_plugins);

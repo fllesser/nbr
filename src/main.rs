@@ -54,8 +54,6 @@ pub enum NbrCommands {
     },
     Generate {
         #[clap(short, long)]
-        file: String,
-        #[clap(short, long)]
         force: bool,
     },
     Init {
@@ -104,7 +102,7 @@ async fn main() -> Result<()> {
         NbrCommands::Adapter { adapter_commands } => {
             adapter::handle_adapter(&adapter_commands).await?
         }
-        NbrCommands::Generate { file, force } => generate::handle_generate(file, force).await?,
+        NbrCommands::Generate { force } => generate::handle_generate(force).await?,
         NbrCommands::Init { .. } => unimplemented!(),
         NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
         NbrCommands::Cache { cache_commands } => cache::handle_cache(&cache_commands).await?,

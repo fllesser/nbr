@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, error, info, warn};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -69,7 +69,7 @@ impl Default for AdapterManager {
 impl AdapterManager {
     /// Create a new adapter manager
     pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
-        let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
+        let work_dir = work_dir.unwrap_or_else(|| Path::new(".").to_path_buf());
 
         let client = Client::builder()
             .timeout(Duration::from_secs(15))

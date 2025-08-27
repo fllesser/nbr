@@ -50,6 +50,7 @@ pub enum Template {
 
 #[derive(ValueEnum, Debug, Clone, Display)]
 #[clap(rename_all = "lowercase")]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Driver {
     FastAPI,
     HTTPX,
@@ -143,7 +144,7 @@ async fn gather_project_options(
     let output_dir = args
         .output
         .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap().join(&name));
+        .unwrap_or_else(|| Path::new(&name).to_path_buf());
 
     if !args.force {
         // 如果 output_dir 已经存在，则提示用户是否继续

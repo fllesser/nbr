@@ -90,8 +90,8 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 }
 
 /// Handle the generate command
-pub async fn handle_generate(file: String, force: bool) -> Result<()> {
-    generate_bot_file(Path::new(&file), force).await
+pub async fn handle_generate(force: bool) -> Result<()> {
+    generate_bot_file(Path::new("."), force).await
 }
 
 #[cfg(test)]

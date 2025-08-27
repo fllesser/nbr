@@ -329,8 +329,7 @@ mod tests {
 
     #[test]
     fn test_add_adapters() {
-        let current_dir = std::env::current_dir().unwrap();
-        let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
+        let toml_path = Path::new("awesome-bot");
         let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_adapters(vec![Adapter {
@@ -342,8 +341,7 @@ mod tests {
 
     #[test]
     fn test_add_plugins() {
-        let current_dir = std::env::current_dir().unwrap();
-        let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
+        let toml_path = Path::new("awesome-bot");
         let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_plugins(vec!["nonebot-plugin-status".to_string()])
@@ -352,8 +350,7 @@ mod tests {
 
     #[test]
     fn test_parse_toml_to_nonebot() {
-        let current_dir = std::env::current_dir().unwrap();
-        let toml_path = current_dir.join("awesome-bot").join("pyproject.toml");
+        let toml_path = Path::new("awesome-bot");
         let pyproject = PyProjectConfig::parse(Some(&toml_path)).unwrap();
         let nonebot = pyproject.nonebot().unwrap();
         dbg!(nonebot);
