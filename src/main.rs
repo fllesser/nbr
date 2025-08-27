@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use colored::*;
 
 mod cli;
@@ -34,8 +34,8 @@ pub struct CLI {
     #[clap(
         short,
         long,
-        default_value = "0",
-        help = "Verbose level, 0: INFO, 1: DEBUG, 2: TRACE"
+        action = ArgAction::Count,
+        help = "Verbose level, -v: DEBUG, -vv: TRACE"
     )]
     pub verbose: u8,
 }
