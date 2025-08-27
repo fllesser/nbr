@@ -144,7 +144,7 @@ impl PyProjectConfig {
 
         if !toml_path.exists() {
             return Err(NbrError::config(format!(
-                "pyproject.toml not found in {}",
+                "{} is not exists",
                 toml_path.display()
             )));
         }

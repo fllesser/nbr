@@ -54,12 +54,12 @@ pub enum NbrCommands {
     #[clap(about = "Manage plugins")]
     Plugin {
         #[clap(subcommand)]
-        plugin_commands: plugin::PluginCommands,
+        commands: plugin::PluginCommands,
     },
     #[clap(about = "Manage adapters")]
     Adapter {
         #[clap(subcommand)]
-        adapter_commands: adapter::AdapterCommands,
+        commands: adapter::AdapterCommands,
     },
     #[clap(about = "Generate bot entry file")]
     Generate {
@@ -113,10 +113,8 @@ async fn main() -> Result<()> {
     match cli.commands {
         NbrCommands::Create(create_args) => create::handle_create(create_args).await?,
         NbrCommands::Run { file, reload } => run::handle_run(file, reload).await?,
-        NbrCommands::Plugin { plugin_commands } => plugin::handle_plugin(&plugin_commands).await?,
-        NbrCommands::Adapter { adapter_commands } => {
-            adapter::handle_adapter(&adapter_commands).await?
-        }
+        NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await?,
+        NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await?,
         NbrCommands::Generate { force } => generate::handle_generate(force).await?,
         NbrCommands::Init { .. } => unimplemented!(),
         NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
