@@ -105,7 +105,7 @@ pub struct ConfigManager {
 impl ConfigManager {
     /// Create a new configuration manager
     pub fn new() -> Result<Self> {
-        let current_dir = Path::new(".").to_path_buf();
+        let current_dir = std::env::current_dir()?;
 
         let config_dir = get_config_dir();
         let cache_dir = get_cache_dir();

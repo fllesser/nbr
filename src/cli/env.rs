@@ -11,7 +11,7 @@ use colored::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use sysinfo::System;
 use tracing::{info, warn};
 
@@ -104,7 +104,7 @@ impl EnvironmentChecker {
     /// Create a new environment checker
     pub async fn new() -> Result<Self> {
         //let config_manager = ConfigManager::new()?;
-        let work_dir = Path::new(".").to_path_buf().canonicalize().unwrap();
+        let work_dir = std::env::current_dir()?;
         let mut system = System::new_all();
         system.refresh_all();
 

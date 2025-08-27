@@ -143,6 +143,7 @@ impl BotRunner {
         const MAX_RAPID_RESTARTS: u32 = 5;
         const RAPID_RESTART_THRESHOLD: Duration = Duration::from_secs(10);
 
+        let mut reload_needed = false;
         loop {
             // Start the bot process
             match self.start_bot_process() {
@@ -156,7 +157,7 @@ impl BotRunner {
                     let mut restart_count = 0;
 
                     // Wait for file changes or process exit
-                    let reload_needed = self.wait_for_reload_trigger().await?;
+                    reload_needed = self.wait_for_reload_trigger().await?;
 
                     // Kill current process
                     self.kill_current_process();
@@ -180,6 +181,9 @@ impl BotRunner {
                 }
                 Err(e) => {
                     error!("Failed to start bot process: {}", e);
+                    if !reload_needed {
+                        break;
+                    }
                     sleep(Duration::from_secs(2)).await;
                 }
             }
@@ -339,7 +343,7 @@ impl Drop for BotRunner {
 pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
     let bot_file = file.unwrap_or("bot.py".to_string());
     // Load configuration
-    let work_dir = Path::new(".").to_path_buf();
+    let work_dir = std::env::current_dir()?;
     // Find bot file
     let bot_file_path = work_dir.join(bot_file);
     // Find Python executable
@@ -355,13 +359,13 @@ pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
 /// Find Python executabled
 fn find_python_executable(work_dir: &Path) -> Result<String> {
     #[cfg(target_os = "windows")]
-    let venv_path = work_dir.join(".venv").join("Scripts").join("python.exe");
+    let python_path = work_dir.join(".venv").join("Scripts").join("python.exe");
 
     #[cfg(not(target_os = "windows"))]
-    let venv_path = work_dir.join(".venv").join("bin").join("python");
+    let python_path = work_dir.join(".venv").join("bin").join("python");
 
-    if venv_path.exists() {
-        return Ok(venv_path.to_string_lossy().to_string());
+    if python_path.exists() {
+        return Ok(python_path.to_string_lossy().to_string());
     }
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
