@@ -69,7 +69,7 @@ pub enum Environment {
 
 #[derive(ValueEnum, Debug, Clone, Display)]
 #[clap(rename_all = "kebab-case")]
-#[strum(serialize_all = "kebab-case")]
+#[strum(serialize_all = "snake_case")]
 pub enum BuiltinPlugin {
     Echo,
     SingleSession,
