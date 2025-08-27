@@ -167,7 +167,14 @@ async fn gather_project_options(
     };
 
     let adapters = match args.adapters {
-        Some(_) => vec![],
+        Some(adapters) => {
+            let regsitry_adapter_map = adapter_manager.fetch_regsitry_adapters().await?;
+            adapters
+                .into_iter()
+                .filter(|a| regsitry_adapter_map.contains_key(a))
+                .map(|a| regsitry_adapter_map[&a].clone())
+                .collect()
+        }
         None => adapter_manager
             .select_adapters(false)
             .await?
