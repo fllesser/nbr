@@ -3,15 +3,15 @@
 //! This module handles environment management including showing system information,
 //! checking dependencies, and validating the current project setup.
 
+use crate::EnvCommands;
 use crate::error::{NbrError, Result};
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{self, Package};
-use clap::ArgMatches;
 use colored::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use sysinfo::System;
 use tracing::{info, warn};
 
@@ -104,8 +104,7 @@ impl EnvironmentChecker {
     /// Create a new environment checker
     pub async fn new() -> Result<Self> {
         //let config_manager = ConfigManager::new()?;
-        //let work_dir = config_manager.current_dir().to_path_buf();
-        let work_dir = std::env::current_dir().unwrap();
+        let work_dir = Path::new(".").to_path_buf();
         let mut system = System::new_all();
         system.refresh_all();
 
@@ -177,7 +176,7 @@ impl EnvironmentChecker {
             .get_virtual_env()
             .map(|path| path.to_string_lossy().to_string());
 
-        let uv_version = uv::self_version().await.ok();
+        let uv_version = uv::self_version().await.ok().map(|v| v.trim().to_string());
         let site_packages = uv::list(false).await.unwrap_or_default();
 
         Ok(PythonInfo {
@@ -757,13 +756,12 @@ impl EnvironmentChecker {
 }
 
 /// Handle the env command
-pub async fn handle_env(matches: &ArgMatches) -> Result<()> {
+pub async fn handle_env(commands: &EnvCommands) -> Result<()> {
     let mut checker = EnvironmentChecker::new().await?;
 
-    match matches.subcommand() {
-        Some(("info", _)) => checker.show_info().await,
-        Some(("check", _)) => checker.check_environment().await,
-        _ => Err(NbrError::invalid_argument("Invalid env subcommand")),
+    match commands {
+        EnvCommands::Info => checker.show_info().await,
+        EnvCommands::Check => checker.check_environment().await,
     }
 }
 

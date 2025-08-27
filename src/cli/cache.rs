@@ -4,10 +4,10 @@
 //! showing cache information, and managing cache policies.
 #![allow(dead_code)]
 
+use crate::CacheCommands;
 use crate::config::ConfigManager;
 use crate::error::{NbrError, Result};
 use crate::utils::{fs_utils, terminal_utils};
-use clap::ArgMatches;
 use colored::*;
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
@@ -611,40 +611,8 @@ fn parse_cache_type(s: &str) -> Option<CacheType> {
 }
 
 /// Handle the cache command
-pub async fn handle_cache(matches: &ArgMatches) -> Result<()> {
-    let cache_manager = CacheManager::new().await?;
-
-    match matches.subcommand() {
-        Some(("clear", sub_matches)) => {
-            let cache_types = if let Some(types_str) = sub_matches.get_many::<String>("types") {
-                let mut types = Vec::new();
-                for type_str in types_str {
-                    if let Some(cache_type) = parse_cache_type(type_str) {
-                        if cache_type == CacheType::All {
-                            types = vec![CacheType::Plugins, CacheType::Adapters];
-                            break;
-                        } else {
-                            types.push(cache_type);
-                        }
-                    } else {
-                        return Err(NbrError::invalid_argument(format!(
-                            "Unknown cache type: {}",
-                            type_str
-                        )));
-                    }
-                }
-                types
-            } else {
-                vec![CacheType::All]
-            };
-
-            let force = sub_matches.get_flag("force");
-            cache_manager.clear_cache(cache_types, force).await
-        }
-        Some(("info", _)) => cache_manager.show_info().await,
-        Some(("cleanup", _)) => cache_manager.cleanup_cache().await,
-        _ => Err(NbrError::invalid_argument("Invalid cache subcommand")),
-    }
+pub async fn handle_cache(_commands: &CacheCommands) -> Result<()> {
+    unimplemented!()
 }
 
 #[cfg(test)]

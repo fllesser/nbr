@@ -69,6 +69,9 @@ pub enum NbrError {
 
     #[error("Unknown error: {message}")]
     Unknown { message: String },
+
+    #[error("Operation cancelled")]
+    Cancelled,
 }
 
 impl NbrError {
@@ -211,6 +214,7 @@ impl NbrError {
             Self::Validation { .. } => false,
             Self::Cache { .. } => true,
             Self::Archive { .. } => true,
+            Self::Cancelled => false,
             Self::Unknown { .. } => false,
         }
     }
@@ -238,6 +242,7 @@ impl NbrError {
             Self::Validation { .. } => "validation",
             Self::Cache { .. } => "cache",
             Self::Archive { .. } => "archive",
+            Self::Cancelled => "cancelled",
             Self::Unknown { .. } => "unknown",
         }
     }
@@ -255,33 +260,32 @@ impl From<anyhow::Error> for NbrError {
     }
 }
 
-/// Helper trait for converting Results
-pub trait NbrResultExt<T> {
-    fn with_context<F>(self, f: F) -> Result<T>
-    where
-        F: FnOnce() -> String;
-}
+// pub trait NbrResultExt<T> {
+//     fn with_context<F>(self, f: F) -> Result<T>
+//     where
+//         F: FnOnce() -> String;
+// }
 
-impl<T, E> NbrResultExt<T> for std::result::Result<T, E>
-where
-    E: Into<NbrError>,
-{
-    fn with_context<F>(self, f: F) -> Result<T>
-    where
-        F: FnOnce() -> String,
-    {
-        self.map_err(|e| {
-            let base_err = e.into();
-            let context = f();
-            match base_err {
-                NbrError::Unknown { .. } => NbrError::Unknown { message: context },
-                _ => NbrError::Unknown {
-                    message: format!("{}: {}", context, base_err),
-                },
-            }
-        })
-    }
-}
+// impl<T, E> NbrResultExt<T> for std::result::Result<T, E>
+// where
+//     E: Into<NbrError>,
+// {
+//     fn with_context<F>(self, f: F) -> Result<T>
+//     where
+//         F: FnOnce() -> String,
+//     {
+//         self.map_err(|e| {
+//             let base_err = e.into();
+//             let context = f();
+//             match base_err {
+//                 NbrError::Unknown { .. } => NbrError::Unknown { message: context },
+//                 _ => NbrError::Unknown {
+//                     message: format!("{}: {}", context, base_err),
+//                 },
+//             }
+//         })
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

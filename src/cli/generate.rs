@@ -5,7 +5,6 @@
 
 use crate::error::{NbrError, Result};
 use crate::pyproject::PyProjectConfig;
-use clap::ArgMatches;
 use colored::Colorize;
 
 use dialoguer::Confirm;
@@ -91,8 +90,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 }
 
 /// Handle the generate command
-pub async fn handle_generate(matches: &ArgMatches) -> Result<()> {
-    let force = matches.get_flag("force");
+pub async fn handle_generate(force: bool) -> Result<()> {
     generate_bot_file(Path::new("."), force).await
 }
 

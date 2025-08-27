@@ -7,7 +7,7 @@ use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::utils::terminal_utils;
 use crate::uv;
-use clap::ArgMatches;
+use clap::Subcommand;
 use colored::*;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, MultiSelect};
@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, error, info, warn};
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -69,7 +69,7 @@ impl Default for AdapterManager {
 impl AdapterManager {
     /// Create a new adapter manager
     pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
-        let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
+        let work_dir = work_dir.unwrap_or_else(|| Path::new(".").to_path_buf());
 
         let client = Client::builder()
             .timeout(Duration::from_secs(15))
@@ -463,18 +463,24 @@ impl AdapterManager {
     }
 }
 
+#[derive(Subcommand)]
+pub enum AdapterCommands {
+    Install,
+    Uninstall,
+    List {
+        #[clap(short, long)]
+        all: bool,
+    },
+}
+
 /// Handle the adapter command
-pub async fn handle_adapter(matches: &ArgMatches) -> Result<()> {
+pub async fn handle_adapter(commands: &AdapterCommands) -> Result<()> {
     let adapter_manager = AdapterManager::new(None)?;
 
-    match matches.subcommand() {
-        Some(("install", _)) => adapter_manager.install_adapters().await,
-        Some(("uninstall", _)) => adapter_manager.uninstall_adapters().await,
-        Some(("list", sub_matches)) => {
-            let show_all = sub_matches.get_flag("all");
-            adapter_manager.list_adapters(show_all).await
-        }
-        _ => Err(NbrError::invalid_argument("Invalid adapter subcommand")),
+    match commands {
+        AdapterCommands::Install => adapter_manager.install_adapters().await,
+        AdapterCommands::Uninstall => adapter_manager.uninstall_adapters().await,
+        AdapterCommands::List { all } => adapter_manager.list_adapters(*all).await,
     }
 }
 

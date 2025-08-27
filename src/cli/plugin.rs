@@ -7,7 +7,7 @@ use crate::error::{NbrError, Result};
 use crate::pyproject::NbTomlEditor;
 use crate::utils::terminal_utils;
 use crate::uv::{self, Package};
-use clap::ArgMatches;
+use clap::Subcommand;
 use colored::*;
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
@@ -17,10 +17,67 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::HashMap;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
 use tracing::{debug, error, info, warn};
+
+#[derive(Subcommand)]
+pub enum PluginCommands {
+    Install {
+        #[clap()]
+        name: String,
+        #[clap(short, long)]
+        index: Option<String>,
+        #[clap(short, long)]
+        upgrade: bool,
+    },
+    Uninstall {
+        #[clap()]
+        name: String,
+    },
+    List {
+        #[clap(short, long)]
+        outdated: bool,
+    },
+    Search {
+        #[clap()]
+        query: String,
+        #[clap(short, long, default_value = "10")]
+        limit: usize,
+    },
+    Update {
+        #[clap()]
+        name: Option<String>,
+        #[clap(short, long)]
+        all: bool,
+        #[clap(short, long)]
+        reinstall: bool,
+    },
+    Create,
+}
+
+pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
+    let mut manager = PluginManager::new(None)?;
+    match commands {
+        PluginCommands::Install {
+            name,
+            index,
+            upgrade,
+        } => manager.install(name, index.as_deref(), *upgrade).await,
+        PluginCommands::Uninstall { name } => manager.uninstall(name).await,
+        PluginCommands::List { outdated } => manager.list(*outdated).await,
+        PluginCommands::Search { query, limit } => manager.search_plugins(query, *limit).await,
+        PluginCommands::Update {
+            name,
+            all,
+            reinstall,
+        } => manager.update(name.as_deref(), *all, *reinstall).await,
+        PluginCommands::Create => {
+            unimplemented!()
+        }
+    }
+}
 
 // "module_name": "nonebot_plugin_status",
 // "project_link": "nonebot-plugin-status",
@@ -82,7 +139,7 @@ impl Default for PluginManager {
 impl PluginManager {
     /// Create a new plugin manager
     pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
-        let work_dir = work_dir.unwrap_or_else(|| std::env::current_dir().unwrap());
+        let work_dir = work_dir.unwrap_or_else(|| Path::new(".").to_path_buf());
 
         let client = Client::builder()
             .timeout(Duration::from_secs(15))
@@ -99,14 +156,14 @@ impl PluginManager {
         })
     }
 
-    pub async fn install_plugin(
+    pub async fn install(
         &mut self,
         package: &str,
         index_url: Option<&str>,
         upgrade: bool,
     ) -> Result<()> {
         if package.starts_with("https") {
-            return self.install_plugin_from_github(package).await;
+            return self.install_from_github(package).await;
         }
 
         // nonebot-plugin-orm[default] -> nonebot-plugin-orm, default
@@ -122,14 +179,14 @@ impl PluginManager {
         };
 
         if let Ok(registry_plugin) = self.get_registry_plugin(package_name).await {
-            self.install_plugin_from_registry(registry_plugin, index_url, extras, upgrade)
+            self.install_from_registry(registry_plugin, index_url, extras, upgrade)
                 .await
         } else {
             self.install_unregistered_plugin(package_name, extras).await
         }
     }
 
-    pub async fn install_plugin_from_github(&mut self, repo_url: &str) -> Result<()> {
+    pub async fn install_from_github(&mut self, repo_url: &str) -> Result<()> {
         debug!("Installing plugin from github: {}", repo_url);
 
         // 确定是否安装 github 插件
@@ -193,7 +250,7 @@ impl PluginManager {
     }
 
     /// Install a plugin
-    pub async fn install_plugin_from_registry(
+    pub async fn install_from_registry(
         &self,
         registry_plugin: &RegistryPlugin,
         index_url: Option<&str>,
@@ -201,7 +258,6 @@ impl PluginManager {
         upgrade: bool,
     ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
-        debug!("Installing plugin: {package_name}");
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
 
@@ -236,11 +292,11 @@ impl PluginManager {
     }
 
     /// Uninstall a plugin
-    pub async fn uninstall_plugin(&self, name: &str) -> Result<()> {
+    pub async fn uninstall(&self, name: &str) -> Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
         if let Ok(registry_plugin) = self.get_registry_plugin(name).await {
-            self.uninstall_plugin_from_registry(registry_plugin).await
+            self.uninstall_registry_plugin(registry_plugin).await
         } else {
             self.uninstall_unregistered_plugin(name).await
         }
@@ -280,10 +336,7 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn uninstall_plugin_from_registry(
-        &self,
-        registry_plugin: &RegistryPlugin,
-    ) -> Result<()> {
+    pub async fn uninstall_registry_plugin(&self, registry_plugin: &RegistryPlugin) -> Result<()> {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !uv::is_installed(&package_name).await {
@@ -326,7 +379,7 @@ impl PluginManager {
         Ok(installed_plugins)
     }
 
-    pub async fn list_plugins(&self, show_outdated: bool) -> Result<()> {
+    pub async fn list(&self, show_outdated: bool) -> Result<()> {
         // 获取所有插件
         let mut installed_plugins = self.get_installed_plugins(false).await?;
         // 获取需要更新的插件
@@ -389,7 +442,7 @@ impl PluginManager {
     }
 
     /// Update plugins
-    pub async fn update_plugins(
+    pub async fn update(
         &mut self,
         plugin_name: Option<&str>,
         update_all: bool,
@@ -597,50 +650,6 @@ impl PluginManager {
     }
 }
 
-/// Handle the plugin command
-pub async fn handle_plugin(matches: &ArgMatches) -> Result<()> {
-    let mut plugin_manager = PluginManager::new(None)?;
-
-    match matches.subcommand() {
-        Some(("install", sub_matches)) => {
-            let name = sub_matches.get_one::<String>("name").unwrap();
-            let index_url = sub_matches.get_one::<String>("index");
-            let upgrade = sub_matches.get_flag("upgrade");
-
-            plugin_manager
-                .install_plugin(name, index_url.map(|s| s.as_str()), upgrade)
-                .await
-        }
-        Some(("uninstall", sub_matches)) => {
-            let name = sub_matches.get_one::<String>("name").unwrap();
-            plugin_manager.uninstall_plugin(name).await
-        }
-        Some(("list", sub_matches)) => {
-            let outdated = sub_matches.get_flag("outdated");
-            plugin_manager.list_plugins(outdated).await
-        }
-        Some(("search", sub_matches)) => {
-            let query = sub_matches.get_one::<String>("query").unwrap();
-            let limit: usize = sub_matches
-                .get_one::<String>("limit")
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(10);
-
-            plugin_manager.search_plugins(query, limit).await
-        }
-        Some(("update", sub_matches)) => {
-            let plugin_name = sub_matches.get_one::<String>("name");
-            let update_all = sub_matches.get_flag("all");
-            let reinstall = sub_matches.get_flag("reinstall");
-
-            plugin_manager
-                .update_plugins(plugin_name.map(|s| s.as_str()), update_all, reinstall)
-                .await
-        }
-        _ => Err(NbrError::invalid_argument("Invalid plugin subcommand")),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -666,7 +675,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_installed_plugins() {
-        let work_dir = std::env::current_dir().unwrap().join("awesome-bot");
+        let work_dir = Path::new("awesome-bot").to_path_buf();
         let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
         let installed_plugins = plugin_manager.get_installed_plugins(true).await.unwrap();
         dbg!(installed_plugins);

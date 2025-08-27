@@ -1,52 +1,94 @@
 use anyhow::Context;
-use clap::ArgMatches;
+use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 
-use serde::{Deserialize, Serialize};
+use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 use std::collections::HashSet;
-use std::fmt::Display;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use tracing::{error, info};
-
-use crate::cli::adapter::{AdapterManager, RegistryAdapter};
+use strum::Display;
+use tracing::info;
 
 use crate::error::{NbrError, Result};
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::uv;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Args, Debug)]
+pub struct CreateArgs {
+    #[clap()]
+    name: Option<String>,
+    #[clap(short, long, value_enum)]
+    template: Option<Template>,
+    #[clap(short, long)]
+    output: Option<String>,
+    #[clap(short, long)]
+    force: bool,
+    #[clap(short, long)]
+    python: Option<String>,
+    #[clap(long, value_enum, num_args = 1.., value_delimiter = ',')]
+    drivers: Option<Vec<Driver>>,
+    #[clap(short, long, num_args = 0.., value_delimiter = ',')]
+    adapters: Option<Vec<String>>,
+    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
+    plugins: Option<Vec<BuiltinPlugin>>,
+    #[clap(short, long, value_enum)]
+    env: Option<Environment>,
+    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
+    dev_tools: Option<Vec<DevTool>>,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+#[clap(rename_all = "lowercase")]
 pub enum Template {
+    #[clap(help = "Basic NoneBot project template")]
     Bootstrap,
+    #[clap(help = "Simple bot template with basic plugins")]
     Simple,
 }
 
-impl Template {
-    pub fn description(&self) -> &str {
-        match self {
-            Template::Bootstrap => "bootstrap - Basic NoneBot project template",
-            Template::Simple => "simple - Simple bot template with basic plugins",
-        }
-    }
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "lowercase")]
+#[allow(clippy::upper_case_acronyms)]
+pub enum Driver {
+    FastAPI,
+    HTTPX,
+    WebSockets,
+    Quark,
+    AIOHTTP,
 }
 
-impl Display for Template {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Template::Bootstrap => write!(f, "bootstrap"),
-            Template::Simple => write!(f, "simple"),
-        }
-    }
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum Environment {
+    Dev,
+    Prod,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "kebab-case")]
+#[strum(serialize_all = "snake_case")]
+pub enum BuiltinPlugin {
+    Echo,
+    SingleSession,
+}
+
+#[derive(ValueEnum, Debug, Clone, Display)]
+#[clap(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum DevTool {
+    Ruff,
+    Basedpyright,
+    PreCommit,
+    Pylance,
+}
+
 pub struct ProjectOptions {
     pub name: String,
     pub template: Template,
     pub output_dir: PathBuf,
-    pub force: bool,
     pub drivers: Vec<String>,
     pub adapters: Vec<RegistryAdapter>,
     pub plugins: Vec<String>,
@@ -55,22 +97,13 @@ pub struct ProjectOptions {
     pub dev_tools: Vec<String>,
 }
 
-pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
+pub async fn handle_create(args: CreateArgs) -> Result<()> {
     info!("🎉 Creating NoneBot project...");
-
     let adapter_manager = AdapterManager::default();
-
-    // 补齐项目选项
-    let options = gather_project_options(matches, &adapter_manager).await?;
-
-    // Check if directory already exists
-    if !check_directory_exists(&options)? {
-        return Ok(());
-    }
-
+    // 补齐项目参数
+    let options = gather_project_options(args, &adapter_manager).await?;
     // Create the project
     create_project(&options).await?;
-
     info!("\n✨ Project created successfully !");
     info!("🚀 Next steps:\n");
     info!("     {}", format!("cd {}", options.name));
@@ -81,68 +114,95 @@ pub async fn handle_create(matches: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-fn check_directory_exists(options: &ProjectOptions) -> Result<bool> {
-    if options.output_dir.exists() && !options.force {
+fn check_directory_exists(output_dir: &Path) -> Result<()> {
+    if output_dir.exists() {
         let should_continue = Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!(
                 "Directory '{}' already exists. Continue?",
-                options.output_dir.display()
+                output_dir.display()
             ))
             .default(false)
             .interact()
             .map_err(|e| NbrError::io(e.to_string()))?;
 
         if !should_continue {
-            error!("{}", "Create operation cancelled.");
-            return Ok(false);
+            return Err(NbrError::Cancelled);
         }
     }
-    Ok(true)
+    Ok(())
 }
 
 async fn gather_project_options(
-    matches: &ArgMatches,
+    args: CreateArgs,
     adapter_manager: &AdapterManager,
 ) -> Result<ProjectOptions> {
-    let name = matches
-        .get_one::<String>("name")
-        .map(|s| s.to_owned())
-        .unwrap_or(input_project_name()?);
-    // 选择模板
-    let template = select_template()?;
-    // 选择 Bot 创建目录，默认在当前目录下创建
-    let output_dir: PathBuf = matches
-        .get_one::<String>("output")
+    let name = match args.name.clone() {
+        Some(name) => name,
+        None => input_project_name()?,
+    };
+
+    let output_dir = args
+        .output
         .map(PathBuf::from)
-        .unwrap_or(std::env::current_dir()?.join(&name));
-    // 是否强制创建
-    let force = matches.get_flag("force");
-    // 选择驱动
-    let drivers = select_drivers()?;
+        .unwrap_or_else(|| Path::new(&name).to_path_buf());
+
+    if !args.force {
+        // 如果 output_dir 已经存在，则提示用户是否继续
+        check_directory_exists(&output_dir)?;
+    }
     // 指定 Python 版本
-    let python_version = matches
-        .get_one::<String>("python")
-        .map(|s| s.to_owned())
-        .unwrap_or(select_python_version()?);
-    // 选择适配器
-    let adapters = adapter_manager
-        .select_adapters(false)
-        .await?
-        .into_iter()
-        .map(|a| a.to_owned())
-        .collect();
+    let python_version = match args.python {
+        Some(version) => version,
+        None => select_python_version()?,
+    };
+    // 选择模板
+    let template = match args.template {
+        Some(template) => template,
+        None => select_template()?,
+    };
+    // 选择驱动
+    let drivers = match args.drivers {
+        Some(drivers) => drivers.into_iter().map(|d| d.to_string()).collect(),
+        None => select_drivers()?,
+    };
+
+    let adapters = match args.adapters {
+        Some(adapters) => {
+            let regsitry_adapter_map = adapter_manager.fetch_regsitry_adapters().await?;
+            adapters
+                .into_iter()
+                .filter(|a| regsitry_adapter_map.contains_key(a))
+                .map(|a| regsitry_adapter_map[&a].clone())
+                .collect()
+        }
+        None => adapter_manager
+            .select_adapters(false)
+            .await?
+            .into_iter()
+            .map(|a| a.to_owned())
+            .collect(),
+    };
+
     // 选择内置插件
-    let plugins = select_builtin_plugins()?;
+    let plugins = match args.plugins {
+        Some(plugins) => plugins.into_iter().map(|p| p.to_string()).collect(),
+        None => select_builtin_plugins()?,
+    };
     // 选择环境类型
-    let environment = select_environment()?;
+    let environment = match args.env {
+        Some(env) => env.to_string(),
+        None => select_environment()?,
+    };
     // 选择开发工具
-    let dev_tools = select_dev_tools()?;
+    let dev_tools = match args.dev_tools {
+        Some(dev_tools) => dev_tools.into_iter().map(|d| d.to_string()).collect(),
+        None => select_dev_tools()?,
+    };
 
     Ok(ProjectOptions {
         name,
         template,
         output_dir,
-        force,
         drivers,
         adapters,
         plugins,
@@ -152,7 +212,7 @@ async fn gather_project_options(
     })
 }
 
-fn input_project_name() -> Result<String> {
+pub fn input_project_name() -> Result<String> {
     Input::<String>::with_theme(&ColorfulTheme::default())
         .with_prompt("Project name")
         .default("awesome-bot".to_string())
@@ -171,11 +231,11 @@ fn input_project_name() -> Result<String> {
 }
 
 fn select_environment() -> Result<String> {
-    let env_types = vec!["dev", "prod"];
+    let env_types = Environment::value_variants();
 
     let selected_env_type = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Which environment are you in now")
-        .items(&env_types)
+        .items(env_types)
         .default(0)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
@@ -183,10 +243,10 @@ fn select_environment() -> Result<String> {
 }
 
 fn select_drivers() -> Result<Vec<String>> {
-    let drivers = vec!["FastAPI", "HTTPX", "websockets", "Quark", "AIOHTTP"];
+    let drivers = Driver::value_variants();
     let selected_drivers = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Which driver(s) would you like to use")
-        .items(&drivers)
+        .items(drivers)
         // 默认选择前三个
         .defaults(&[true; 3])
         .interact()
@@ -205,15 +265,14 @@ fn select_drivers() -> Result<Vec<String>> {
 }
 
 fn select_template() -> Result<Template> {
-    let template_descriptions: Vec<String> = vec![
-        Template::Bootstrap.description().to_string(),
-        Template::Simple.description().to_string(),
+    let template_prompts = vec![
+        "bootstrap - Basic NoneBot project template",
+        "simple - Simple bot template with basic plugins",
     ];
-
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select a template")
         .default(0)
-        .items(&template_descriptions)
+        .items(&template_prompts)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
 
@@ -252,10 +311,10 @@ fn select_dev_tools() -> Result<Vec<String>> {
 
 // 选择内置插件
 fn select_builtin_plugins() -> Result<Vec<String>> {
-    let builtin_plugins = vec!["echo", "single_session"];
+    let builtin_plugins = BuiltinPlugin::value_variants();
     let selected_plugins = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Which builtin plugin(s) would you like to use")
-        .items(&builtin_plugins)
+        .items(builtin_plugins)
         .defaults(&vec![true; builtin_plugins.len().min(1)])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?
@@ -479,7 +538,6 @@ mod tests {
             name: "awesome-bot".to_string(),
             template: Template::Bootstrap,
             output_dir: PathBuf::from("awesome-bot"),
-            force: false,
             drivers: vec![
                 "FastAPI".to_string(),
                 "HTTPX".to_string(),
@@ -497,5 +555,17 @@ mod tests {
     #[test]
     fn test_generate_ruff_config() {
         append_ruff_config(&PathBuf::from("awesome-bot")).unwrap();
+    }
+
+    #[test]
+    fn test_select_template() {
+        let template = select_template().unwrap();
+        println!("{:?}", template);
+    }
+
+    #[test]
+    fn test_select_drivers() {
+        let drivers = select_drivers().unwrap();
+        println!("{:?}", drivers);
     }
 }

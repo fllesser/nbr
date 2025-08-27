@@ -65,7 +65,7 @@ pub async fn is_installed(package: &str) -> bool {
 }
 
 pub async fn self_version() -> Result<String> {
-    let args = vec!["self", "version"];
+    let args = vec!["self", "version", "--short"];
     CommonBuilder::new(args).run_async().await.map_err(|_| {
         let message = concat!(
             "uv not found. You can run\n\n",
@@ -350,10 +350,9 @@ impl<'a> AddBuilder<'a> {
 mod tests {
 
     use super::*;
-    use std::path::PathBuf;
 
-    fn working_dir() -> PathBuf {
-        std::env::current_dir().unwrap().join("awesome-bot")
+    fn working_dir() -> &'static Path {
+        Path::new("awesome-bot")
     }
 
     #[tokio::test]
