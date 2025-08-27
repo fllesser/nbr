@@ -31,41 +31,54 @@ const ABOUT: &str = "CLI for NoneBot2 - Rust implementation";
 pub struct CLI {
     #[clap(subcommand)]
     pub commands: NbrCommands,
-    #[clap(short, long, default_value = "0")]
-    pub verbose: Option<u8>,
+    #[clap(
+        short,
+        long,
+        default_value = "0",
+        help = "Verbose level, 0: INFO, 1: DEBUG, 2: TRACE"
+    )]
+    pub verbose: u8,
 }
 
 #[derive(Subcommand)]
 pub enum NbrCommands {
+    #[clap(about = "Create a new project")]
     Create(create::CreateArgs),
+    #[clap(about = "Run the bot")]
     Run {
         #[clap()] // 位置参数
         file: Option<String>,
         #[clap(short, long)]
         reload: bool,
     },
+    #[clap(about = "Manage plugins")]
     Plugin {
         #[clap(subcommand)]
         plugin_commands: plugin::PluginCommands,
     },
+    #[clap(about = "Manage adapters")]
     Adapter {
         #[clap(subcommand)]
         adapter_commands: adapter::AdapterCommands,
     },
+    #[clap(about = "Generate bot entry file")]
     Generate {
         #[clap(short, long)]
         force: bool,
     },
+    #[clap(about = "unimplemented")]
     Init {
         #[clap(short, long)]
         name: String,
         #[clap(short, long)]
         force: bool,
     },
+    #[clap(about = "Check environment")]
     Env {
         #[clap(subcommand)]
         env_commands: EnvCommands,
     },
+    #[clap(about = "unimplemented")]
     Cache {
         #[clap(subcommand)]
         cache_commands: CacheCommands,
@@ -74,13 +87,17 @@ pub enum NbrCommands {
 
 #[derive(Subcommand)]
 pub enum EnvCommands {
+    #[clap(about = "Show environment information")]
     Info,
+    #[clap(about = "Check environment")]
     Check,
 }
 
 #[derive(Subcommand)]
 pub enum CacheCommands {
+    #[clap(about = "Clear cache")]
     Clear,
+    #[clap(about = "Show cache information")]
     Info,
 }
 
@@ -88,9 +105,7 @@ pub enum CacheCommands {
 async fn main() -> Result<()> {
     let cli = CLI::parse();
 
-    let verbose = cli.verbose.unwrap_or(0);
-
-    log::init_logging(verbose);
+    log::init_logging(cli.verbose);
 
     // Check if uv is installed
     uv::self_version().await?;
