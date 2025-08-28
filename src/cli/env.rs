@@ -674,53 +674,50 @@ impl EnvironmentChecker {
         for issue in issues {
             if issue.contains("Python 3.10+") {
                 StyledText::new("")
-                    .cyan("  • Install Python 3.10 or later from")
-                    .text("https://python.org")
+                    .text("  • Install Python 3.10 or later from ")
+                    .cyan("https://python.org")
                     .println();
             } else if issue.contains("NoneBot2 is not installed") {
                 StyledText::new("")
-                    .cyan("  • Install NoneBot2:")
-                    .text("uv add nonebot2[fastapi]")
+                    .text("  • Install NoneBot2: ")
+                    .cyan("uv add nonebot2[fastapi]")
                     .println();
             } else if issue.contains("uv is not available") {
                 StyledText::new("")
-                    .cyan("  • Install uv from")
-                    .text("https://astral.sh/blog/uv")
+                    .text("  • Install uv from ")
+                    .cyan("https://astral.sh/blog/uv")
                     .println();
             } else if issue.contains("virtual environment") {
                 StyledText::new("")
-                    .cyan("  • Create a virtual environment:")
-                    .text("uv venv")
+                    .text("  • Create a virtual environment: ")
+                    .cyan("uv venv")
                     .println();
                 StyledText::new("")
-                    .cyan("  • Activate it:")
-                    .text("source .venv/bin/activate")
-                    .text("(Linux/Mac) or")
-                    .text(".venv\\Scripts\\activate")
+                    .text("  • Activate it: ")
+                    .cyan("source .venv/bin/activate")
+                    .text(" (Linux/Mac) or ")
+                    .cyan(".venv\\Scripts\\activate")
+                    .text(" (Windows)")
                     .println();
             } else if issue.contains("memory") {
-                StyledText::new("")
-                    .cyan("  • Close unnecessary applications to free up memory")
-                    .println();
-                StyledText::new("")
-                    .cyan("  • Consider upgrading system RAM")
-                    .println();
+                println!("  • Close unnecessary applications to free up memory");
+                println!("  • Consider upgrading system RAM");
             } else if issue.contains("Disk space") {
                 println!("  • Free up disk space by removing unnecessary files");
                 println!("  • Consider moving the project to a drive with more space");
             } else if issue.contains("bot entry file") {
                 StyledText::new("")
-                    .cyan("  • Create a bot entry file:")
-                    .text("nb generate bot.py")
+                    .text("  • Create a bot entry file: ")
+                    .cyan("nb generate bot.py")
                     .println();
             } else if issue.contains(".env") {
                 StyledText::new("")
-                    .cyan("  • Create environment file:")
-                    .text("cp .env.example .env")
+                    .text("  • Create environment file: ")
+                    .cyan("cp .env.example .env")
                     .println();
                 StyledText::new("")
-                    .cyan("  • Or create a new project:")
-                    .text("nb create")
+                    .text("  • Or create a new project: ")
+                    .cyan("nb create")
                     .println();
             }
         }
