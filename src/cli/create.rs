@@ -212,7 +212,7 @@ async fn gather_project_options(
     })
 }
 
-pub fn input_project_name() -> Result<String> {
+fn input_project_name() -> Result<String> {
     Input::<String>::with_theme(&ColorfulTheme::default())
         .with_prompt("Project name")
         .default("awesome-bot".to_string())
