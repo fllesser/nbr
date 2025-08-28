@@ -210,13 +210,11 @@ impl NbTomlEditor {
     }
 
     pub fn with_str(content: &str, save_path: &Path) -> NbrResult<Self> {
+        let toml_path = save_path.to_path_buf();
         let doc = Document::parse(content)
             .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))?;
         let doc_mut = doc.into_mut();
-        Ok(Self {
-            toml_path: save_path.to_path_buf(),
-            doc_mut,
-        })
+        Ok(Self { toml_path, doc_mut })
     }
 
     fn nonebot_table_mut(&mut self) -> NbrResult<&mut Table> {
