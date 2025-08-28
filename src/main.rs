@@ -31,12 +31,7 @@ const ABOUT: &str = "CLI for NoneBot2 - Rust implementation";
 pub struct CLI {
     #[clap(subcommand)]
     pub commands: NbrCommands,
-    #[clap(
-        short,
-        long,
-        action = ArgAction::Count,
-        help = "Verbose level, -v: DEBUG, -vv: TRACE"
-    )]
+    #[clap(short, long, action = ArgAction::Count, help = "Verbose level, -v: DEBUG, -vv: TRACE")]
     pub verbose: u8,
 }
 
