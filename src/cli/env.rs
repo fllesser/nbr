@@ -67,7 +67,6 @@ pub struct ProjectInfo {
     pub name: String,
     pub root_path: PathBuf,
     pub bot_file: Option<PathBuf>,
-    pub config_files: Vec<PathBuf>,
     pub plugins_dir: Option<PathBuf>,
     pub is_git_repo: bool,
     pub virtual_env: Option<PathBuf>,
@@ -131,9 +130,7 @@ impl EnvironmentChecker {
 
             for (i, issue) in issues.iter().enumerate() {
                 StyledText::new("")
-                    .red(&(i + 1).to_string())
-                    .red(".")
-                    .red(issue)
+                    .red(format!("  {}.{}", i + 1, issue).as_str())
                     .println();
             }
 
@@ -226,17 +223,8 @@ impl EnvironmentChecker {
 
     /// Get project information
     fn get_project_info(&self) -> Option<ProjectInfo> {
-        let mut config_files = Vec::new();
         let mut bot_file = None;
         let mut plugins_dir = None;
-
-        // Check for common config files
-        for config_name in &["pyproject.toml", ".env", ".env.dev", ".env.prod"] {
-            let config_path = self.work_dir.join(config_name);
-            if config_path.exists() {
-                config_files.push(config_path);
-            }
-        }
 
         // Check for bot files
         let bot_path = self.work_dir.join("bot.py");
@@ -264,12 +252,11 @@ impl EnvironmentChecker {
             .to_string();
 
         // Only return project info if we found at least some project files
-        if !config_files.is_empty() || bot_file.is_some() {
+        if bot_file.is_some() {
             Some(ProjectInfo {
                 name: project_name,
                 root_path: self.work_dir.clone(),
                 bot_file,
-                config_files,
                 plugins_dir,
                 is_git_repo,
                 virtual_env,
@@ -293,42 +280,7 @@ impl EnvironmentChecker {
         let available_memory = self.system.available_memory();
         let cpu_count = self.system.cpus().len();
         let cpu_usage = self.system.global_cpu_usage();
-
-        // let disk_usage = self
-        //     .system.
-        //     .disks()
-        //     .iter()
-        //     .map(|disk| {
-        //         let total_space = disk.total_space();
-        //         let available_space = disk.available_space();
-        //         let usage_percentage = if total_space > 0 {
-        //             ((total_space - available_space) as f32 / total_space as f32) * 100.0
-        //         } else {
-        //             0.0
-        //         };
-
-        //         DiskUsage {
-        //             mount_point: disk.mount_point().to_string_lossy().to_string(),
-        //             total_space,
-        //             available_space,
-        //             usage_percentage,
-        //         }
-        //     })
-        //     .collect();
-        let disk_usage = vec![
-            DiskUsage {
-                mount_point: "/".to_string(),
-                total_space: 100000000000,
-                available_space: 50000000000,
-                usage_percentage: 50.0,
-            },
-            DiskUsage {
-                mount_point: "/home".to_string(),
-                total_space: 50000000000,
-                available_space: 25000000000,
-                usage_percentage: 50.0,
-            },
-        ];
+        let disk_usage = vec![];
 
         SystemInfo {
             total_memory,
@@ -343,16 +295,14 @@ impl EnvironmentChecker {
     fn get_relevant_env_vars(&self) -> HashMap<String, String> {
         let mut env_vars = HashMap::new();
         let relevant_vars = [
-            "PATH",
             "PYTHONPATH",
             "VIRTUAL_ENV",
-            "CONDA_PREFIX",
-            "HOST",
-            "PORT",
             "ENVIRONMENT",
             "LOG_LEVEL",
             "HTTP_PROXY",
             "HTTPS_PROXY",
+            "http_proxy",
+            "https_proxy",
         ];
 
         for var_name in &relevant_vars {
@@ -376,45 +326,23 @@ impl EnvironmentChecker {
     /// Display environment information
     fn display_environment_info(&self, env_info: &EnvironmentInfo) {
         // Operating System
-        // println!("{}", "Operating System:".bright_green().bold());
-        // println!(
-        //     "  {} {}",
-        //     "Name:".bright_black(),
-        //     env_info.os_info.name.bright_white()
-        // );
-        // println!(
-        //     "  {} {}",
-        //     "Version:".bright_black(),
-        //     env_info.os_info.version.bright_white()
-        // );
-        // println!(
-        //     "  {} {}",
-        //     "Architecture:".bright_black(),
-        //     env_info.os_info.architecture.bright_white()
-        // );
-        // println!(
-        //     "  {} {}",
-        //     "Kernel:".bright_black(),
-        //     env_info.os_info.kernel_version.bright_white()
-        // );
-        // println!();
 
         // Python Environment
         info!("Python Environment:");
-        StyledText::new("")
-            .black("  version: ")
+        StyledText::new(" ")
+            .black("  version:")
             .text(&env_info.python_info.version)
             .println();
-        StyledText::new("")
-            .black("  uv version: ")
+        StyledText::new(" ")
+            .black("  uv version:")
             .text(env_info.python_info.uv_version.as_ref().unwrap())
             .println();
-        StyledText::new("")
-            .black("  executable: ")
+        StyledText::new(" ")
+            .black("  executable:")
             .text(&env_info.python_info.executable)
             .println();
-        StyledText::new("")
-            .black("  virtual Environment: ")
+        StyledText::new(" ")
+            .black("  virtual environment:")
             .with(|text| {
                 if let Some(venv) = env_info.python_info.virtual_env.as_ref() {
                     text.text(venv);
@@ -424,8 +352,8 @@ impl EnvironmentChecker {
             })
             .println();
 
-        StyledText::new("")
-            .black("  installed Packages: ")
+        StyledText::new(" ")
+            .black("  installed Packages:")
             .text(&env_info.python_info.site_packages.len().to_string())
             .println();
 
@@ -434,56 +362,44 @@ impl EnvironmentChecker {
         // NoneBot Information
         if let Some(ref nonebot) = env_info.nonebot_info {
             info!("NoneBot:");
-            StyledText::new("")
-                .black("  version: ")
+            StyledText::new(" ")
+                .black("  version:")
                 .text(&nonebot.version)
                 .println();
-            StyledText::new("")
-                .black("  location: ")
+            StyledText::new(" ")
+                .black("  location:")
                 .text(&nonebot.location)
-                .println();
-            StyledText::new("")
-                .black("  adapters: ")
-                .text(&nonebot.adapters.len().to_string())
-                .println();
-            StyledText::new("")
-                .black("  plugins: ")
-                .text(&nonebot.plugins.len().to_string())
                 .println();
 
             if !nonebot.adapters.is_empty() {
                 StyledText::new("")
-                    .cyan("    Installed Adapters: ")
+                    .black(format!("  installed {} adapters:", nonebot.adapters.len()).as_str())
                     .println();
                 for adapter in &nonebot.adapters {
-                    StyledText::new("")
-                        .text("      • ")
+                    StyledText::new(" ")
+                        .text("    •")
                         .text(&adapter.name)
-                        .black(" (v")
-                        .black(&adapter.version)
-                        .black(")")
+                        .black(format!("(v{})", adapter.version).as_str())
                         .println();
                 }
             }
 
             if !nonebot.plugins.is_empty() {
                 StyledText::new("")
-                    .cyan("    Installed Plugins: ")
+                    .black(format!("  installed {} plugins:", nonebot.plugins.len()).as_str())
                     .println();
                 for plugin in &nonebot.plugins {
-                    StyledText::new("")
-                        .text("      • ")
+                    StyledText::new(" ")
+                        .text("    •")
                         .text(&plugin.name)
-                        .black(" (v")
-                        .black(&plugin.version)
-                        .black(")")
+                        .black(format!("(v{})", plugin.version).as_str())
                         .println();
                 }
             }
         } else {
             StyledText::new("").green_bold("NoneBot:").println();
-            StyledText::new("")
-                .black("  status: ")
+            StyledText::new(" ")
+                .black("  status:")
                 .red("Not installed")
                 .println();
         }
@@ -492,31 +408,31 @@ impl EnvironmentChecker {
         // Project Information
         if let Some(ref project) = env_info.project_info {
             info!("Project:");
-            StyledText::new("")
-                .black("  name: ")
+            StyledText::new(" ")
+                .black("  name:")
                 .text(&project.name)
                 .println();
-            StyledText::new("")
-                .black("  root path: ")
+            StyledText::new(" ")
+                .black("  root path:")
                 .text(&project.root_path.display().to_string())
                 .println();
 
             if let Some(ref bot_file) = project.bot_file {
-                StyledText::new("")
-                    .black("  bot file: ")
+                StyledText::new(" ")
+                    .black("  bot file:")
                     .text(&bot_file.display().to_string())
                     .println();
             }
 
             if let Some(ref plugins_dir) = project.plugins_dir {
-                StyledText::new("")
-                    .black("  plugins directory: ")
+                StyledText::new(" ")
+                    .black("  plugins directory:")
                     .text(&plugins_dir.display().to_string())
                     .println();
             }
 
-            StyledText::new("")
-                .black("  git repository: ")
+            StyledText::new(" ")
+                .black("  git repository:")
                 .with(|text| {
                     if project.is_git_repo {
                         text.green("Yes");
@@ -527,28 +443,15 @@ impl EnvironmentChecker {
                 .println();
 
             if let Some(ref venv) = project.virtual_env {
-                StyledText::new("")
-                    .black("  virtual environment: ")
+                StyledText::new(" ")
+                    .black("  virtual environment:")
                     .text(&venv.display().to_string())
                     .println();
             }
-
-            if !project.config_files.is_empty() {
-                StyledText::new("")
-                    .black("  config files: ")
-                    .text(&project.config_files.len().to_string())
-                    .println();
-                for config in &project.config_files {
-                    StyledText::new("")
-                        .text("    • ")
-                        .text(&config.file_name().unwrap().to_string_lossy())
-                        .println();
-                }
-            }
         } else {
             info!("Project:");
-            StyledText::new("")
-                .black("  status: ")
+            StyledText::new(" ")
+                .black("  status:")
                 .red("No NoneBot project detected")
                 .println();
         }
@@ -556,24 +459,17 @@ impl EnvironmentChecker {
 
         // System Resources
         info!("System Resources:");
-        StyledText::new("")
-            .black("  cpu: ")
+        StyledText::new(" ")
+            .black("  cpu:")
             .text(&env_info.system_info.cpu_count.to_string())
-            .println();
-        StyledText::new("")
-            .black("  cpu usage: ")
-            .text(&env_info.system_info.cpu_usage.to_string())
+            .text(format!("/ {:.2}%", env_info.system_info.cpu_usage).as_str())
             .println();
 
         let total_gb = env_info.system_info.total_memory as f64 / 1_073_741_824.0;
         let available_gb = env_info.system_info.available_memory as f64 / 1_073_741_824.0;
-        StyledText::new("")
-            .black("  memory: ")
-            .text(&total_gb.to_string())
-            .println();
-        StyledText::new("")
-            .black("  memory: ")
-            .text(&available_gb.to_string())
+        StyledText::new(" ")
+            .black("  memory:")
+            .text(format!("{} GB / {} GB", available_gb, total_gb).as_str())
             .println();
 
         if !env_info.system_info.disk_usage.is_empty() {
@@ -581,15 +477,11 @@ impl EnvironmentChecker {
             for disk in &env_info.system_info.disk_usage {
                 let total_gb = disk.total_space as f64 / 1_073_741_824.0;
                 let available_gb = disk.available_space as f64 / 1_073_741_824.0;
-                StyledText::new("")
-                    .text("    • ")
-                    .cyan(&disk.usage_percentage.to_string())
-                    .text(" % used (")
-                    .cyan(&format!("{:.2}", total_gb - available_gb))
-                    .text(" / ")
-                    .cyan(&format!("{:.2}", total_gb))
-                    .text(" GB) at ")
-                    .cyan(&disk.mount_point)
+                StyledText::new(" ")
+                    .text("    •")
+                    .text(format!("{}% used", disk.usage_percentage).as_str())
+                    .text(format!("({:.2} / {:.2} GB)", total_gb - available_gb, total_gb).as_str())
+                    .text(format!(" GB) at {}", disk.mount_point).as_str())
                     .println();
             }
         }
@@ -599,10 +491,9 @@ impl EnvironmentChecker {
         if !env_info.env_vars.is_empty() {
             info!("Environment Variables:");
             for (key, value) in &env_info.env_vars {
-                StyledText::new("")
-                    .black("  ")
-                    .text(&format!("{}:", key))
-                    .white(value)
+                StyledText::new(" ")
+                    .black(&format!(" • {}:", key))
+                    .text(value)
                     .println();
             }
         }
@@ -660,16 +551,6 @@ impl EnvironmentChecker {
                     disk.mount_point, disk.usage_percentage
                 ));
             }
-        }
-
-        // Check project structure
-        if let Some(ref project) = env_info.project_info
-            && !project
-                .config_files
-                .iter()
-                .any(|f| f.file_name().unwrap().to_string_lossy().starts_with(".env"))
-        {
-            issues.push("No .env.* file found".to_string());
         }
 
         issues
