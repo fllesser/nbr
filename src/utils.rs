@@ -504,9 +504,7 @@ pub mod terminal_utils {
     pub fn create_spinner(message: impl Into<String>) -> ProgressBar {
         let pb = ProgressBar::new_spinner();
         pb.set_style(
-            ProgressStyle::default_spinner()
-                .template("{spinner:.green} {msg}")
-                .unwrap(),
+            ProgressStyle::with_template("{spinner:.green.bold} {msg:.green.bold}").unwrap(),
         );
         pb.set_message(message.into());
         pb.enable_steady_tick(Duration::from_millis(100));

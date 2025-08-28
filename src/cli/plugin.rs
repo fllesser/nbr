@@ -220,8 +220,8 @@ impl PluginManager {
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
-        StyledText::new("")
-            .green_bold("✓ Successfully installed plugin: ")
+        StyledText::new(" ")
+            .green_bold("✓ Successfully installed plugin:")
             .cyan_bold(repo_name)
             .println();
         Ok(())
@@ -253,8 +253,8 @@ impl PluginManager {
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
-        StyledText::new("")
-            .green_bold("✓ Successfully installed plugin: ")
+        StyledText::new(" ")
+            .green_bold("✓ Successfully installed plugin:")
             .cyan_bold(package_name)
             .println();
         Ok(())
@@ -294,8 +294,8 @@ impl PluginManager {
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
             .add_plugins(vec![registry_plugin.module_name.clone()])?;
 
-        StyledText::new("")
-            .green_bold("✓ Successfully installed plugin: ")
+        StyledText::new(" ")
+            .green_bold("✓ Successfully installed plugin:")
             .cyan_bold(package_name)
             .println();
 
@@ -335,8 +335,8 @@ impl PluginManager {
             NbTomlEditor::with_work_dir(Some(&self.work_dir))?
                 .remove_plugins(vec![package_name.replace("-", "_")])?;
 
-            StyledText::new("")
-                .green_bold("✓ Successfully uninstalled plugin: ")
+            StyledText::new(" ")
+                .green_bold("✓ Successfully uninstalled plugin:")
                 .cyan_bold(package_name)
                 .println();
         } else {
@@ -373,8 +373,8 @@ impl PluginManager {
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
             .remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
-        StyledText::new("")
-            .green_bold("✓ Successfully uninstalled plugin: ")
+        StyledText::new(" ")
+            .green_bold("✓ Successfully uninstalled plugin:")
             .cyan_bold(&package_name)
             .println();
 
@@ -500,8 +500,8 @@ impl PluginManager {
         let package_names: Vec<&str> = outdated_plugins.iter().map(|p| p.name.as_str()).collect();
         uv::upgrade(package_names.clone())?;
 
-        StyledText::new("")
-            .green_bold("Successfully updated plugins: ")
+        StyledText::new(" ")
+            .green_bold("Successfully updated plugins:")
             .cyan_bold(&package_names.join(", "))
             .println();
 
@@ -591,36 +591,37 @@ impl PluginManager {
     /// Display plugin information
     fn display_plugin_info(&self, plugin: &RegistryPlugin) {
         StyledText::new("").cyan_bold(&plugin.name).println();
-        StyledText::new("")
-            .black("  ")
+        StyledText::new(" ")
+            .black("  Desc:")
             .white(&plugin.desc)
             .println();
-        StyledText::new("")
+        StyledText::new(" ")
             .black("  Version:")
             .white(&plugin.version)
             .println();
-        StyledText::new("")
+        StyledText::new(" ")
             .black("  Author:")
             .white(&plugin.author)
             .println();
 
         if let Some(ref homepage) = plugin.homepage {
-            StyledText::new("")
+            StyledText::new(" ")
                 .black("  Homepage:")
                 .cyan(homepage)
                 .println();
         }
 
         if !plugin.tags.is_empty() {
-            StyledText::new("")
-                .black("  Tags: ")
+            StyledText::new(" ")
+                .black("  Tags:")
                 .yellow(
-                    &plugin
+                    plugin
                         .tags
                         .iter()
                         .map(|t| t.get("label").unwrap().to_string())
                         .collect::<Vec<_>>()
-                        .join(", "),
+                        .join(", ")
+                        .as_str(),
                 )
                 .println();
         }
@@ -629,22 +630,23 @@ impl PluginManager {
     /// Display search result
     fn display_search_result(&self, plugin: &RegistryPlugin, index: usize) {
         StyledText::new("")
-            .black(&format!("{}. ", index))
+            .black(index.to_string().as_str())
+            .black(".")
             .cyan_bold(&plugin.name)
             .println();
 
-        StyledText::new("")
+        StyledText::new(" ")
             .black("  Desc:")
             .white(&plugin.desc)
             .println();
         if let Some(ref homepage) = plugin.homepage {
-            StyledText::new("")
+            StyledText::new(" ")
                 .black("  Homepage:")
                 .cyan(homepage)
                 .println();
         }
 
-        StyledText::new("")
+        StyledText::new(" ")
             .black("  Install Command:")
             .yellow(&format!("nbr plugin install {}", plugin.project_link))
             .println();

@@ -193,11 +193,9 @@ impl AdapterManager {
             .map(|a| a.name.clone())
             .collect::<Vec<String>>()
             .join(", ");
-        let prompt = StyledText::new("")
+        let prompt = StyledText::new(" ")
             .white_bold("Would you like to install")
-            .text("[")
-            .cyan_bold(&selected_adapters_names)
-            .text("]")
+            .cyan_bold(format!("[{}]", selected_adapters_names).as_str())
             .build();
 
         if !Confirm::with_theme(&ColorfulTheme::default())
