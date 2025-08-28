@@ -218,7 +218,7 @@ impl PluginManager {
         let module_name = repo_name.replace("-", "_");
 
         // Add to configuration
-        NbTomlEditor::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
         info!(
             "✓ Successfully installed plugin: {}",
@@ -251,7 +251,7 @@ impl PluginManager {
 
         let module_name = package_name.replace("-", "_");
         // Add to configuration
-        NbTomlEditor::parse(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
         info!(
             "✓ Successfully installed plugin: {}",
@@ -291,7 +291,7 @@ impl PluginManager {
             .run()?;
 
         // Add to configuration
-        NbTomlEditor::parse(Some(&self.work_dir))?
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
             .add_plugins(vec![registry_plugin.module_name.clone()])?;
 
         info!(
@@ -332,7 +332,7 @@ impl PluginManager {
             uv::remove(vec![&package_name])
                 .working_dir(&self.work_dir)
                 .run()?;
-            NbTomlEditor::parse(Some(&self.work_dir))?
+            NbTomlEditor::with_work_dir(Some(&self.work_dir))?
                 .remove_plugins(vec![package_name.replace("-", "_")])?;
 
             info!(
@@ -370,7 +370,7 @@ impl PluginManager {
         // Uninstall the package
         uv::remove(vec![&package_name]).run()?;
 
-        NbTomlEditor::parse(Some(&self.work_dir))?
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
             .remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
         info!(
@@ -415,7 +415,7 @@ impl PluginManager {
     #[allow(dead_code)]
     pub async fn fix_nonebot_plugins(&self) -> Result<()> {
         let installed_plugins = self.get_installed_plugins(false).await?;
-        NbTomlEditor::parse(Some(&self.work_dir))?.reset_plugins(
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.reset_plugins(
             installed_plugins
                 .iter()
                 .map(|p| p.name.replace("-", "_"))

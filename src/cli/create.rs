@@ -419,18 +419,17 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
 
     // 写入文件
     let content = toml::to_string(&pyproject)?;
-    fs::write(options.output_dir.join("pyproject.toml"), content)?;
-
+    //fs::write(options.output_dir.join("pyproject.toml"), content)?;
     let adapters = options
         .adapters
         .iter()
         .map(|a| Adapter {
-            name: a.name.clone(),
-            module_name: a.module_name.clone(),
+            name: a.name.to_string(),
+            module_name: a.module_name.to_string(),
         })
         .collect();
-
-    NbTomlEditor::parse(Some(&options.output_dir))?.add_adapters(adapters)?;
+    let toml_path = options.output_dir.join("pyproject.toml");
+    NbTomlEditor::with_str(&content, &toml_path)?.add_adapters(adapters)?;
     Ok(())
 }
 

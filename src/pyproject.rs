@@ -185,12 +185,7 @@ pub struct NbTomlEditor {
 }
 
 impl NbTomlEditor {
-    #[allow(unused)]
-    pub fn parse_current_dir() -> NbrResult<Self> {
-        Self::parse(None)
-    }
-
-    pub fn parse(work_dir: Option<&Path>) -> NbrResult<Self> {
+    pub fn with_work_dir(work_dir: Option<&Path>) -> NbrResult<Self> {
         let toml_path = if let Some(work_dir) = work_dir {
             work_dir.join("pyproject.toml")
         } else {
@@ -211,12 +206,17 @@ impl NbTomlEditor {
             );
         }
 
-        let doc = Document::parse(&content)
+        Self::with_str(&content, &toml_path)
+    }
+
+    pub fn with_str(content: &str, save_path: &Path) -> NbrResult<Self> {
+        let doc = Document::parse(content)
             .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))?;
-
         let doc_mut = doc.into_mut();
-
-        Ok(Self { toml_path, doc_mut })
+        Ok(Self {
+            toml_path: save_path.to_path_buf(),
+            doc_mut,
+        })
     }
 
     fn nonebot_table_mut(&mut self) -> NbrResult<&mut Table> {
@@ -330,7 +330,7 @@ mod tests {
     #[test]
     fn test_add_adapters() {
         let toml_path = Path::new("awesome-bot");
-        let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
+        let mut tool_nonebot = NbTomlEditor::with_work_dir(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_adapters(vec![Adapter {
                 name: "OneBot V12".to_string(),
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn test_add_plugins() {
         let toml_path = Path::new("awesome-bot");
-        let mut tool_nonebot = NbTomlEditor::parse(Some(&toml_path)).unwrap();
+        let mut tool_nonebot = NbTomlEditor::with_work_dir(Some(&toml_path)).unwrap();
         tool_nonebot
             .add_plugins(vec!["nonebot-plugin-status".to_string()])
             .unwrap();
