@@ -1,6 +1,5 @@
 use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand};
-use colored::*;
 
 mod cli;
 mod config;
@@ -27,7 +26,7 @@ const AUTHOR: &str = "fllesser";
 const ABOUT: &str = "CLI for NoneBot2 - Rust implementation";
 
 #[derive(Parser)]
-#[command(name = "nbr", version = VERSION, about = ABOUT, author = AUTHOR, before_help = BANNER.bright_cyan().to_string(), arg_required_else_help = true)]
+#[command(name = "nbr", version = VERSION, about = ABOUT, author = AUTHOR, before_help = BANNER, arg_required_else_help = true)]
 pub struct CLI {
     #[clap(subcommand)]
     pub commands: NbrCommands,
@@ -111,9 +110,9 @@ async fn main() -> Result<()> {
         NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await?,
         NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await?,
         NbrCommands::Generate { force } => generate::handle_generate(force).await?,
-        NbrCommands::Init { .. } => unimplemented!(),
         NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
-        NbrCommands::Cache { cache_commands } => cache::handle_cache(&cache_commands).await?,
+        NbrCommands::Init { .. } => unimplemented!(),
+        NbrCommands::Cache { .. } => unimplemented!(),
     }
 
     Ok(())

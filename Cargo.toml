@@ -47,7 +47,7 @@ console = "0.16.0"
 dialoguer = "0.12"
 
 # Colored output
-colored = "3.0.0"
+# colored = "3.0.0"
 
 # Error handling
 anyhow = "1.0"

@@ -5,8 +5,8 @@
 
 use crate::cli::generate::generate_bot_content;
 use crate::error::{NbrError, Result};
+use crate::log::StyledText;
 use crate::utils::process_utils;
-use colored::Colorize;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::fs;
@@ -351,7 +351,10 @@ pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
     // Create and run bot
     let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
-    info!("Using Python: {}", runner.python_path.cyan().bold());
+    StyledText::new("")
+        .green_bold("Using Python:")
+        .cyan_bold(&runner.python_path)
+        .println();
 
     runner.run().await
 }

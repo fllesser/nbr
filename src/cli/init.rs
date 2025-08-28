@@ -4,7 +4,6 @@
 //! creating necessary files and directory structure.
 #![allow(dead_code)]
 
-use colored::Colorize;
 use std::path::PathBuf;
 
 /// Project initialization handler
@@ -54,29 +53,4 @@ impl Default for InitOptions {
     }
 }
 
-impl InitHandler {
-    /// Show completion message
-    fn show_completion_message(&self) {
-        println!();
-        println!(
-            "{}",
-            "✓ Project initialized successfully!".bright_green().bold()
-        );
-        println!();
-        println!("{}", "Next Steps:".bright_yellow().bold());
-
-        if !self.options.create_venv {
-            println!("  • Install dependencies: {}", "uv sync".bright_cyan());
-        }
-
-        println!("  • Configure your bot: {}", "vim .env".bright_cyan());
-        println!("  • Run your bot: {}", "nbr run".bright_cyan());
-
-        println!();
-        println!("For more help: {}", "nbr --help".cyan());
-        println!(
-            "Documentation: {}",
-            "https://github.com/fllesser/nbr".cyan()
-        );
-    }
-}
+impl InitHandler {}

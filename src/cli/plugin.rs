@@ -4,11 +4,11 @@
 //! listing, searching, and updating plugins from various sources.
 
 use crate::error::{NbrError, Result};
+use crate::log::StyledText;
 use crate::pyproject::NbTomlEditor;
 use crate::utils::terminal_utils;
 use crate::uv::{self, Package};
 use clap::Subcommand;
-use colored::*;
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
 use regex::Regex;
@@ -220,10 +220,10 @@ impl PluginManager {
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
-        info!(
-            "✓ Successfully installed plugin: {}",
-            repo_name.cyan().bold()
-        );
+        StyledText::new("")
+            .green_bold("✓ Successfully installed plugin: ")
+            .cyan_bold(repo_name)
+            .println();
         Ok(())
     }
 
@@ -253,10 +253,10 @@ impl PluginManager {
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
 
-        info!(
-            "✓ Successfully installed plugin: {}",
-            package_name.cyan().bold()
-        );
+        StyledText::new("")
+            .green_bold("✓ Successfully installed plugin: ")
+            .cyan_bold(package_name)
+            .println();
         Ok(())
     }
 
@@ -294,10 +294,10 @@ impl PluginManager {
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
             .add_plugins(vec![registry_plugin.module_name.clone()])?;
 
-        info!(
-            "✓ Successfully installed plugin: {}",
-            package_name.cyan().bold()
-        );
+        StyledText::new("")
+            .green_bold("✓ Successfully installed plugin: ")
+            .cyan_bold(package_name)
+            .println();
 
         Ok(())
     }
@@ -335,10 +335,10 @@ impl PluginManager {
             NbTomlEditor::with_work_dir(Some(&self.work_dir))?
                 .remove_plugins(vec![package_name.replace("-", "_")])?;
 
-            info!(
-                "✓ Successfully uninstalled plugin: {}",
-                package_name.cyan().bold()
-            );
+            StyledText::new("")
+                .green_bold("✓ Successfully uninstalled plugin: ")
+                .cyan_bold(package_name)
+                .println();
         } else {
             error!("Uninstallation operation cancelled.");
             return Ok(());
@@ -373,10 +373,10 @@ impl PluginManager {
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
             .remove_plugins(vec![registry_plugin.module_name.clone()])?;
 
-        info!(
-            "✓ Successfully uninstalled plugin: {}",
-            package_name.cyan().bold()
-        );
+        StyledText::new("")
+            .green_bold("✓ Successfully uninstalled plugin: ")
+            .cyan_bold(&package_name)
+            .println();
 
         Ok(())
     }
@@ -500,10 +500,10 @@ impl PluginManager {
         let package_names: Vec<&str> = outdated_plugins.iter().map(|p| p.name.as_str()).collect();
         uv::upgrade(package_names.clone())?;
 
-        info!(
-            "Successfully updated plugins: {}",
-            package_names.join(", ").cyan().bold()
-        );
+        StyledText::new("")
+            .green_bold("Successfully updated plugins: ")
+            .cyan_bold(&package_names.join(", "))
+            .println();
 
         Ok(())
     }
@@ -590,74 +590,64 @@ impl PluginManager {
 
     /// Display plugin information
     fn display_plugin_info(&self, plugin: &RegistryPlugin) {
-        println!("{}", plugin.name.cyan().bold());
-        println!("  {}", plugin.desc);
-        println!(
-            "  {} {}",
-            "Version:".bright_black(),
-            plugin.version.bright_white()
-        );
-        println!(
-            "  {} {}",
-            "Author:".bright_black(),
-            plugin.author.bright_white()
-        );
+        StyledText::new("").cyan_bold(&plugin.name).println();
+        StyledText::new("")
+            .black("  ")
+            .white(&plugin.desc)
+            .println();
+        StyledText::new("")
+            .black("  Version:")
+            .white(&plugin.version)
+            .println();
+        StyledText::new("")
+            .black("  Author:")
+            .white(&plugin.author)
+            .println();
 
         if let Some(ref homepage) = plugin.homepage {
-            println!(
-                "  {} {}",
-                "Homepage:".bright_black(),
-                homepage.bright_cyan()
-            );
+            StyledText::new("")
+                .black("  Homepage:")
+                .cyan(homepage)
+                .println();
         }
 
         if !plugin.tags.is_empty() {
-            println!(
-                "  {} {}",
-                "Tags:".bright_black(),
-                plugin
-                    .tags
-                    .iter()
-                    .map(|t| t.get("label").unwrap().bright_yellow().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
+            StyledText::new("")
+                .black("  Tags: ")
+                .yellow(
+                    &plugin
+                        .tags
+                        .iter()
+                        .map(|t| t.get("label").unwrap().to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+                .println();
         }
     }
 
     /// Display search result
     fn display_search_result(&self, plugin: &RegistryPlugin, index: usize) {
-        println!(
-            "{}. {} ({}) {}",
-            index.to_string().bright_black(),
-            plugin.name.cyan().bold(),
-            plugin.project_link.bright_cyan(),
-            format!("v{}", plugin.version).bright_green()
-        );
+        StyledText::new("")
+            .black(&format!("{}. ", index))
+            .cyan_bold(&plugin.name)
+            .println();
 
-        println!("   Desc: {}", plugin.desc);
+        StyledText::new("")
+            .black("  Desc:")
+            .white(&plugin.desc)
+            .println();
         if let Some(ref homepage) = plugin.homepage {
-            println!("   Homepage: {}", homepage.bright_cyan());
+            StyledText::new("")
+                .black("  Homepage:")
+                .cyan(homepage)
+                .println();
         }
 
-        // if !plugin.tags.is_empty() {
-        //     println!(
-        //         "   {} {}",
-        //         "Tags:".bright_black(),
-        //         plugin
-        //             .tags
-        //             .iter()
-        //             .take(3)
-        //             .map(|t| t.get("label").unwrap().bright_yellow().to_string())
-        //             .collect::<Vec<_>>()
-        //             .join(", ")
-        //     );
-        // }
-
-        println!(
-            "   Install Command: {}",
-            format!("nbr plugin install {}", plugin.project_link).bright_yellow()
-        );
+        StyledText::new("")
+            .black("  Install Command:")
+            .yellow(&format!("nbr plugin install {}", plugin.project_link))
+            .println();
     }
 }
 

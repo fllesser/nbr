@@ -1,5 +1,4 @@
 use ansi_term::{Colour, Style};
-use colored::Colorize;
 use tracing_core::Event;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FormatEvent, FormatFields};
@@ -40,10 +39,18 @@ where
                 write!(writer, "⚠️  ")?;
             }
             tracing::Level::DEBUG => {
-                write!(writer, "{} ", "[DEBUG]".blue().bold())?;
+                write!(
+                    writer,
+                    "{} ",
+                    Style::new().bold().fg(Colour::Blue).paint("[DEBUG]")
+                )?;
             }
             tracing::Level::TRACE => {
-                write!(writer, "{} ", "[TRACE]".purple().bold())?;
+                write!(
+                    writer,
+                    "{} ",
+                    Style::new().bold().fg(Colour::Purple).paint("[TRACE]")
+                )?;
             }
         }
 
@@ -128,6 +135,27 @@ impl<'a> StyledText<'a> {
             .map(|part| Style::new().bold().paint(part).to_string())
             .collect::<Vec<String>>()
             .join(self.sep)
+    }
+
+    /// 接收闭包
+    pub fn with(&mut self, closure: impl FnOnce(&mut Self)) -> &mut Self {
+        closure(self);
+        self
+    }
+
+    pub fn text(&mut self, text: &str) -> &mut Self {
+        self.parts.push(text.to_string());
+        self
+    }
+
+    pub fn white(&mut self, text: &str) -> &mut Self {
+        self.parts.push(Colour::White.paint(text).to_string());
+        self
+    }
+
+    pub fn black(&mut self, text: &str) -> &mut Self {
+        self.parts.push(Colour::Black.paint(text).to_string());
+        self
     }
 
     /// 红色
@@ -305,7 +333,6 @@ impl<'a> StyledText<'a> {
 
 #[cfg(test)]
 mod tests {
-    use colored::Colorize;
 
     use super::*;
 
@@ -313,7 +340,11 @@ mod tests {
     fn test_log() {
         init_logging(1);
 
-        tracing::info!("test {} {}", "info".yellow(), "info".cyan());
+        tracing::info!(
+            "test {} {}",
+            Colour::Yellow.paint("info"),
+            Colour::Cyan.paint("info")
+        );
         tracing::debug!("test {}", 123);
         tracing::trace!("test {}", 123);
         tracing::warn!("test {}", 123);

@@ -4,11 +4,11 @@
 //! and listing adapters for NoneBot applications.
 
 use crate::error::{NbrError, Result};
+use crate::log::StyledText;
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::utils::terminal_utils;
 use crate::uv;
 use clap::Subcommand;
-use colored::*;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, MultiSelect};
 use reqwest::Client;
@@ -188,15 +188,17 @@ impl AdapterManager {
             warn!("You haven't selected any adapters to install");
             return Ok(());
         }
-
-        let prompt = format!(
-            "Would you like to install [{}] ?",
-            selected_adapters
-                .iter()
-                .map(|a| a.name.clone().cyan().bold().to_string())
-                .collect::<Vec<String>>()
-                .join(", ")
-        );
+        let selected_adapters_names = selected_adapters
+            .iter()
+            .map(|a| a.name.clone())
+            .collect::<Vec<String>>()
+            .join(", ");
+        let prompt = StyledText::new("")
+            .white_bold("Would you like to install")
+            .text("[")
+            .cyan_bold(&selected_adapters_names)
+            .text("]")
+            .build();
 
         if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(&prompt)
@@ -231,16 +233,10 @@ impl AdapterManager {
         // Add adapters to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_adapters(adapters)?;
 
-        info!(
-            "✓ Successfully installed adapters: {}",
-            selected_adapters
-                .iter()
-                .map(|a| a.name.clone())
-                .collect::<Vec<String>>()
-                .join(", ")
-                .cyan()
-                .bold()
-        );
+        StyledText::new("")
+            .green_bold("✓ Successfully installed adapters: ")
+            .cyan_bold(&selected_adapters_names)
+            .println();
 
         // Show configuration instructions
         // if let Some(ref adapter) = adapter_info {
@@ -318,10 +314,10 @@ impl AdapterManager {
                 .run()?;
         }
 
-        info!(
-            "✓ Successfully uninstalled adapters: {}",
-            selected_adapters.to_vec().join(", ").cyan().bold()
-        );
+        StyledText::new("")
+            .green_bold("✓ Successfully uninstalled adapters: ")
+            .cyan_bold(&selected_adapters.join(", "))
+            .println();
 
         Ok(())
     }
@@ -353,13 +349,14 @@ impl AdapterManager {
     }
 
     pub fn display_adapter(&self, adapter: &RegistryAdapter) {
-        println!(
-            " {} {} ({} {})",
-            "•".cyan(),
-            adapter.name.cyan().bold(),
-            adapter.project_link.bright_black(),
-            format!("v{}", adapter.version).bright_green(),
-        );
+        StyledText::new("")
+            .text("•")
+            .cyan_bold(&adapter.name)
+            .text(" (")
+            .text(&adapter.project_link)
+            .text(")")
+            .green_bold(format!("v{}", adapter.version).as_str())
+            .println();
     }
 
     /// Get adapter configuration template
@@ -416,51 +413,33 @@ impl AdapterManager {
     /// Display adapter information
     #[allow(dead_code)]
     fn display_adapter_info(&self, adapter: &RegistryAdapter) {
-        println!("{}", adapter.name.cyan().bold());
-        println!("  Package: {}", adapter.project_link);
-        println!("  Module: {}", adapter.module_name);
-        println!("  Desc: {}", adapter.desc);
-        println!(
-            "  {} {}",
-            "Version:".bright_black(),
-            adapter.version.bright_white()
-        );
-        println!(
-            "  {} {}",
-            "Author:".bright_black(),
-            adapter.author.bright_white()
-        );
-
+        StyledText::new("").cyan_bold(&adapter.name).println();
+        StyledText::new("")
+            .text("  Package: ")
+            .text(&adapter.project_link)
+            .println();
+        StyledText::new("")
+            .text("  Module: ")
+            .text(&adapter.module_name)
+            .println();
+        StyledText::new("")
+            .text("  Desc: ")
+            .text(&adapter.desc)
+            .println();
+        StyledText::new("")
+            .text("  Version: ")
+            .text(&adapter.version)
+            .println();
+        StyledText::new("")
+            .text("  Author: ")
+            .text(&adapter.author)
+            .println();
         if let Some(ref homepage) = adapter.homepage {
-            println!(
-                "  {} {}",
-                "Homepage:".bright_black(),
-                homepage.bright_cyan()
-            );
+            StyledText::new("")
+                .text("  Homepage: ")
+                .text(homepage)
+                .println();
         }
-    }
-
-    /// Show configuration instructions
-    #[allow(dead_code)]
-    fn show_configuration_instructions(
-        &self,
-        _adapter: &RegistryAdapter,
-        config_template: &HashMap<String, String>,
-    ) {
-        println!();
-        println!("{}", "Configuration Instructions:".bright_yellow().bold());
-        println!("Add the following to your .env file:");
-        println!();
-
-        for (key, value) in config_template {
-            println!("{}={}", key.bright_cyan(), value.bright_white());
-        }
-
-        println!();
-        println!(
-            "{}",
-            "Remember to replace placeholder values with actual configuration!".bright_red()
-        );
     }
 }
 

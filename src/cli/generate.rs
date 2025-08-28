@@ -4,14 +4,14 @@
 //! with customizable templates and configurations.
 
 use crate::error::{NbrError, Result};
+use crate::log::StyledText;
 use crate::pyproject::PyProjectConfig;
-use colored::Colorize;
 
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
 use std::fs;
 use std::path::Path;
-use tracing::{error, info};
+use tracing::error;
 
 /// Generate bot entry file
 pub async fn generate_bot_file(work_dir: &Path, force: bool) -> Result<()> {
@@ -38,10 +38,10 @@ pub async fn generate_bot_file(work_dir: &Path, force: bool) -> Result<()> {
     fs::write(&bot_path, content)
         .map_err(|e| NbrError::io(format!("Failed to write bot file: {}", e)))?;
 
-    info!(
-        "✓ Successfully generated bot file: {}",
-        filename.cyan().bold()
-    );
+    StyledText::new("")
+        .green_bold("✓ Successfully generated bot file: ")
+        .cyan_bold(filename)
+        .println();
 
     Ok(())
 }
