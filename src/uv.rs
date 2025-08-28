@@ -185,14 +185,13 @@ impl Package {
     pub fn display_info(&self) {
         StyledText::new("")
             .text("  ")
-            .cyan_bold(&self.name)
-            .green_bold(format!("v{}", self.version).as_str())
+            .cyan(&self.name)
+            .text(" ")
+            .green(format!("v{}", self.version).as_str())
+            .text(" ")
             .with(|text| {
                 if self.is_outdated() {
-                    text.yellow_bold(&format!(
-                        "(available: v{})",
-                        self.latest_version.as_ref().unwrap()
-                    ));
+                    text.yellow(&format!("(v{})", self.latest_version.as_ref().unwrap()));
                 }
             })
             .println();
