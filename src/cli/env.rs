@@ -534,7 +534,7 @@ impl EnvironmentChecker {
                     .println();
                 for config in &project.config_files {
                     StyledText::new("")
-                        .text("    •")
+                        .text("    • ")
                         .text(&config.file_name().unwrap().to_string_lossy())
                         .println();
                 }
