@@ -94,7 +94,7 @@ pub struct ProjectOptions {
     pub plugins: Vec<String>,
     pub python_version: String,
     pub environment: Environment,
-    pub dev_tools: Vec<String>,
+    pub dev_tools: Vec<DevTool>,
 }
 
 pub async fn handle_create(args: CreateArgs) -> Result<()> {
@@ -195,7 +195,7 @@ async fn gather_project_options(
     };
     // 选择开发工具
     let dev_tools = match args.dev_tools {
-        Some(dev_tools) => dev_tools.into_iter().map(|d| d.to_string()).collect(),
+        Some(dev_tools) => dev_tools,
         None => select_dev_tools()?,
     };
 
@@ -294,17 +294,17 @@ fn select_python_version() -> Result<String> {
     Ok(python_versions[selected_python_version].to_string())
 }
 
-fn select_dev_tools() -> Result<Vec<String>> {
-    let dev_tools = vec!["ruff", "basedpyright", "pre-commit", "pylance"];
+fn select_dev_tools() -> Result<Vec<DevTool>> {
+    let dev_tools = DevTool::value_variants();
     let selected_dev_tools = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt("Which dev tool(s) would you like to use")
-        .items(&dev_tools)
+        .items(dev_tools)
         .defaults(&[true; 3])
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
     let selected_dev_tools = selected_dev_tools
         .into_iter()
-        .map(|i| dev_tools[i].to_string())
+        .map(|i| dev_tools[i].to_owned())
         .collect();
     Ok(selected_dev_tools)
 }
@@ -404,12 +404,14 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
 
     // 补齐 dependency_groups.dev group
     let mut dev_deps = vec![];
-    if options.dev_tools.contains(&"ruff".to_string()) {
-        dev_deps.push("ruff>=0.12.10".to_string());
+    for tool in options.dev_tools.iter() {
+        match tool {
+            DevTool::Ruff => dev_deps.push("ruff>=0.12.10".to_string()),
+            DevTool::PreCommit => dev_deps.push("pre-commit>=4.3.0".to_string()),
+            _ => {}
+        }
     }
-    if options.dev_tools.contains(&"pre-commit".to_string()) {
-        dev_deps.push("pre-commit>=4.3.0".to_string());
-    }
+
     pyproject.dependency_groups.as_mut().unwrap().dev = Some(dev_deps);
 
     // 补齐 tool.nonebot
@@ -471,14 +473,13 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_dev_tools_config(options: &ProjectOptions) -> Result<()> {
-    if options.dev_tools.contains(&"ruff".to_string()) {
-        append_ruff_config(&options.output_dir)?;
-    }
-    if options.dev_tools.contains(&"basedpyright".to_string()) {
-        append_pyright_config(&options.output_dir)?;
-    }
-    if options.dev_tools.contains(&"pre-commit".to_string()) {
-        generate_pre_commit_config(&options.output_dir)?;
+    for tool in options.dev_tools.iter() {
+        match tool {
+            DevTool::Ruff => append_ruff_config(&options.output_dir)?,
+            DevTool::Basedpyright => append_pyright_config(&options.output_dir)?,
+            DevTool::PreCommit => generate_pre_commit_config(&options.output_dir)?,
+            DevTool::Pylance => {}
+        }
     }
     Ok(())
 }
