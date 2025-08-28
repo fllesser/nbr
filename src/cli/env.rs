@@ -402,36 +402,30 @@ impl EnvironmentChecker {
         // Python Environment
         info!("Python Environment:");
         StyledText::new("")
-            .black("  version:")
+            .black("  version: ")
             .text(&env_info.python_info.version)
             .println();
         StyledText::new("")
-            .black("  uv version:")
+            .black("  uv version: ")
             .text(env_info.python_info.uv_version.as_ref().unwrap())
             .println();
         StyledText::new("")
-            .black("  executable:")
+            .black("  executable: ")
             .text(&env_info.python_info.executable)
             .println();
         StyledText::new("")
-            .black("  virtual Environment:")
-            .text(env_info.python_info.virtual_env.as_ref().unwrap())
+            .black("  virtual Environment: ")
+            .with(|text| {
+                if let Some(venv) = env_info.python_info.virtual_env.as_ref() {
+                    text.text(venv);
+                } else {
+                    text.red("None");
+                }
+            })
             .println();
 
-        if let Some(ref venv) = env_info.python_info.virtual_env {
-            StyledText::new("")
-                .black("  virtual Environment:")
-                .text(venv)
-                .println();
-        } else {
-            StyledText::new("")
-                .black("  virtual Environment:")
-                .red("None")
-                .println();
-        }
-
         StyledText::new("")
-            .black("  installed Packages:")
+            .black("  installed Packages: ")
             .text(&env_info.python_info.site_packages.len().to_string())
             .println();
 
@@ -441,55 +435,55 @@ impl EnvironmentChecker {
         if let Some(ref nonebot) = env_info.nonebot_info {
             info!("NoneBot:");
             StyledText::new("")
-                .black("  version:")
+                .black("  version: ")
                 .text(&nonebot.version)
                 .println();
             StyledText::new("")
-                .black("  location:")
+                .black("  location: ")
                 .text(&nonebot.location)
                 .println();
             StyledText::new("")
-                .black("  adapters:")
+                .black("  adapters: ")
                 .text(&nonebot.adapters.len().to_string())
                 .println();
             StyledText::new("")
-                .black("  plugins:")
+                .black("  plugins: ")
                 .text(&nonebot.plugins.len().to_string())
                 .println();
 
             if !nonebot.adapters.is_empty() {
                 StyledText::new("")
-                    .cyan("    Installed Adapters:")
+                    .cyan("    Installed Adapters: ")
                     .println();
                 for adapter in &nonebot.adapters {
                     StyledText::new("")
-                        .cyan("      ")
-                        .text("•")
+                        .text("      • ")
                         .text(&adapter.name)
-                        .text(" (")
+                        .black(" (v")
                         .black(&adapter.version)
-                        .text(")")
+                        .black(")")
                         .println();
                 }
             }
 
             if !nonebot.plugins.is_empty() {
-                StyledText::new("").cyan("    Installed Plugins:").println();
+                StyledText::new("")
+                    .cyan("    Installed Plugins: ")
+                    .println();
                 for plugin in &nonebot.plugins {
                     StyledText::new("")
-                        .cyan("      ")
-                        .text("•")
+                        .text("      • ")
                         .text(&plugin.name)
-                        .text(" (")
+                        .black(" (v")
                         .black(&plugin.version)
-                        .text(")")
+                        .black(")")
                         .println();
                 }
             }
         } else {
-            info!("NoneBot:");
+            StyledText::new("").green_bold("NoneBot:").println();
             StyledText::new("")
-                .black("  status:")
+                .black("  status: ")
                 .red("Not installed")
                 .println();
         }
@@ -499,49 +493,48 @@ impl EnvironmentChecker {
         if let Some(ref project) = env_info.project_info {
             info!("Project:");
             StyledText::new("")
-                .black("  name:")
+                .black("  name: ")
                 .text(&project.name)
                 .println();
             StyledText::new("")
-                .black("  root path:")
+                .black("  root path: ")
                 .text(&project.root_path.display().to_string())
                 .println();
 
             if let Some(ref bot_file) = project.bot_file {
                 StyledText::new("")
-                    .black("  bot file:")
+                    .black("  bot file: ")
                     .text(&bot_file.display().to_string())
                     .println();
             }
 
             if let Some(ref plugins_dir) = project.plugins_dir {
                 StyledText::new("")
-                    .black("  plugins directory:")
+                    .black("  plugins directory: ")
                     .text(&plugins_dir.display().to_string())
                     .println();
             }
 
             StyledText::new("")
-                .black("  git repository:")
+                .black("  git repository: ")
                 .text(if project.is_git_repo { "Yes" } else { "No" })
                 .println();
 
             if let Some(ref venv) = project.virtual_env {
                 StyledText::new("")
-                    .black("  virtual environment:")
+                    .black("  virtual environment: ")
                     .text(&venv.display().to_string())
                     .println();
             }
 
             if !project.config_files.is_empty() {
                 StyledText::new("")
-                    .black("  config files:")
+                    .black("  config files: ")
                     .text(&project.config_files.len().to_string())
                     .println();
                 for config in &project.config_files {
                     StyledText::new("")
-                        .cyan("    ")
-                        .text("•")
+                        .text("    •")
                         .text(&config.file_name().unwrap().to_string_lossy())
                         .println();
                 }
@@ -549,7 +542,7 @@ impl EnvironmentChecker {
         } else {
             info!("Project:");
             StyledText::new("")
-                .black("  status:")
+                .black("  status: ")
                 .red("No NoneBot project detected")
                 .println();
         }
@@ -558,22 +551,22 @@ impl EnvironmentChecker {
         // System Resources
         info!("System Resources:");
         StyledText::new("")
-            .black("  cpu:")
+            .black("  cpu: ")
             .text(&env_info.system_info.cpu_count.to_string())
             .println();
         StyledText::new("")
-            .black("  cpu usage:")
+            .black("  cpu usage: ")
             .text(&env_info.system_info.cpu_usage.to_string())
             .println();
 
         let total_gb = env_info.system_info.total_memory as f64 / 1_073_741_824.0;
         let available_gb = env_info.system_info.available_memory as f64 / 1_073_741_824.0;
         StyledText::new("")
-            .black("  memory:")
+            .black("  memory: ")
             .text(&total_gb.to_string())
             .println();
         StyledText::new("")
-            .black("  memory:")
+            .black("  memory: ")
             .text(&available_gb.to_string())
             .println();
 
@@ -582,24 +575,15 @@ impl EnvironmentChecker {
             for disk in &env_info.system_info.disk_usage {
                 let total_gb = disk.total_space as f64 / 1_073_741_824.0;
                 let available_gb = disk.available_space as f64 / 1_073_741_824.0;
-                // let usage_color = if disk.usage_percentage > 90.0 {
-                //     "bright_red"
-                // } else if disk.usage_percentage > 80.0 {
-                //     "bright_yellow"
-                // } else {
-                //     "bright_green"
-                // };
-
                 StyledText::new("")
-                    .cyan("    ")
-                    .text("•")
-                    .text(&disk.usage_percentage.to_string())
-                    .text("% used (")
-                    .text(&(total_gb - available_gb).to_string())
+                    .text("    • ")
+                    .cyan(&disk.usage_percentage.to_string())
+                    .text(" % used (")
+                    .cyan(&format!("{:.2}", total_gb - available_gb))
                     .text("/")
-                    .text(&total_gb.to_string())
+                    .cyan(&format!("{:.2}", total_gb))
                     .text(" GB) at ")
-                    .text(&disk.mount_point)
+                    .cyan(&disk.mount_point)
                     .println();
             }
         }
@@ -624,7 +608,7 @@ impl EnvironmentChecker {
 
         // Check Python version
         if !env_info.python_info.version.contains("3.") {
-            issues.push("Python 3.8+ is required for NoneBot2".to_string());
+            issues.push("Python 3.10+ is required for NoneBot2".to_string());
         } else {
             // Extract version number for more detailed check
             if let Some(version_str) = env_info.python_info.version.split_whitespace().nth(1)
@@ -635,7 +619,7 @@ impl EnvironmentChecker {
                 )
                 && (major < 3 || (major == 3 && minor < 8))
             {
-                issues.push("Python 3.8+ is recommended for NoneBot2".to_string());
+                issues.push("Python 3.10+ is recommended for NoneBot2".to_string());
             }
         }
 
