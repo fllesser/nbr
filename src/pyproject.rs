@@ -226,6 +226,29 @@ impl NbTomlEditor {
         Ok(())
     }
 
+    /// 格式化 toml_edit::Array
+    ///
+    /// # Arguments
+    ///
+    /// * `array` - 要格式化的 toml 数组
+    ///
+    /// # Returns
+    ///
+    /// 返回格式化后的 toml 数组
+    fn fmt_toml_array(array: &mut toml_edit::Array) {
+        array.iter_mut().for_each(|a| {
+            let decor_mut = a.decor_mut();
+            decor_mut.set_prefix("\n  ");
+            //decor_mut.set_suffix("");
+        });
+        // array
+        //     .iter_mut()
+        //     .last()
+        //     .unwrap()
+        //     .decor_mut()
+        //     .set_suffix("\n");
+    }
+
     pub fn add_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
         let adapters = adapters.into_iter().collect::<HashSet<Adapter>>();
         let nonebot = self.nonebot_table_mut()?;
@@ -249,9 +272,10 @@ impl NbTomlEditor {
                 let mut inline_table = InlineTable::new();
                 inline_table.insert("name", adapter.name.into());
                 inline_table.insert("module_name", adapter.module_name.into());
+                inline_table.decor_mut().set_prefix("\n  ");
                 adapters_arr_mut.push(inline_table);
             }
-            adapters_arr_mut.fmt();
+            Self::fmt_toml_array(adapters_arr_mut);
         }
 
         // 写回文件
@@ -280,6 +304,8 @@ impl NbTomlEditor {
                 .collect::<Vec<String>>();
             plugins.retain(|p| !plugin_names.contains(p));
             plugins_arr_mut.extend(plugins);
+
+            Self::fmt_toml_array(plugins_arr_mut);
         }
 
         self.save()
