@@ -517,7 +517,13 @@ impl EnvironmentChecker {
 
             StyledText::new("")
                 .black("  git repository: ")
-                .text(if project.is_git_repo { "Yes" } else { "No" })
+                .with(|text| {
+                    if project.is_git_repo {
+                        text.green("Yes");
+                    } else {
+                        text.red("No");
+                    }
+                })
                 .println();
 
             if let Some(ref venv) = project.virtual_env {
@@ -580,7 +586,7 @@ impl EnvironmentChecker {
                     .cyan(&disk.usage_percentage.to_string())
                     .text(" % used (")
                     .cyan(&format!("{:.2}", total_gb - available_gb))
-                    .text("/")
+                    .text(" / ")
                     .cyan(&format!("{:.2}", total_gb))
                     .text(" GB) at ")
                     .cyan(&disk.mount_point)
