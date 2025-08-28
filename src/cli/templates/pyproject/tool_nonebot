@@ -3,6 +3,8 @@
 adapters = [
     {}
 ]
-plugins = []
+plugins = [
+    
+]
 plugin_dirs = [{}]
 builtin_plugins = [{}]

@@ -229,7 +229,7 @@ impl AdapterManager {
             .collect::<Vec<Adapter>>();
 
         // Add adapters to configuration
-        NbTomlEditor::parse(Some(&self.work_dir))?.add_adapters(adapters)?;
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_adapters(adapters)?;
 
         info!(
             "✓ Successfully installed adapters: {}",
@@ -290,7 +290,8 @@ impl AdapterManager {
         };
 
         // Remove from configuration
-        NbTomlEditor::parse(Some(&self.work_dir))?.remove_adapters(selected_adapters.to_vec())?;
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
+            .remove_adapters(selected_adapters.to_vec())?;
 
         // Uninstall the package
         let registry_adapters = self.fetch_regsitry_adapters().await?;

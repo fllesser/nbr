@@ -93,7 +93,7 @@ pub struct ProjectOptions {
     pub adapters: Vec<RegistryAdapter>,
     pub plugins: Vec<String>,
     pub python_version: String,
-    pub environment: String,
+    pub environment: Environment,
     pub dev_tools: Vec<String>,
 }
 
@@ -190,7 +190,7 @@ async fn gather_project_options(
     };
     // 选择环境类型
     let environment = match args.env {
-        Some(env) => env.to_string(),
+        Some(env) => env,
         None => select_environment()?,
     };
     // 选择开发工具
@@ -230,16 +230,16 @@ pub fn input_project_name() -> Result<String> {
         .map_err(|e| NbrError::io(e.to_string()))
 }
 
-fn select_environment() -> Result<String> {
-    let env_types = Environment::value_variants();
+fn select_environment() -> Result<Environment> {
+    let envs = Environment::value_variants();
 
-    let selected_env_type = Select::with_theme(&ColorfulTheme::default())
+    let selected_idx = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Which environment are you in now")
-        .items(env_types)
+        .items(envs)
         .default(0)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
-    Ok(env_types[selected_env_type].to_string())
+    Ok(envs[selected_idx].clone())
 }
 
 fn select_drivers() -> Result<Vec<String>> {
@@ -405,7 +405,7 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     // 补齐 dependency_groups.dev group
     let mut dev_deps = vec![];
     if options.dev_tools.contains(&"ruff".to_string()) {
-        dev_deps.push("ruff>=0.12.9".to_string());
+        dev_deps.push("ruff>=0.12.10".to_string());
     }
     if options.dev_tools.contains(&"pre-commit".to_string()) {
         dev_deps.push("pre-commit>=4.3.0".to_string());
@@ -419,18 +419,17 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
 
     // 写入文件
     let content = toml::to_string(&pyproject)?;
-    fs::write(options.output_dir.join("pyproject.toml"), content)?;
-
+    //fs::write(options.output_dir.join("pyproject.toml"), content)?;
     let adapters = options
         .adapters
         .iter()
         .map(|a| Adapter {
-            name: a.name.clone(),
-            module_name: a.module_name.clone(),
+            name: a.name.to_string(),
+            module_name: a.module_name.to_string(),
         })
         .collect();
-
-    NbTomlEditor::parse(Some(&options.output_dir))?.add_adapters(adapters)?;
+    let save_path = options.output_dir.join("pyproject.toml");
+    NbTomlEditor::with_str(&content, &save_path)?.add_adapters(adapters)?;
     Ok(())
 }
 
@@ -441,10 +440,9 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
         .map(|d| format!("~{}", d.to_lowercase()))
         .collect::<Vec<String>>()
         .join("+");
-    let log_level = match options.environment.as_str() {
-        "dev" => "DEBUG",
-        "prod" => "INFO",
-        _ => unreachable!(),
+    let log_level = match options.environment {
+        Environment::Dev => "DEBUG",
+        Environment::Prod => "INFO",
     };
     let file_name = format!(".env.{}", options.environment);
     let env_content = format!(
@@ -546,7 +544,7 @@ mod tests {
             adapters: vec![],
             plugins: vec![],
             python_version: "3.10".to_string(),
-            environment: "dev".to_string(),
+            environment: Environment::Dev,
             dev_tools: vec![],
         };
         generate_env_files(&options).unwrap();
