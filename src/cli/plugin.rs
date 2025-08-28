@@ -501,7 +501,7 @@ impl PluginManager {
         uv::upgrade(package_names.clone())?;
 
         StyledText::new(" ")
-            .green_bold("Successfully updated plugins:")
+            .green_bold("Successfully updated plugin(s):")
             .cyan_bold(&package_names.join(", "))
             .println();
 
@@ -532,8 +532,8 @@ impl PluginManager {
             .await
             .map_err(NbrError::Network)?;
 
-        spinner.finish_and_clear();
         if !response.status().is_success() {
+            spinner.finish_and_clear();
             return Err(NbrError::not_found("Plugin registry not found"));
         }
 
@@ -542,6 +542,7 @@ impl PluginManager {
             .await
             .map_err(|e| NbrError::plugin(format!("Failed to parse plugin info: {}", e)))?;
 
+        spinner.finish_and_clear();
         self.registry_plugins.set(plugins).unwrap();
 
         Ok(self.registry_plugins.get().unwrap())
@@ -630,9 +631,7 @@ impl PluginManager {
     /// Display search result
     fn display_search_result(&self, plugin: &RegistryPlugin, index: usize) {
         StyledText::new("")
-            .black(index.to_string().as_str())
-            .black(".")
-            .cyan_bold(&plugin.name)
+            .cyan_bold(format!("{}.{}", index, plugin.name).as_str())
             .println();
 
         StyledText::new(" ")
