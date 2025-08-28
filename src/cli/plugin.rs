@@ -532,11 +532,6 @@ impl PluginManager {
             .await
             .map_err(NbrError::Network)?;
 
-        if !response.status().is_success() {
-            spinner.finish_and_clear();
-            return Err(NbrError::not_found("Plugin registry not found"));
-        }
-
         let plugins: Vec<RegistryPlugin> = response
             .json()
             .await

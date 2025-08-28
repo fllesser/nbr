@@ -99,15 +99,13 @@ impl AdapterManager {
             .await
             .map_err(NbrError::Network)?;
 
-        spinner.finish_and_clear();
-        if !response.status().is_success() {
-            return Err(NbrError::not_found("Adapter registry not found"));
-        }
-
         let adapters: Vec<RegistryAdapter> = response
             .json()
             .await
             .map_err(|e| NbrError::plugin(format!("Failed to parse adapter info: {}", e)))?;
+
+        // 解析成功后，结束 spinner
+        spinner.finish_and_clear();
 
         let mut adapters_map = HashMap::new();
         for adapter in adapters {
@@ -231,8 +229,8 @@ impl AdapterManager {
         // Add adapters to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_adapters(adapters)?;
 
-        StyledText::new("")
-            .green_bold("✓ Successfully installed adapters: ")
+        StyledText::new(" ")
+            .green_bold("✓ Successfully installed adapters:")
             .cyan_bold(&selected_adapters_names)
             .println();
 
@@ -312,8 +310,8 @@ impl AdapterManager {
                 .run()?;
         }
 
-        StyledText::new("")
-            .green_bold("✓ Successfully uninstalled adapters: ")
+        StyledText::new(" ")
+            .green_bold("✓ Successfully uninstalled adapters:")
             .cyan_bold(&selected_adapters.join(", "))
             .println();
 
@@ -347,13 +345,11 @@ impl AdapterManager {
     }
 
     pub fn display_adapter(&self, adapter: &RegistryAdapter) {
-        StyledText::new("")
-            .text("•")
+        StyledText::new(" ")
+            .cyan_bold("  •")
             .cyan_bold(&adapter.name)
-            .text(" (")
-            .text(&adapter.project_link)
-            .text(")")
-            .green_bold(format!("v{}", adapter.version).as_str())
+            .black(format!("({})", adapter.project_link).as_str())
+            .green(format!("v{}", adapter.version).as_str())
             .println();
     }
 
@@ -412,29 +408,29 @@ impl AdapterManager {
     #[allow(dead_code)]
     fn display_adapter_info(&self, adapter: &RegistryAdapter) {
         StyledText::new("").cyan_bold(&adapter.name).println();
-        StyledText::new("")
-            .text("  Package: ")
+        StyledText::new(" ")
+            .text("  Package:")
             .text(&adapter.project_link)
             .println();
-        StyledText::new("")
-            .text("  Module: ")
+        StyledText::new(" ")
+            .text("  Module:")
             .text(&adapter.module_name)
             .println();
-        StyledText::new("")
-            .text("  Desc: ")
+        StyledText::new(" ")
+            .text("  Desc:")
             .text(&adapter.desc)
             .println();
-        StyledText::new("")
-            .text("  Version: ")
+        StyledText::new(" ")
+            .text("  Version:")
             .text(&adapter.version)
             .println();
-        StyledText::new("")
-            .text("  Author: ")
+        StyledText::new(" ")
+            .text("  Author:")
             .text(&adapter.author)
             .println();
         if let Some(ref homepage) = adapter.homepage {
-            StyledText::new("")
-                .text("  Homepage: ")
+            StyledText::new(" ")
+                .text("  Homepage:")
                 .text(homepage)
                 .println();
         }
