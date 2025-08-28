@@ -38,8 +38,8 @@ pub async fn generate_bot_file(work_dir: &Path, force: bool) -> Result<()> {
     fs::write(&bot_path, content)
         .map_err(|e| NbrError::io(format!("Failed to write bot file: {}", e)))?;
 
-    StyledText::new("")
-        .green_bold("✓ Successfully generated bot file: ")
+    StyledText::new(" ")
+        .green_bold("✓ Successfully generated bot file:")
         .cyan_bold(filename)
         .println();
 

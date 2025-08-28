@@ -187,7 +187,8 @@ impl Package {
             .text("  ")
             .cyan(&self.name)
             .text(" ")
-            .green(format!("v{}", self.version).as_str())
+            .green("v")
+            .green(&self.version)
             .text(" ")
             .with(|text| {
                 if self.is_outdated() {
