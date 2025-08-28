@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use colored::Colorize;
 use serde::Deserialize;
 
 use crate::{
     error::{NbrError, Result},
+    log::StyledText,
     utils::{process_utils, terminal_utils},
 };
 use std::{
@@ -183,20 +183,19 @@ impl Package {
     /// Display package info
     /// name installedeversion (available version)
     pub fn display_info(&self) {
-        let installed_version = format!("v{}", self.version).bright_green();
-        let available_version = if self.is_outdated() {
-            format!("(available: v{})", self.latest_version.as_ref().unwrap())
-                .bright_yellow()
-                .to_string()
-        } else {
-            "".to_string()
-        };
-        println!(
-            "  {} {} {}",
-            self.name.cyan().bold(),
-            installed_version,
-            available_version
-        );
+        StyledText::new("")
+            .text("  ")
+            .cyan(&self.name)
+            .text(" ")
+            .green("v")
+            .green(&self.version)
+            .text(" ")
+            .with(|text| {
+                if self.is_outdated() {
+                    text.yellow(&format!("(v{})", self.latest_version.as_ref().unwrap()));
+                }
+            })
+            .println();
     }
 }
 
