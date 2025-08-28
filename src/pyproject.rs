@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    vec,
 };
 
 use toml_edit::{Document, DocumentMut, InlineTable, Table};
@@ -228,17 +227,23 @@ impl NbTomlEditor {
     }
 
     pub fn add_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
-        let mut adapters = adapters.into_iter().collect::<HashSet<Adapter>>();
+        let adapters = adapters.into_iter().collect::<HashSet<Adapter>>();
         let nonebot = self.nonebot_table_mut()?;
 
-        if let Some(adapters_array) = nonebot.get_mut("adapters") {
-            let adapters_arr_mut = adapters_array.as_array_mut().unwrap();
-            let adapters_names = adapters_arr_mut
-                .iter()
-                .map(|a| a.as_inline_table().unwrap()["name"].to_string())
-                .collect::<Vec<String>>();
-
-            adapters.retain(|a| !adapters_names.contains(&a.name));
+        if let Some(adapters_item) = nonebot.get_mut("adapters") {
+            let adapters_arr_mut = adapters_item.as_array_mut().unwrap();
+            // adapters 交互逻辑 已经排除了已经安装的 adapter
+            // let adapters_names = adapters_arr_mut
+            //     .iter()
+            //     .map(|a| {
+            //         a.as_inline_table().unwrap()["name"]
+            //             .as_str()
+            //             .unwrap()
+            //             .to_string()
+            //     })
+            //     .collect::<Vec<String>>();
+            // debug!("installed adapters: {:?}", adapters_names);
+            // adapters.retain(|a| !adapters_names.contains(&a.name));
 
             for adapter in adapters {
                 let mut inline_table = InlineTable::new();
@@ -246,6 +251,7 @@ impl NbTomlEditor {
                 inline_table.insert("module_name", adapter.module_name.into());
                 adapters_arr_mut.push(inline_table);
             }
+            adapters_arr_mut.fmt();
         }
 
         // 写回文件
@@ -254,8 +260,8 @@ impl NbTomlEditor {
 
     pub fn remove_adapters(&mut self, adapter_names: Vec<&str>) -> NbrResult<()> {
         let nonebot = self.nonebot_table_mut()?;
-        let adapters_array = nonebot.get_mut("adapters").unwrap();
-        let adapters_arr_mut = adapters_array.as_array_mut().unwrap();
+        let adapters_item = nonebot.get_mut("adapters").unwrap();
+        let adapters_arr_mut = adapters_item.as_array_mut().unwrap();
         adapters_arr_mut.retain(|a| {
             !adapter_names.contains(&a.as_inline_table().unwrap()["name"].as_str().unwrap())
         });
@@ -266,18 +272,14 @@ impl NbTomlEditor {
         let mut plugins = plugins.into_iter().collect::<HashSet<String>>();
         let nonebot = self.nonebot_table_mut()?;
 
-        if let Some(plugins_array) = nonebot.get_mut("plugins") {
-            let plugins_arr_mut = plugins_array.as_array_mut().unwrap();
-            let plugins_names = plugins_arr_mut
+        if let Some(plugins_item) = nonebot.get_mut("plugins") {
+            let plugins_arr_mut = plugins_item.as_array_mut().unwrap();
+            let plugin_names = plugins_arr_mut
                 .iter()
-                .map(|p| p.to_string())
+                .map(|p| p.as_str().unwrap().to_string())
                 .collect::<Vec<String>>();
-
-            plugins.retain(|p| !plugins_names.contains(&p));
-
-            for plugin in plugins {
-                plugins_arr_mut.push(plugin);
-            }
+            plugins.retain(|p| !plugin_names.contains(p));
+            plugins_arr_mut.extend(plugins);
         }
 
         self.save()
@@ -285,17 +287,17 @@ impl NbTomlEditor {
 
     pub fn remove_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
         let nonebot_table = self.nonebot_table_mut()?;
-        let plugins_array = nonebot_table.get_mut("plugins").unwrap();
-        let plugins_arr_mut = plugins_array.as_array_mut().unwrap();
-        plugins_arr_mut.retain(|p| plugins.contains(&p.to_string()));
+        let plugins_item = nonebot_table.get_mut("plugins").unwrap();
+        let plugins_arr_mut = plugins_item.as_array_mut().unwrap();
+        plugins_arr_mut.retain(|p| !plugins.contains(&p.as_str().unwrap().to_string()));
         self.save()
     }
 
     /// 重置 tool.nonebot.plugins
     pub fn reset_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
         let nonebot_table = self.nonebot_table_mut()?;
-        let plugins_array = nonebot_table.get_mut("plugins").unwrap();
-        let plugins_arr_mut = plugins_array.as_array_mut().unwrap();
+        let plugins_item = nonebot_table.get_mut("plugins").unwrap();
+        let plugins_arr_mut = plugins_item.as_array_mut().unwrap();
         plugins_arr_mut.clear();
         plugins_arr_mut.extend(plugins);
         self.save()
@@ -305,8 +307,8 @@ impl NbTomlEditor {
     #[allow(unused)]
     pub fn reset_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
         let nonebot_table = self.nonebot_table_mut()?;
-        let adapters_array = nonebot_table.get_mut("adapters").unwrap();
-        let adapters_arr_mut = adapters_array.as_array_mut().unwrap();
+        let adapters_item = nonebot_table.get_mut("adapters").unwrap();
+        let adapters_arr_mut = adapters_item.as_array_mut().unwrap();
         adapters_arr_mut.clear();
         adapters_arr_mut.extend(adapters.into_iter().map(|adapter| {
             let mut inline_table = InlineTable::new();
