@@ -100,9 +100,9 @@
 
     nbr create
 
-非询问模式创建项目
+非询问式创建
 
-    nbr create awesome-bot -p 3.12 -t bootstrap --adapters "OneBot V11" --drivers fastapi,httpx,websockets --env dev --plugins echo,single-session --dev-tools ruff,basedpyright,pre-commit -f
+    nbr create awesome-bot -p 3.12 -t bootstrap --adapters "OneBot V11" --drivers fastapi,httpx,websockets --env dev --plugins echo --dev-tools ruff,basedpyright,pre-commit -f
 
 运行 NoneBot2 项目，选项 `-r` / `--reload` 重新加载项目
 
