@@ -153,11 +153,6 @@ impl<'a> StyledText<'a> {
         self
     }
 
-    pub fn black(&mut self, text: &str) -> &mut Self {
-        self.parts.push(Colour::Black.paint(text).to_string());
-        self
-    }
-
     /// 红色
     pub fn red(&mut self, text: &str) -> &mut Self {
         self.parts.push(Colour::Red.paint(text).to_string());
@@ -218,6 +213,17 @@ impl<'a> StyledText<'a> {
     pub fn underline(&mut self, text: &str) -> &mut Self {
         self.parts
             .push(Style::new().underline().paint(text).to_string());
+        self
+    }
+
+    pub fn cyan_underline(&mut self, text: &str) -> &mut Self {
+        self.parts.push(
+            Style::new()
+                .underline()
+                .fg(Colour::Cyan)
+                .paint(text)
+                .to_string(),
+        );
         self
     }
 
@@ -317,18 +323,6 @@ impl<'a> StyledText<'a> {
         );
         self
     }
-
-    /// 黑色粗体
-    pub fn black_bold(&mut self, text: &str) -> &mut Self {
-        self.parts.push(
-            Style::new()
-                .bold()
-                .fg(Colour::Black)
-                .paint(text)
-                .to_string(),
-        );
-        self
-    }
 }
 
 #[cfg(test)]
@@ -369,7 +363,6 @@ mod tests {
             .yellow_bold("yellow_bold")
             .purple_bold("purple_bold")
             .white_bold("white_bold")
-            .black_bold("black_bold")
             .dimmed("dimmed")
             .italic("italic")
             .underline("underline")

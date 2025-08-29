@@ -348,7 +348,7 @@ impl AdapterManager {
         StyledText::new(" ")
             .cyan_bold("  •")
             .cyan_bold(&adapter.name)
-            .black(format!("({})", adapter.project_link).as_str())
+            .text(format!("({})", adapter.project_link).as_str())
             .green(format!("v{}", adapter.version).as_str())
             .println();
     }

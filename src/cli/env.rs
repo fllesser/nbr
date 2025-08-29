@@ -462,15 +462,26 @@ impl EnvironmentChecker {
         info!("System Resources:");
         StyledText::new(" ")
             .text("  cpu:")
-            .cyan(&env_info.system_info.cpu_count.to_string())
-            .cyan(format!("/ {:.2}%", env_info.system_info.cpu_usage).as_str())
+            .cyan(
+                format!(
+                    "num {} / {:.2}% usage",
+                    env_info.system_info.cpu_count, env_info.system_info.cpu_usage
+                )
+                .as_str(),
+            )
             .println();
 
         let total_gb = env_info.system_info.total_memory as f64 / 1_073_741_824.0;
         let available_gb = env_info.system_info.available_memory as f64 / 1_073_741_824.0;
         StyledText::new(" ")
             .text("  memory:")
-            .cyan(format!("{:.3} GB / {:.3} GB", available_gb, total_gb).as_str())
+            .cyan(
+                format!(
+                    "available: {:.3} GB / total: {:.3} GB",
+                    available_gb, total_gb
+                )
+                .as_str(),
+            )
             .println();
 
         if !env_info.system_info.disk_usage.is_empty() {

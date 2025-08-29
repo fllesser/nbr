@@ -352,9 +352,9 @@ pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
     let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
 
     StyledText::new(" ")
-        .green_bold("Using Python:")
-        .cyan_bold(&runner.python_path)
-        .println();
+        .green("Using Python:")
+        .cyan_underline(&runner.python_path)
+        .println_bold();
 
     runner.run().await
 }

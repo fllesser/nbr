@@ -588,28 +588,28 @@ impl PluginManager {
     fn display_plugin_info(&self, plugin: &RegistryPlugin) {
         StyledText::new("").cyan_bold(&plugin.name).println();
         StyledText::new(" ")
-            .black("  Desc:")
+            .text("  Desc:")
             .white(&plugin.desc)
             .println();
         StyledText::new(" ")
-            .black("  Version:")
+            .text("  Version:")
             .white(&plugin.version)
             .println();
         StyledText::new(" ")
-            .black("  Author:")
+            .text("  Author:")
             .white(&plugin.author)
             .println();
 
         if let Some(ref homepage) = plugin.homepage {
             StyledText::new(" ")
-                .black("  Homepage:")
+                .text("  Homepage:")
                 .cyan(homepage)
                 .println();
         }
 
         if !plugin.tags.is_empty() {
             StyledText::new(" ")
-                .black("  Tags:")
+                .text("  Tags:")
                 .yellow(
                     plugin
                         .tags
@@ -630,18 +630,18 @@ impl PluginManager {
             .println();
 
         StyledText::new(" ")
-            .black("  Desc:")
+            .text("  Desc:")
             .white(&plugin.desc)
             .println();
         if let Some(ref homepage) = plugin.homepage {
             StyledText::new(" ")
-                .black("  Homepage:")
+                .text("  Homepage:")
                 .cyan(homepage)
                 .println();
         }
 
         StyledText::new(" ")
-            .black("  Install Command:")
+            .text("  Install Command:")
             .yellow(&format!("nbr plugin install {}", plugin.project_link))
             .println();
     }
