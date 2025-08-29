@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
-use sysinfo::System;
+use sysinfo::{Disks, System};
 use tracing::{info, warn};
 
 /// Environment information structure
@@ -97,17 +97,23 @@ pub struct EnvironmentChecker {
     work_dir: PathBuf,
     /// System information
     system: System,
+    /// Disks information
+    disks: Disks,
 }
 
 impl EnvironmentChecker {
     /// Create a new environment checker
-    pub async fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         //let config_manager = ConfigManager::new()?;
         let work_dir = std::env::current_dir()?;
         let mut system = System::new_all();
         system.refresh_all();
-
-        Ok(Self { work_dir, system })
+        let disks = Disks::new_with_refreshed_list();
+        Ok(Self {
+            work_dir,
+            system,
+            disks,
+        })
     }
 
     /// Show environment information
@@ -223,20 +229,30 @@ impl EnvironmentChecker {
 
     /// Get project information
     fn get_project_info(&self) -> Option<ProjectInfo> {
-        let mut bot_file = None;
-        let mut plugins_dir = None;
+        let name = self
+            .work_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let root_path = self.work_dir.clone();
 
         // Check for bot files
         let bot_path = self.work_dir.join("bot.py");
-        if bot_path.exists() {
-            bot_file = Some(bot_path);
-        }
+        let bot_file = if bot_path.exists() {
+            Some(bot_path)
+        } else {
+            None
+        };
 
         // Check for plugins directory
         let plugins_path = self.work_dir.join("src").join("plugins");
-        if plugins_path.exists() && plugins_path.is_dir() {
-            plugins_dir = Some(plugins_path);
-        }
+        let plugins_dir = if plugins_path.exists() && plugins_path.is_dir() {
+            Some(plugins_path)
+        } else {
+            None
+        };
 
         // Check if it's a git repository
         let is_git_repo = self.work_dir.join(".git").exists();
@@ -244,16 +260,9 @@ impl EnvironmentChecker {
         // Check for virtual environment
         let virtual_env = self.get_virtual_env();
 
-        let project_name = self
-            .work_dir
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-
         Some(ProjectInfo {
-            name: project_name,
-            root_path: self.work_dir.clone(),
+            name,
+            root_path,
             bot_file,
             plugins_dir,
             is_git_repo,
@@ -275,7 +284,24 @@ impl EnvironmentChecker {
         let available_memory = self.system.available_memory();
         let cpu_count = self.system.cpus().len();
         let cpu_usage = self.system.global_cpu_usage();
-        let disk_usage = vec![];
+
+        let disk_usage = self
+            .disks
+            .iter()
+            .map(|disk| {
+                let mount_point = disk.mount_point().to_string_lossy().to_string();
+                let available_space = disk.available_space();
+                let total_space = disk.total_space();
+                let usage_percentage =
+                    (total_space - available_space) as f32 / total_space as f32 * 100.0;
+                DiskUsage {
+                    mount_point,
+                    total_space,
+                    available_space,
+                    usage_percentage,
+                }
+            })
+            .collect();
 
         SystemInfo {
             total_memory,
@@ -303,15 +329,7 @@ impl EnvironmentChecker {
         for var_name in &relevant_vars {
             if let Ok(value) = env::var(var_name) {
                 // Hide sensitive values
-                let display_value = if var_name.to_lowercase().contains("token")
-                    || var_name.to_lowercase().contains("secret")
-                    || var_name.to_lowercase().contains("password")
-                {
-                    "*".repeat(value.len().min(8))
-                } else {
-                    value
-                };
-                env_vars.insert(var_name.to_string(), display_value);
+                env_vars.insert(var_name.to_string(), value);
             }
         }
 
@@ -330,13 +348,13 @@ impl EnvironmentChecker {
             .println();
         StyledText::new(" ")
             .text("  uv version:")
-            .cyan(
-                env_info
-                    .python_info
-                    .uv_version
-                    .as_ref()
-                    .unwrap_or(&"not installed".to_string()),
-            )
+            .with(|text| {
+                if let Some(uv_version) = env_info.python_info.uv_version.as_ref() {
+                    text.cyan(uv_version);
+                } else {
+                    text.red("Not Installed");
+                }
+            })
             .println();
         StyledText::new(" ")
             .text("  executable:")
@@ -374,26 +392,26 @@ impl EnvironmentChecker {
 
             if !nonebot.adapters.is_empty() {
                 StyledText::new("")
-                    .text(format!("  installed {} adapters:", nonebot.adapters.len()).as_str())
+                    .text(&format!("  installed {} adapters:", nonebot.adapters.len()))
                     .println();
                 for adapter in &nonebot.adapters {
                     StyledText::new(" ")
                         .text("    •")
                         .cyan(&adapter.name)
-                        .green(format!("(v{})", adapter.version).as_str())
+                        .green(&format!("(v{})", adapter.version))
                         .println();
                 }
             }
 
             if !nonebot.plugins.is_empty() {
                 StyledText::new("")
-                    .text(format!("  installed {} plugins:", nonebot.plugins.len()).as_str())
+                    .text(&format!("  installed {} plugins:", nonebot.plugins.len()))
                     .println();
                 for plugin in &nonebot.plugins {
                     StyledText::new(" ")
                         .text("    •")
                         .cyan(&plugin.name)
-                        .green(format!("(v{})", plugin.version).as_str())
+                        .green(&format!("(v{})", plugin.version))
                         .println();
                 }
             }
@@ -462,26 +480,19 @@ impl EnvironmentChecker {
         info!("System Resources:");
         StyledText::new(" ")
             .text("  cpu:")
-            .cyan(
-                format!(
-                    "{} cores / {:.2}% usage",
-                    env_info.system_info.cpu_count, env_info.system_info.cpu_usage
-                )
-                .as_str(),
-            )
+            .cyan(&format!(
+                "{} cores / {:.2}% usage",
+                env_info.system_info.cpu_count, env_info.system_info.cpu_usage
+            ))
             .println();
 
         let total_gb = env_info.system_info.total_memory as f64 / 1_073_741_824.0;
         let available_gb = env_info.system_info.available_memory as f64 / 1_073_741_824.0;
         StyledText::new(" ")
             .text("  memory:")
-            .cyan(
-                format!(
-                    "available: {:.3} GB / total: {:.3} GB",
-                    available_gb, total_gb
-                )
-                .as_str(),
-            )
+            .cyan(&format!(
+                "available: {available_gb:.3} GB / total: {total_gb:.3} GB",
+            ))
             .println();
 
         if !env_info.system_info.disk_usage.is_empty() {
@@ -489,11 +500,12 @@ impl EnvironmentChecker {
             for disk in &env_info.system_info.disk_usage {
                 let total_gb = disk.total_space as f64 / 1_073_741_824.0;
                 let available_gb = disk.available_space as f64 / 1_073_741_824.0;
+                let used_gb = total_gb - available_gb;
                 StyledText::new(" ")
                     .text("    •")
-                    .cyan(format!("{}% used", disk.usage_percentage).as_str())
-                    .cyan(format!("({:.2} / {:.2} GB)", total_gb - available_gb, total_gb).as_str())
-                    .cyan(format!(" GB) at {}", disk.mount_point).as_str())
+                    .cyan(&format!("{:.2}% used", disk.usage_percentage))
+                    .cyan(&format!("({used_gb:.2} / {total_gb:.2} GB)"))
+                    .cyan(&format!("at {}", disk.mount_point))
                     .println();
             }
         }
@@ -625,7 +637,7 @@ impl EnvironmentChecker {
 
 /// Handle the env command
 pub async fn handle_env(commands: &EnvCommands) -> Result<()> {
-    let mut checker = EnvironmentChecker::new().await?;
+    let mut checker = EnvironmentChecker::new()?;
 
     match commands {
         EnvCommands::Info => checker.show_info().await,
@@ -639,7 +651,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_environment_checker_creation() {
-        let checker = EnvironmentChecker::new().await;
+        let checker = EnvironmentChecker::new();
         assert!(checker.is_ok());
     }
 
@@ -671,10 +683,7 @@ mod tests {
             env_vars: HashMap::new(),
         };
 
-        let checker = EnvironmentChecker {
-            work_dir: PathBuf::new(),
-            system: System::new_all(),
-        };
+        let checker = EnvironmentChecker::new().unwrap();
 
         let issues = checker.check_for_issues(&env_info);
         assert!(!issues.is_empty()); // Should have issues with Python 2.7

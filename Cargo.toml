@@ -77,7 +77,7 @@ config = "0.15.13"
 notify = "8.2.0"
 
 # System information
-sysinfo = "0.37.0"
+sysinfo = { version = "0.37.0", features = ["disk"] }
 
 # Futures utilities
 futures-util = "0.3"
