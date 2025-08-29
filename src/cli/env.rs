@@ -464,7 +464,7 @@ impl EnvironmentChecker {
             .text("  cpu:")
             .cyan(
                 format!(
-                    "num {} / {:.2}% usage",
+                    "{} cores / {:.2}% usage",
                     env_info.system_info.cpu_count, env_info.system_info.cpu_usage
                 )
                 .as_str(),
