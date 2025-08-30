@@ -15,48 +15,41 @@ use std::{
 /// Install pre-commit hooks
 pub fn pre_commit_install(output_dir: &Path) -> Result<()> {
     let args = vec!["run", "pre-commit", "install"];
-    CommonBuilder::new(args).working_dir(output_dir).run()
+    CmdBuilder::uv(args).working_dir(output_dir).run()
 }
 
 pub fn add(packages: Vec<&str>) -> AddBuilder<'_> {
     AddBuilder::new(packages)
 }
 
-pub fn add_from_github(repo_url: &str) -> Result<()> {
-    let git_url = format!("git+{}", repo_url);
-    let args = vec!["add", git_url.as_str()];
-    CommonBuilder::new(args).run()
-}
-
-pub fn remove(packages: Vec<&str>) -> CommonBuilder<'_> {
+pub fn remove(packages: Vec<&str>) -> CmdBuilder<'_> {
     let mut args = vec!["remove"];
     args.extend(packages.clone());
-    CommonBuilder::new(args)
+    CmdBuilder::uv(args)
 }
 
-pub fn sync(python_version: Option<&str>) -> CommonBuilder<'_> {
+pub fn sync(python_version: Option<&str>) -> CmdBuilder<'_> {
     let mut args = vec!["sync"];
     if let Some(version) = python_version {
         args.push("--python");
         args.push(version);
     }
-    CommonBuilder::new(args)
+    CmdBuilder::uv(args)
 }
 
-pub fn show(package: &str) -> CommonBuilder<'_> {
+pub fn show(package: &str) -> CmdBuilder<'_> {
     let args = vec!["pip", "show", package];
-    CommonBuilder::new(args)
+    CmdBuilder::uv(args)
 }
 
 pub fn reinstall(package: &str) -> Result<()> {
-    remove(vec![package]).run()?;
-    add(vec![package]).run()
+    add(vec![package]).reinstall(true).run()
 }
 
 pub fn upgrade(packages: Vec<&str>) -> Result<()> {
     let mut args = vec!["lock"];
     args.extend(packages.iter().flat_map(|p| ["-P", p]));
-    CommonBuilder::new(args).run()?;
+    CmdBuilder::uv(args).run()?;
     sync(None).run()
 }
 
@@ -66,7 +59,7 @@ pub async fn is_installed(package: &str) -> bool {
 
 pub async fn self_version() -> Result<String> {
     let args = vec!["self", "version", "--short"];
-    CommonBuilder::new(args).run_async().await.map_err(|_| {
+    CmdBuilder::uv(args).run_async().await.map_err(|_| {
         let message = concat!(
             "uv not found. You can run\n\n",
             "   curl -LsSf https://astral.sh/uv/install.sh | sh\n\n",
@@ -78,7 +71,7 @@ pub async fn self_version() -> Result<String> {
 
 pub async fn list(outdated: bool) -> Result<Vec<Package>> {
     let args: Vec<&str> = vec!["pip", "list", "--format=json"];
-    let mut builder = CommonBuilder::new(args);
+    let mut builder = CmdBuilder::uv(args);
     let stdout = if outdated {
         builder
             .arg("--outdated")
@@ -199,16 +192,18 @@ impl Package {
     }
 }
 
-pub struct CommonBuilder<'a> {
+pub struct CmdBuilder<'a> {
+    pub cmd: &'a str,
     pub args: Vec<&'a str>,
     pub working_dir: Option<&'a Path>,
     pub timeout_secs: u16,
 }
 
-impl<'a> CommonBuilder<'a> {
-    /// Create a new CommonBuilder
-    pub fn new(args: Vec<&'a str>) -> Self {
+impl<'a> CmdBuilder<'a> {
+    /// Create a new CmdBuilder
+    pub fn uv(args: Vec<&'a str>) -> Self {
         Self {
+            cmd: "uv",
             args,
             working_dir: None,
             timeout_secs: 5,
@@ -258,13 +253,13 @@ impl<'a> CommonBuilder<'a> {
     // }
 
     pub fn run(&self) -> Result<()> {
-        process_utils::execute_interactive("uv", &self.args, self.working_dir)
+        process_utils::execute_interactive(self.cmd, &self.args, self.working_dir)
     }
 
     /// Run the command asynchronously and return the stdout as a string
     pub async fn run_async(&self) -> Result<String> {
         let output = process_utils::execute_command_with_output(
-            "uv",
+            self.cmd,
             &self.args,
             self.working_dir,
             self.timeout_secs as u64,
@@ -289,6 +284,7 @@ pub struct AddBuilder<'a> {
     pub index_url: Option<&'a str>,
     pub working_dir: Option<&'a Path>,
     pub extras: Option<Vec<&'a str>>,
+    pub reinstall: bool,
 }
 
 impl<'a> AddBuilder<'a> {
@@ -299,6 +295,7 @@ impl<'a> AddBuilder<'a> {
             index_url: None,
             working_dir: None,
             extras: None,
+            reinstall: false,
         }
     }
 
@@ -327,6 +324,11 @@ impl<'a> AddBuilder<'a> {
         self
     }
 
+    pub fn reinstall(&mut self, reinstall: bool) -> &mut Self {
+        self.reinstall = reinstall;
+        self
+    }
+
     pub fn run(&self) -> Result<()> {
         let mut args: Vec<&str> = vec!["add"];
         args.extend(self.packages.clone());
@@ -340,6 +342,9 @@ impl<'a> AddBuilder<'a> {
         if let Some(ref extras) = self.extras {
             let extras = extras.iter().flat_map(|e| ["--extra", e]);
             args.extend(extras);
+        }
+        if self.reinstall {
+            args.push("--reinstall");
         }
         process_utils::execute_interactive("uv", &args, self.working_dir)
     }

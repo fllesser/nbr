@@ -7,7 +7,7 @@ use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::NbTomlEditor;
 use crate::utils::terminal_utils;
-use crate::uv::{self, CommonBuilder, Package};
+use crate::uv::{self, CmdBuilder, Package};
 use clap::Subcommand;
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
@@ -243,7 +243,7 @@ impl<'a> InstallOptions<'a> {
             let extras = extras.iter().flat_map(|e| ["--extra", e]);
             args.extend(extras);
         }
-        CommonBuilder::new(args).run()
+        CmdBuilder::uv(args).run()
     }
 }
 
@@ -496,8 +496,13 @@ impl PluginManager {
             .iter()
             .map(|p| p.name.replace("-", "_"))
             .collect::<Vec<String>>();
+
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
             .reset_plugins(plugins.iter().map(|p| p.as_str()).collect())?;
+        StyledText::new(" ")
+            .green_bold("✓ Successfully reset nonebot plugins:")
+            .cyan_bold(&plugins.join(", "))
+            .println();
         Ok(())
     }
 
@@ -751,7 +756,7 @@ mod tests {
     async fn test_get_installed_plugins() {
         let work_dir = Path::new("awesome-bot").to_path_buf();
         let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
-        let installed_plugins = plugin_manager.get_installed_plugins(true).await.unwrap();
+        let installed_plugins = plugin_manager.get_installed_plugins(false).await.unwrap();
         dbg!(installed_plugins);
     }
 
