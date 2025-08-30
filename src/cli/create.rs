@@ -37,7 +37,7 @@ pub struct CreateArgs {
     env: Option<Environment>,
     #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
     dev_tools: Option<Vec<DevTool>>,
-    #[clap(long, action = clap::ArgAction::SetTrue, help = "Generate Dockerfile")]
+    #[clap(long, help = "Generate Dockerfile")]
     gen_dockerfile: Option<bool>,
 }
 
@@ -138,7 +138,7 @@ fn check_directory_exists(output_dir: &Path) -> Result<()> {
 fn confirm_gen_dockerfile() -> Result<bool> {
     let gen_dockerfile = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to generate a Dockerfile")
-        .default(false)
+        .default(true)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
     Ok(gen_dockerfile)
@@ -210,6 +210,7 @@ async fn gather_project_options(
         Some(dev_tools) => dev_tools,
         None => select_dev_tools()?,
     };
+    // 是否生成 Dockerfile
     let gen_dockerfile = match args.gen_dockerfile {
         Some(gen_dockerfile) => gen_dockerfile,
         None => confirm_gen_dockerfile()?,
