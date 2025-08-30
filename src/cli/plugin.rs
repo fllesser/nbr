@@ -66,6 +66,8 @@ pub enum PluginCommands {
         #[clap(short, long, help = "Reinstall the plugin")]
         reinstall: bool,
     },
+    #[clap(about = "Reset nonebot plugins, remove invalid plugins and add missing plugins")]
+    Reset,
     #[clap(about = "Create a new plugin")]
     Create,
 }
@@ -90,6 +92,7 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
             all,
             reinstall,
         } => manager.update(name.as_deref(), *all, *reinstall).await,
+        PluginCommands::Reset => manager.reset_nonebot_plugins().await,
         PluginCommands::Create => {
             unimplemented!()
         }
@@ -279,9 +282,14 @@ impl PluginManager {
         let git_url = options.git_url.unwrap();
         debug!("Installing plugin from github: {}", git_url);
 
+        let prompt = StyledText::new(" ")
+            .text("Would you like to install")
+            .cyan(options.name)
+            .text("from github")
+            .build();
         // 确定是否安装 github 插件
         if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Would you like to install this plugin from github")
+            .with_prompt(prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -306,8 +314,13 @@ impl PluginManager {
     pub async fn install_unregistered_plugin(&mut self, options: InstallOptions<'_>) -> Result<()> {
         debug!("Installing unregistered plugin: {}", options.name);
 
+        let prompt = StyledText::new(" ")
+            .text("Would you like to install")
+            .cyan(options.name)
+            .text("from PyPI?")
+            .build();
         if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Would you like to install this unregistered plugin from PyPI?")
+            .with_prompt(prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
@@ -339,13 +352,17 @@ impl PluginManager {
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
 
+        let prompt = StyledText::new(" ")
+            .text("Would you like to install")
+            .cyan(package_name)
+            .build();
         if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Would you like to install this plugin")
+            .with_prompt(prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            error!("{}", "Installation operation cancelled.");
+            error!("Installation operation cancelled.");
             return Ok(());
         }
         // Install the plugin
@@ -394,7 +411,7 @@ impl PluginManager {
                 .working_dir(&self.work_dir)
                 .run()?;
             NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-                .remove_plugins(vec![package_name.replace("-", "_")])?;
+                .remove_plugins(vec![&package_name.replace("-", "_")])?;
 
             StyledText::new(" ")
                 .green_bold("✓ Successfully uninstalled plugin:")
@@ -432,7 +449,7 @@ impl PluginManager {
         uv::remove(vec![&package_name]).run()?;
 
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .remove_plugins(vec![registry_plugin.module_name.clone()])?;
+            .remove_plugins(vec![&registry_plugin.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully uninstalled plugin:")
@@ -473,15 +490,14 @@ impl PluginManager {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub async fn fix_nonebot_plugins(&self) -> Result<()> {
+    pub async fn reset_nonebot_plugins(&self) -> Result<()> {
         let installed_plugins = self.get_installed_plugins(false).await?;
-        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.reset_plugins(
-            installed_plugins
-                .iter()
-                .map(|p| p.name.replace("-", "_"))
-                .collect::<Vec<String>>(),
-        )?;
+        let plugins = installed_plugins
+            .iter()
+            .map(|p| p.name.replace("-", "_"))
+            .collect::<Vec<String>>();
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
+            .reset_plugins(plugins.iter().map(|p| p.as_str()).collect())?;
         Ok(())
     }
 
