@@ -92,7 +92,7 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
             all,
             reinstall,
         } => manager.update(name.as_deref(), *all, *reinstall).await,
-        PluginCommands::Reset => manager.reset_nonebot_plugins().await,
+        PluginCommands::Reset => manager.reset().await,
         PluginCommands::Create => {
             unimplemented!()
         }
@@ -463,7 +463,7 @@ impl PluginManager {
         let installed_packages = uv::list(outdated).await?;
         let installed_plugins = installed_packages
             .into_iter()
-            .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
+            .filter(|p| Self::is_plugin(&p.name))
             .collect();
         Ok(installed_plugins)
     }
@@ -490,8 +490,29 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn reset_nonebot_plugins(&self) -> Result<()> {
-        let installed_plugins = self.get_installed_plugins(false).await?;
+    pub fn is_plugin(package_name: &str) -> bool {
+        package_name.starts_with("nonebot") && package_name.contains("plugin")
+    }
+
+    pub async fn reset(&self) -> Result<()> {
+        let mut installed_plugins = self.get_installed_plugins(false).await?;
+
+        let mut requires_plugins: Vec<String> = Vec::new();
+        for plugin in &installed_plugins {
+            let requires = uv::show_package_info(plugin.name.as_str())
+                .await?
+                .requires
+                .unwrap_or_default();
+            for p in requires {
+                if Self::is_plugin(&p) && !requires_plugins.contains(&p) {
+                    requires_plugins.push(p);
+                }
+            }
+        }
+
+        // 去除 requires 的插件
+        installed_plugins.retain(|p| !requires_plugins.contains(&p.name));
+
         let plugins = installed_plugins
             .iter()
             .map(|p| p.name.replace("-", "_"))
