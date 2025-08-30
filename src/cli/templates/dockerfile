@@ -1,27 +1,25 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:debian-slim AS builder
 
 WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY pyproject.toml ./
-COPY uv.lock* ./
+# Copy dependency files first for better caching
+COPY pyproject.toml uv.lock .env* README.md ./
+COPY src/ ./src/
 
 # Install Python dependencies
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && uv sync --no-dev
+RUN uv sync --no-dev --frozen --python {}
 
-# Copy application
-COPY . .
-
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash {}
-RUN chown -R {}:{} /app
-USER {}
+# Install nbr (ensure we get the correct architecture)
+RUN curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf - -C /usr/local/bin/ && \
+    chmod +x /usr/local/bin/nbr
 
 EXPOSE 8080
 
-CMD ["uv", "run", "bot.py"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["nbr", "run"]
