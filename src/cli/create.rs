@@ -37,6 +37,8 @@ pub struct CreateArgs {
     env: Option<Environment>,
     #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
     dev_tools: Option<Vec<DevTool>>,
+    #[clap(long, action = clap::ArgAction::SetTrue, help = "Generate Dockerfile")]
+    gen_dockerfile: Option<bool>,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -95,6 +97,7 @@ pub struct ProjectOptions {
     pub python_version: String,
     pub environment: Environment,
     pub dev_tools: Vec<DevTool>,
+    pub gen_dockerfile: bool,
 }
 
 pub async fn handle_create(args: CreateArgs) -> Result<()> {
@@ -130,6 +133,15 @@ fn check_directory_exists(output_dir: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn confirm_gen_dockerfile() -> Result<bool> {
+    let gen_dockerfile = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Would you like to generate a Dockerfile")
+        .default(false)
+        .interact()
+        .map_err(|e| NbrError::io(e.to_string()))?;
+    Ok(gen_dockerfile)
 }
 
 async fn gather_project_options(
@@ -198,6 +210,10 @@ async fn gather_project_options(
         Some(dev_tools) => dev_tools,
         None => select_dev_tools()?,
     };
+    let gen_dockerfile = match args.gen_dockerfile {
+        Some(gen_dockerfile) => gen_dockerfile,
+        None => confirm_gen_dockerfile()?,
+    };
 
     Ok(ProjectOptions {
         name,
@@ -209,6 +225,7 @@ async fn gather_project_options(
         python_version,
         environment,
         dev_tools,
+        gen_dockerfile,
     })
 }
 
@@ -342,6 +359,7 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     generate_readme_file(options)?;
     generate_gitignore(&options.output_dir)?;
     generate_dev_tools_config(options)?;
+    generate_dockerfile(options)?;
     install_dependencies(options)?;
     Ok(())
 }
@@ -484,6 +502,14 @@ fn generate_dev_tools_config(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
+fn generate_dockerfile(options: &ProjectOptions) -> Result<()> {
+    if options.gen_dockerfile {
+        let dockerfile = format!(include_str!("templates/dockerfile"), options.python_version);
+        fs::write(options.output_dir.join("Dockerfile"), dockerfile)?;
+    }
+    Ok(())
+}
+
 fn generate_pre_commit_config(output_dir: &Path) -> Result<()> {
     let pre_commit_config = include_str!("templates/pre_commit_config");
     fs::write(
@@ -547,6 +573,7 @@ mod tests {
             python_version: "3.10".to_string(),
             environment: Environment::Dev,
             dev_tools: vec![],
+            gen_dockerfile: true,
         };
         generate_env_files(&options).unwrap();
     }
