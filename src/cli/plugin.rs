@@ -294,7 +294,7 @@ impl PluginManager {
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![options.module_name.unwrap()])?;
+            .add_plugins(vec![&options.module_name.unwrap()])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
@@ -320,7 +320,7 @@ impl PluginManager {
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![options.module_name.unwrap()])?;
+            .add_plugins(vec![&options.module_name.unwrap()])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
@@ -353,7 +353,7 @@ impl PluginManager {
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![registry_plugin.module_name.clone()])?;
+            .add_plugins(vec![&registry_plugin.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")

@@ -283,15 +283,15 @@ impl NbTomlEditor {
         self.save()
     }
 
-    pub fn add_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
-        let mut plugins = plugins.into_iter().collect::<HashSet<String>>();
+    pub fn add_plugins(&mut self, plugins: Vec<&str>) -> NbrResult<()> {
+        let mut plugins = plugins.into_iter().collect::<HashSet<&str>>();
         let plugins_arr_mut = self.plugins_array_mut()?;
 
         let plugin_names = plugins_arr_mut
             .iter()
             .map(|p| p.as_str().unwrap().to_string())
             .collect::<Vec<String>>();
-        plugins.retain(|p| !plugin_names.contains(p));
+        plugins.retain(|p| !plugin_names.contains(&p.to_string()));
         plugins_arr_mut.extend(plugins);
 
         Self::fmt_toml_array(plugins_arr_mut);
@@ -355,9 +355,7 @@ mod tests {
         let toml_path = Path::new("awesome-bot");
         let mut editor = NbTomlEditor::with_work_dir(Some(&toml_path)).unwrap();
 
-        editor
-            .add_plugins(vec!["nonebot_plugin_status".to_string()])
-            .unwrap();
+        editor.add_plugins(vec!["nonebot_plugin_status"]).unwrap();
     }
 
     #[test]
