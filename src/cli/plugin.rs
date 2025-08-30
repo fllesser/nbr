@@ -190,10 +190,10 @@ impl<'a> InstallOptions<'a> {
 
     pub fn parse_name(mut self) -> Result<Self> {
         if self.name.starts_with("git+") {
-            const GIT_URL_PATTERN: &'static str = r"nonebot-plugin-(?P<repo>[^/@]+)";
+            const GIT_URL_PATTERN: &str = r"nonebot-plugin-(?P<repo>[^/@]+)";
             let re = Regex::new(GIT_URL_PATTERN).unwrap();
             let captures = re
-                .captures(&self.name)
+                .captures(self.name)
                 .ok_or(NbrError::invalid_argument(format!(
                     "Invalid plugin name: {}",
                     self.name
@@ -203,10 +203,10 @@ impl<'a> InstallOptions<'a> {
             self.module_name = Some(self.name.replace("-", "_"));
             return Ok(self);
         }
-        const PATTERN: &'static str = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
+        const PATTERN: &str = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
         let re = Regex::new(PATTERN).unwrap();
         let captures = re
-            .captures(&self.name)
+            .captures(self.name)
             .ok_or(NbrError::invalid_argument(format!(
                 "Invalid plugin name: {}",
                 self.name

@@ -291,7 +291,7 @@ impl NbTomlEditor {
             .iter()
             .map(|p| p.as_str().unwrap())
             .collect::<Vec<&str>>();
-        plugins.retain(|p| !plugin_names.contains(&p));
+        plugins.retain(|p| !plugin_names.contains(p));
         plugins_arr_mut.extend(plugins);
         Self::fmt_toml_array(plugins_arr_mut);
 
