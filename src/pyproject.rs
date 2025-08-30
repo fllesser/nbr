@@ -283,33 +283,34 @@ impl NbTomlEditor {
         self.save()
     }
 
-    pub fn add_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
-        let mut plugins = plugins.into_iter().collect::<HashSet<String>>();
+    pub fn add_plugins(&mut self, plugins: Vec<&str>) -> NbrResult<()> {
+        let mut plugins = plugins.into_iter().collect::<HashSet<&str>>();
         let plugins_arr_mut = self.plugins_array_mut()?;
 
         let plugin_names = plugins_arr_mut
             .iter()
-            .map(|p| p.as_str().unwrap().to_string())
-            .collect::<Vec<String>>();
+            .map(|p| p.as_str().unwrap())
+            .collect::<Vec<&str>>();
         plugins.retain(|p| !plugin_names.contains(p));
         plugins_arr_mut.extend(plugins);
-
         Self::fmt_toml_array(plugins_arr_mut);
 
         self.save()
     }
 
-    pub fn remove_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
+    pub fn remove_plugins(&mut self, plugins: Vec<&str>) -> NbrResult<()> {
         let plugins_arr_mut = self.plugins_array_mut()?;
-        plugins_arr_mut.retain(|p| !plugins.contains(&p.as_str().unwrap().to_string()));
+        plugins_arr_mut.retain(|p| !plugins.contains(&p.as_str().unwrap()));
+        Self::fmt_toml_array(plugins_arr_mut);
         self.save()
     }
 
     /// 重置 tool.nonebot.plugins
-    pub fn reset_plugins(&mut self, plugins: Vec<String>) -> NbrResult<()> {
+    pub fn reset_plugins(&mut self, plugins: Vec<&str>) -> NbrResult<()> {
         let plugins_arr_mut = self.plugins_array_mut()?;
         plugins_arr_mut.clear();
         plugins_arr_mut.extend(plugins);
+        Self::fmt_toml_array(plugins_arr_mut);
         self.save()
     }
 
@@ -356,7 +357,20 @@ mod tests {
         let mut editor = NbTomlEditor::with_work_dir(Some(&toml_path)).unwrap();
 
         editor
-            .add_plugins(vec!["nonebot_plugin_status".to_string()])
+            .add_plugins(vec![
+                "nonebot_plugin_status",
+                "nonebot_plugin_alconna",
+                "nonebot_plugin_waiter",
+            ])
+            .unwrap();
+    }
+
+    #[test]
+    fn test_remove_plugins() {
+        let toml_path = Path::new("awesome-bot");
+        let mut editor = NbTomlEditor::with_work_dir(Some(&toml_path)).unwrap();
+        editor
+            .remove_plugins(vec!["nonebot_plugin_status"])
             .unwrap();
     }
 

@@ -7,7 +7,7 @@ use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::NbTomlEditor;
 use crate::utils::terminal_utils;
-use crate::uv::{self, Package};
+use crate::uv::{self, CmdBuilder, Package};
 use clap::Subcommand;
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
@@ -26,16 +26,18 @@ use tracing::{debug, error, info, warn};
 pub enum PluginCommands {
     #[clap(about = "Install a plugin")]
     Install {
-        #[clap()]
+        #[clap(help = "Plugin name")]
         name: String,
-        #[clap(short, long)]
+        #[clap(short, long, help = "Specify the index url")]
         index: Option<String>,
-        #[clap(short, long)]
+        #[clap(short, long, help = "Upgrade the plugin")]
         upgrade: bool,
+        #[clap(short, long, help = "Reinstall the plugin")]
+        reinstall: bool,
     },
     #[clap(about = "Uninstall a plugin")]
     Uninstall {
-        #[clap()]
+        #[clap(help = "Plugin name")]
         name: String,
     },
     #[clap(about = "List installed plugins, show outdated plugins if --outdated is set")]
@@ -64,6 +66,8 @@ pub enum PluginCommands {
         #[clap(short, long, help = "Reinstall the plugin")]
         reinstall: bool,
     },
+    #[clap(about = "Reset nonebot plugins, remove invalid plugins and add missing plugins")]
+    Reset,
     #[clap(about = "Create a new plugin")]
     Create,
 }
@@ -75,7 +79,11 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
             name,
             index,
             upgrade,
-        } => manager.install(name, index.as_deref(), *upgrade).await,
+            reinstall,
+        } => {
+            let options = InstallOptions::new(name, *upgrade, *reinstall, index.as_deref())?;
+            manager.install(options).await
+        }
         PluginCommands::Uninstall { name } => manager.uninstall(name).await,
         PluginCommands::List { outdated } => manager.list(*outdated).await,
         PluginCommands::Search { query, limit } => manager.search_plugins(query, *limit).await,
@@ -84,6 +92,7 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
             all,
             reinstall,
         } => manager.update(name.as_deref(), *all, *reinstall).await,
+        PluginCommands::Reset => manager.reset().await,
         PluginCommands::Create => {
             unimplemented!()
         }
@@ -147,6 +156,97 @@ impl Default for PluginManager {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct InstallOptions<'a> {
+    pub name: &'a str,
+    pub module_name: Option<String>,
+    pub git_url: Option<&'a str>,
+    pub upgrade: bool,
+    pub reinstall: bool,
+    pub index_url: Option<&'a str>,
+    pub extras: Option<Vec<&'a str>>,
+    pub specifier: Option<&'a str>,
+}
+
+impl<'a> InstallOptions<'a> {
+    pub fn new(
+        name: &'a str,
+        upgrade: bool,
+        reinstall: bool,
+        index_url: Option<&'a str>,
+    ) -> Result<Self> {
+        let options = Self {
+            name,
+            module_name: None,
+            git_url: None,
+            upgrade,
+            reinstall,
+            index_url,
+            extras: None,
+            specifier: None,
+        };
+        options.parse_name()
+    }
+
+    pub fn parse_name(mut self) -> Result<Self> {
+        if self.name.starts_with("git+") {
+            const GIT_URL_PATTERN: &str = r"nonebot-plugin-(?P<repo>[^/@]+)";
+            let re = Regex::new(GIT_URL_PATTERN).unwrap();
+            let captures = re
+                .captures(self.name)
+                .ok_or(NbrError::invalid_argument(format!(
+                    "Invalid plugin name: {}",
+                    self.name
+                )))?;
+            self.git_url = Some(self.name);
+            self.name = captures.get(0).map(|m| m.as_str()).unwrap();
+            self.module_name = Some(self.name.replace("-", "_"));
+            return Ok(self);
+        }
+        const PATTERN: &str = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
+        let re = Regex::new(PATTERN).unwrap();
+        let captures = re
+            .captures(self.name)
+            .ok_or(NbrError::invalid_argument(format!(
+                "Invalid plugin name: {}",
+                self.name
+            )))?;
+        self.name = captures.get(1).map(|m| m.as_str()).unwrap();
+        self.module_name = Some(self.name.replace("-", "_"));
+        self.extras = captures
+            .get(2)
+            .map(|m| m.as_str().split(',').collect::<Vec<&str>>());
+        self.specifier = captures.get(3).map(|m| m.as_str());
+        Ok(self)
+    }
+
+    pub fn install(&self) -> Result<()> {
+        let mut args = vec!["add"];
+
+        if let Some(git_url) = self.git_url {
+            args.push(git_url);
+        } else {
+            args.push(self.name);
+        }
+
+        if self.upgrade {
+            args.push("--upgrade");
+        }
+        if self.reinstall {
+            args.push("--reinstall");
+        }
+        if let Some(index_url) = self.index_url {
+            args.push("--index-url");
+            args.push(index_url);
+        }
+        if let Some(ref extras) = self.extras {
+            let extras = extras.iter().flat_map(|e| ["--extra", e]);
+            args.extend(extras);
+        }
+        CmdBuilder::uv(args).run()
+    }
+}
+
 impl PluginManager {
     /// Create a new plugin manager
     pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
@@ -167,132 +267,110 @@ impl PluginManager {
         })
     }
 
-    pub async fn install(
-        &mut self,
-        package: &str,
-        index_url: Option<&str>,
-        upgrade: bool,
-    ) -> Result<()> {
-        if package.starts_with("https") {
-            return self.install_from_github(package).await;
+    pub async fn install(&mut self, options: InstallOptions<'_>) -> Result<()> {
+        if options.git_url.is_some() {
+            return self.install_from_github(options).await;
+        }
+        if let Ok(registry_plugin) = self.get_registry_plugin(options.name).await {
+            return self.install_registry_plugin(registry_plugin, options).await;
         }
 
-        // nonebot-plugin-orm[default] -> nonebot-plugin-orm, default
-        // nonebot-plugin-orm -> nonebot-plugin-orm
-        // nonebot-plugin-orm[default, sqlalchemy] -> nonebot-plugin-orm, default, sqlalchemy
-        let package_and_extras = package.split('[').collect::<Vec<&str>>();
-        let package_name = package_and_extras[0];
-        let extras = if let Some(extras) = package_and_extras.get(1) {
-            let extras = extras.trim_end_matches(']');
-            extras.split(',').collect::<Vec<&str>>()
-        } else {
-            vec![]
-        };
-
-        if let Ok(registry_plugin) = self.get_registry_plugin(package_name).await {
-            self.install_from_registry(registry_plugin, index_url, extras, upgrade)
-                .await
-        } else {
-            self.install_unregistered_plugin(package_name, extras).await
-        }
+        self.install_unregistered_plugin(options).await
     }
 
-    pub async fn install_from_github(&mut self, repo_url: &str) -> Result<()> {
-        debug!("Installing plugin from github: {}", repo_url);
+    pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> Result<()> {
+        let git_url = options.git_url.unwrap();
+        debug!("Installing plugin from github: {}", git_url);
 
+        let prompt = StyledText::new(" ")
+            .text("Would you like to install")
+            .cyan(options.name)
+            .text("from github")
+            .build();
         // 确定是否安装 github 插件
         if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Would you like to install this plugin from github")
+            .with_prompt(prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            uv::add_from_github(repo_url)?;
+            options.install()?;
         } else {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
 
-        let regex = Regex::new(r"nonebot-plugin-(?P<repo>[^/@]+)").unwrap();
-        let repo_name = regex.captures(repo_url).unwrap().get(0).unwrap().as_str();
-        let module_name = repo_name.replace("-", "_");
-
         // Add to configuration
-        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
+            .add_plugins(vec![&options.module_name.unwrap()])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
-            .cyan_bold(repo_name)
+            .cyan_bold(options.name)
             .println();
         Ok(())
     }
 
-    pub async fn install_unregistered_plugin(
-        &mut self,
-        package_name: &str,
-        extras: Vec<&str>,
-    ) -> Result<()> {
-        debug!("Installing unregistered plugin: {}", package_name);
+    pub async fn install_unregistered_plugin(&mut self, options: InstallOptions<'_>) -> Result<()> {
+        debug!("Installing unregistered plugin: {}", options.name);
 
+        let prompt = StyledText::new(" ")
+            .text("Would you like to install")
+            .cyan(options.name)
+            .text("from PyPI?")
+            .build();
         if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Would you like to install this unregistered plugin from PyPI?")
+            .with_prompt(prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            uv::add(vec![package_name])
-                .extras(extras)
-                .working_dir(&self.work_dir)
-                .run()?;
+            options.install()?;
         } else {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
 
-        let module_name = package_name.replace("-", "_");
         // Add to configuration
-        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.add_plugins(vec![module_name])?;
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
+            .add_plugins(vec![&options.module_name.unwrap()])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
-            .cyan_bold(package_name)
+            .cyan_bold(options.name)
             .println();
         Ok(())
     }
 
     /// Install a plugin
-    pub async fn install_from_registry(
+    pub async fn install_registry_plugin(
         &self,
         registry_plugin: &RegistryPlugin,
-        index_url: Option<&str>,
-        extras: Vec<&str>,
-        upgrade: bool,
+        options: InstallOptions<'_>,
     ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
 
+        let prompt = StyledText::new(" ")
+            .text("Would you like to install")
+            .cyan(package_name)
+            .build();
         if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt("Would you like to install this plugin")
+            .with_prompt(prompt)
             .default(true)
             .interact()
             .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
         {
-            error!("{}", "Installation operation cancelled.");
+            error!("Installation operation cancelled.");
             return Ok(());
         }
         // Install the plugin
-
-        uv::add(vec![package_name])
-            .extras(extras)
-            .upgrade(upgrade)
-            .index_url_opt(index_url)
-            .working_dir(&self.work_dir)
-            .run()?;
+        options.install()?;
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![registry_plugin.module_name.clone()])?;
+            .add_plugins(vec![&registry_plugin.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
@@ -333,7 +411,7 @@ impl PluginManager {
                 .working_dir(&self.work_dir)
                 .run()?;
             NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-                .remove_plugins(vec![package_name.replace("-", "_")])?;
+                .remove_plugins(vec![&package_name.replace("-", "_")])?;
 
             StyledText::new(" ")
                 .green_bold("✓ Successfully uninstalled plugin:")
@@ -371,7 +449,7 @@ impl PluginManager {
         uv::remove(vec![&package_name]).run()?;
 
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .remove_plugins(vec![registry_plugin.module_name.clone()])?;
+            .remove_plugins(vec![&registry_plugin.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully uninstalled plugin:")
@@ -385,7 +463,7 @@ impl PluginManager {
         let installed_packages = uv::list(outdated).await?;
         let installed_plugins = installed_packages
             .into_iter()
-            .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
+            .filter(|p| Self::is_plugin(&p.name))
             .collect();
         Ok(installed_plugins)
     }
@@ -412,15 +490,40 @@ impl PluginManager {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub async fn fix_nonebot_plugins(&self) -> Result<()> {
-        let installed_plugins = self.get_installed_plugins(false).await?;
-        NbTomlEditor::with_work_dir(Some(&self.work_dir))?.reset_plugins(
-            installed_plugins
-                .iter()
-                .map(|p| p.name.replace("-", "_"))
-                .collect::<Vec<String>>(),
-        )?;
+    pub fn is_plugin(package_name: &str) -> bool {
+        package_name.starts_with("nonebot") && package_name.contains("plugin")
+    }
+
+    pub async fn reset(&self) -> Result<()> {
+        let mut installed_plugins = self.get_installed_plugins(false).await?;
+
+        let mut requires_plugins: Vec<String> = Vec::new();
+        for plugin in &installed_plugins {
+            let requires = uv::show_package_info(plugin.name.as_str())
+                .await?
+                .requires
+                .unwrap_or_default();
+            for require in requires {
+                if Self::is_plugin(&require) && !requires_plugins.contains(&require) {
+                    requires_plugins.push(require);
+                }
+            }
+        }
+
+        // 去除 requires 的插件
+        installed_plugins.retain(|p| !requires_plugins.contains(&p.name));
+
+        let plugins = installed_plugins
+            .iter()
+            .map(|p| p.name.replace("-", "_"))
+            .collect::<Vec<String>>();
+
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
+            .reset_plugins(plugins.iter().map(|p| p.as_str()).collect())?;
+        StyledText::new(" ")
+            .green_bold("✓ Successfully reset nonebot plugins:")
+            .cyan_bold(&plugins.join(", "))
+            .println();
         Ok(())
     }
 
@@ -674,7 +777,24 @@ mod tests {
     async fn test_get_installed_plugins() {
         let work_dir = Path::new("awesome-bot").to_path_buf();
         let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
-        let installed_plugins = plugin_manager.get_installed_plugins(true).await.unwrap();
+        let installed_plugins = plugin_manager.get_installed_plugins(false).await.unwrap();
         dbg!(installed_plugins);
+    }
+
+    #[test]
+    fn test_regex() {
+        let pattern = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
+        let re = Regex::new(pattern).unwrap();
+        let plugins = vec![
+            "nonebot-plugin-orm[default]",
+            "nonebot-plugin-orm[default, sqlalchemy]",
+            "nonebot-plugin-orm[default,sqlalchemy]>=1.0.0",
+            "nonebot-plugin-abs==1.0.0",
+            "nonebot-plugin-abs>=1.0.0",
+        ];
+        for plugin in plugins {
+            let captures = re.captures(plugin).unwrap();
+            dbg!(captures);
+        }
     }
 }
