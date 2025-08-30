@@ -503,9 +503,9 @@ impl PluginManager {
                 .await?
                 .requires
                 .unwrap_or_default();
-            for p in requires {
-                if Self::is_plugin(&p) && !requires_plugins.contains(&p) {
-                    requires_plugins.push(p);
+            for require in requires {
+                if Self::is_plugin(&require) && !requires_plugins.contains(&require) {
+                    requires_plugins.push(require);
                 }
             }
         }
