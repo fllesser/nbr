@@ -124,7 +124,7 @@
 
 从 github 仓库安装一个插件
 
-    nbr plugin install https://github.com/fllesser/nonebot-plugin-abs@master
+    nbr plugin install git+https://github.com/fllesser/nonebot-plugin-abs@master
 
 卸载一个插件
 
