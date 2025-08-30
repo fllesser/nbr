@@ -5,7 +5,7 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files first for better caching
+# Copy project files
 COPY pyproject.toml uv.lock .env* README.md ./
 COPY src/ ./src/
 
@@ -17,9 +17,5 @@ RUN curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linu
     chmod +x /usr/local/bin/nbr
 
 EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
 
 CMD ["nbr", "run"]
