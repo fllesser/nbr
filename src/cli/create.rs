@@ -507,6 +507,10 @@ fn generate_dockerfile(options: &ProjectOptions) -> Result<()> {
     if options.gen_dockerfile {
         let dockerfile = format!(include_str!("templates/dockerfile"), options.python_version);
         fs::write(options.output_dir.join("Dockerfile"), dockerfile)?;
+
+        let compose_config = include_str!("templates/compose.yml");
+        let compose_config = compose_config.replace("${PROJECT_NAME}", &options.name);
+        fs::write(options.output_dir.join("compose.yml"), compose_config)?;
     }
     Ok(())
 }
@@ -577,6 +581,7 @@ mod tests {
             gen_dockerfile: true,
         };
         generate_env_files(&options).unwrap();
+        generate_dockerfile(&options).unwrap();
     }
 
     #[test]

@@ -16,6 +16,9 @@ RUN uv sync --no-dev --frozen --python {}
 RUN curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf - -C /usr/local/bin/ && \
     chmod +x /usr/local/bin/nbr
 
+# if you use nonebot-plugin-orm
+# RUN uv tool run --from nb-cli nb orm upgrade
+
 EXPOSE 8080
 
 CMD ["nbr", "run"]
