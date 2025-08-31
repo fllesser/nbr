@@ -10,6 +10,7 @@ COMMAND_START=["", "/"]
 NICKNAME=["{}"]
 
 # localstore(https://github.com/nonebot/plugin-localstore)
+# 使用 docker 建议设置为 true
 LOCALSTORE_USE_CWD=false
 
 # Adapter configurations

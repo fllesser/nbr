@@ -44,16 +44,12 @@
 
 仅支持 Linux(x86_64), MacOS(arm64) 和 Windows(x86_64)
 
-<details>
+<details open>
 <summary>Linux(x86_64) 安装</summary>
 
-从 GitHub Releases 下载最新版本
-
-    curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf -
-
-将二进制文件移动到 PATH
-
-    sudo mv nbr /usr/local/bin/
+    curl -Lf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf - -C /usr/local/bin/ nbr && \
+    chmod +x /usr/local/bin/nbr
+    
 </details>
 
 <details>
@@ -61,7 +57,7 @@
 
 从 GitHub Releases 下载最新版本
 
-    curl -LsSf https://github.com/fllesser/nbr/releases/latest/download/nbr-macOS-arm64.tar.gz | tar -xzf -
+    curl -Lf https://github.com/fllesser/nbr/releases/latest/download/nbr-macOS-arm64.tar.gz | tar -xzf -
 
 将二进制文件移动到 PATH
 
