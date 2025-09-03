@@ -157,7 +157,7 @@ pub struct PluginManager {
     /// Working directory
     work_dir: PathBuf,
     /// Registry plugins, key is package name
-    registry_plugins: OnceLock<Vec<RegistryPlugin>>,
+    registry_plugins: OnceLock<HashMap<String, RegistryPlugin>>,
 }
 
 impl Default for PluginManager {
@@ -643,14 +643,17 @@ impl PluginManager {
         get_cache_dir().join("plugins.json")
     }
 
-    pub async fn fetch_registry_plugins(&self, fetch_remote: bool) -> Result<&Vec<RegistryPlugin>> {
+    pub async fn fetch_registry_plugins(
+        &self,
+        fetch_remote: bool,
+    ) -> Result<&HashMap<String, RegistryPlugin>> {
         if let Some(plugins) = self.registry_plugins.get() {
             return Ok(plugins);
         }
 
         let cache_file = self.get_cache_file();
         if !fetch_remote && cache_file.exists() {
-            let plugins: Vec<RegistryPlugin> =
+            let plugins: HashMap<String, RegistryPlugin> =
                 serde_json::from_slice(&std::fs::read(&cache_file)?)?;
             self.registry_plugins
                 .set(plugins)
@@ -674,21 +677,19 @@ impl PluginManager {
             .map_err(|e| NbrError::plugin(format!("Failed to parse plugin info: {}", e)))?;
 
         spinner.finish_and_clear();
-        self.registry_plugins.set(plugins).unwrap();
-
-        Ok(self.registry_plugins.get().unwrap())
-    }
-
-    pub async fn get_plugins_map(
-        &self,
-        fetch_remote: bool,
-    ) -> Result<HashMap<&str, &RegistryPlugin>> {
-        let plugins = self.fetch_registry_plugins(fetch_remote).await?;
         let plugins_map = plugins
             .iter()
-            .map(|p| (p.project_link.as_str(), p))
-            .collect::<HashMap<&str, &RegistryPlugin>>();
-        Ok(plugins_map)
+            .map(|p| (p.project_link.clone(), p.clone()))
+            .collect::<HashMap<String, RegistryPlugin>>();
+        self.registry_plugins
+            .set(plugins_map.clone())
+            .map_err(|_| NbrError::cache("Failed to cache plugin info"))?;
+
+        // 缓存到文件
+        std::fs::write(cache_file, serde_json::to_string(&plugins_map)?)
+            .map_err(|_| NbrError::cache("Failed to cache plugin info"))?;
+
+        Ok(self.registry_plugins.get().unwrap())
     }
 
     /// Get plugin from registry
@@ -697,7 +698,7 @@ impl PluginManager {
         package_name: &str,
         fetch_remote: bool,
     ) -> Result<&RegistryPlugin> {
-        let plugins = self.get_plugins_map(fetch_remote).await?;
+        let plugins = self.fetch_registry_plugins(fetch_remote).await?;
         let plugin = plugins
             .get(package_name)
             .ok_or_else(|| NbrError::not_found(format!("Plugin '{}' not found", package_name)))?;
@@ -711,7 +712,7 @@ impl PluginManager {
         limit: usize,
         fetch_remote: bool,
     ) -> Result<Vec<&RegistryPlugin>> {
-        let plugins_map = self.get_plugins_map(fetch_remote).await?;
+        let plugins_map = self.fetch_registry_plugins(fetch_remote).await?;
 
         let results: Vec<&RegistryPlugin> = plugins_map
             .values()
@@ -722,7 +723,6 @@ impl PluginManager {
                     || plugin.author.contains(query)
             })
             .take(limit)
-            .cloned()
             .collect();
 
         Ok(results)
@@ -798,7 +798,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
         let plugin_manager = PluginManager::default();
-        let plugins = plugin_manager.get_plugins_map(false).await.unwrap();
+        let plugins = plugin_manager.fetch_registry_plugins(false).await.unwrap();
         for (_, plugin) in plugins {
             dbg!(plugin);
         }

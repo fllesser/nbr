@@ -129,10 +129,10 @@ impl AdapterManager {
         // 解析成功后，结束 spinner
         spinner.finish_and_clear();
 
-        let mut adapters_map = HashMap::new();
-        for adapter in adapters {
-            adapters_map.insert(adapter.name.to_owned(), adapter);
-        }
+        let adapters_map = adapters
+            .iter()
+            .map(|a| (a.name.to_owned(), a.clone()))
+            .collect::<HashMap<String, RegistryAdapter>>();
 
         self.registry_adapters
             .set(adapters_map.clone())
