@@ -177,7 +177,7 @@ impl ConfigManager {
 }
 
 /// Get platform-specific configuration directory
-fn get_config_dir() -> PathBuf {
+pub(crate) fn get_config_dir() -> PathBuf {
     if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nbr") {
         proj_dirs.config_dir().to_path_buf()
     } else {
@@ -188,7 +188,7 @@ fn get_config_dir() -> PathBuf {
 }
 
 /// Get platform-specific cache directory
-fn get_cache_dir() -> PathBuf {
+pub(crate) fn get_cache_dir() -> PathBuf {
     if let Some(proj_dirs) = ProjectDirs::from("dev", "nonebot", "nbr") {
         proj_dirs.cache_dir().to_path_buf()
     } else {

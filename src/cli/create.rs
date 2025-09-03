@@ -180,7 +180,7 @@ async fn gather_project_options(
 
     let adapters = match args.adapters {
         Some(adapters) => {
-            let regsitry_adapter_map = adapter_manager.fetch_regsitry_adapters().await?;
+            let regsitry_adapter_map = adapter_manager.fetch_regsitry_adapters(false).await?;
             adapters
                 .into_iter()
                 .filter(|a| regsitry_adapter_map.contains_key(a))
@@ -188,7 +188,7 @@ async fn gather_project_options(
                 .collect()
         }
         None => adapter_manager
-            .select_adapters(false)
+            .select_adapters(false, false)
             .await?
             .into_iter()
             .map(|a| a.to_owned())

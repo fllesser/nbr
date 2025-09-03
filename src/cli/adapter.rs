@@ -3,6 +3,7 @@
 //! This module handles adapter management including installation, removal,
 //! and listing adapters for NoneBot applications.
 
+use crate::config::get_cache_dir;
 use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
@@ -85,11 +86,32 @@ impl AdapterManager {
         })
     }
 
+    fn get_cache_file(&self) -> PathBuf {
+        get_cache_dir().join("adapters.json")
+    }
+
     /// Fetch registry adapters from registry.nonebot.dev
-    pub async fn fetch_regsitry_adapters(&self) -> Result<&HashMap<String, RegistryAdapter>> {
+    pub async fn fetch_regsitry_adapters(
+        &self,
+        fetch_remote: bool,
+    ) -> Result<&HashMap<String, RegistryAdapter>> {
         if let Some(adapters) = self.registry_adapters.get() {
             return Ok(adapters);
         }
+
+        // 从缓存中获取
+        let cache_file = self.get_cache_file();
+        if !fetch_remote && cache_file.exists() {
+            let adapters: HashMap<String, RegistryAdapter> =
+                serde_json::from_slice(&std::fs::read(&cache_file).unwrap()).unwrap();
+            self.registry_adapters
+                .set(adapters)
+                .map_err(|_| NbrError::cache("Failed to parse adapter info"))?;
+            debug!("Loaded adapters from cache: {}", cache_file.display());
+            return Ok(self.registry_adapters.get().unwrap());
+        }
+
+        // 从 registry 获取
         let spinner = terminal_utils::create_spinner("Fetching adapters from registry...");
         let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
         let response = self
@@ -112,7 +134,14 @@ impl AdapterManager {
             adapters_map.insert(adapter.name.to_owned(), adapter);
         }
 
-        self.registry_adapters.set(adapters_map).unwrap();
+        self.registry_adapters
+            .set(adapters_map.clone())
+            .map_err(|_| NbrError::cache("Failed to cache adapter info"))?;
+
+        // 缓存到文件
+        std::fs::write(cache_file, serde_json::to_string(&adapters_map)?)
+            .map_err(|_| NbrError::cache("Failed to cache adapter info"))?;
+
         Ok(self.registry_adapters.get().unwrap())
     }
 
@@ -142,9 +171,13 @@ impl AdapterManager {
     }
 
     /// Select adapters from registry
-    pub async fn select_adapters(&self, filter_installed: bool) -> Result<Vec<&RegistryAdapter>> {
+    pub async fn select_adapters(
+        &self,
+        fetch_remote: bool,
+        filter_installed: bool,
+    ) -> Result<Vec<&RegistryAdapter>> {
         // 获取 registry 中的 adapters
-        let registry_adapters = self.fetch_regsitry_adapters().await?;
+        let registry_adapters = self.fetch_regsitry_adapters(fetch_remote).await?;
         let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
 
         // 过滤已安装的 adapters
@@ -179,8 +212,8 @@ impl AdapterManager {
     }
 
     /// Install an adapter
-    pub async fn install_adapters(&self) -> Result<()> {
-        let selected_adapters = self.select_adapters(true).await?;
+    pub async fn install_adapters(&self, fetch_remote: bool) -> Result<()> {
+        let selected_adapters = self.select_adapters(fetch_remote, true).await?;
 
         if selected_adapters.is_empty() {
             warn!("You haven't selected any adapters to install");
@@ -286,7 +319,7 @@ impl AdapterManager {
             .remove_adapters(selected_adapters.to_vec())?;
 
         // Uninstall the package
-        let registry_adapters = self.fetch_regsitry_adapters().await?;
+        let registry_adapters = self.fetch_regsitry_adapters(false).await?;
 
         let mut adapter_packages = selected_adapters
             .iter()
@@ -321,7 +354,7 @@ impl AdapterManager {
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
         let installed_adapters = self.get_installed_adapters_names();
-        let adapters_map = self.fetch_regsitry_adapters().await?;
+        let adapters_map = self.fetch_regsitry_adapters(show_all).await?;
 
         if show_all {
             info!("All Adapters:");
@@ -351,57 +384,6 @@ impl AdapterManager {
             .text(format!("({})", adapter.project_link).as_str())
             .green(format!("v{}", adapter.version).as_str())
             .println();
-    }
-
-    /// Get adapter configuration template
-    #[allow(dead_code)]
-    fn get_adapter_config_template(&self, package_name: &str) -> Option<HashMap<String, String>> {
-        let mut template = HashMap::new();
-
-        match package_name {
-            "nonebot-adapter-onebot" => {
-                template.insert("driver".to_string(), "~httpx+~websockets".to_string());
-                template.insert(
-                    "onebot_access_token".to_string(),
-                    "your_access_token_here".to_string(),
-                );
-                template.insert("onebot_secret".to_string(), "your_secret_here".to_string());
-                template.insert(
-                    "onebot_ws_urls".to_string(),
-                    "[\"ws://127.0.0.1:6700/\"]".to_string(),
-                );
-            }
-            "nonebot-adapter-telegram" => {
-                template.insert("driver".to_string(), "~httpx".to_string());
-                template.insert(
-                    "telegram_bot_token".to_string(),
-                    "your_bot_token_here".to_string(),
-                );
-            }
-            "nonebot-adapter-ding" => {
-                template.insert("driver".to_string(), "~httpx".to_string());
-                template.insert(
-                    "ding_access_token".to_string(),
-                    "your_access_token_here".to_string(),
-                );
-                template.insert("ding_secret".to_string(), "your_secret_here".to_string());
-            }
-            "nonebot-adapter-feishu" => {
-                template.insert("driver".to_string(), "~httpx".to_string());
-                template.insert("feishu_app_id".to_string(), "your_app_id_here".to_string());
-                template.insert(
-                    "feishu_app_secret".to_string(),
-                    "your_app_secret_here".to_string(),
-                );
-            }
-            "nonebot-adapter-console" => {
-                // Console adapter doesn't need additional config
-                return None;
-            }
-            _ => return None,
-        }
-
-        Some(template)
     }
 
     /// Display adapter information
@@ -440,7 +422,10 @@ impl AdapterManager {
 #[derive(Subcommand)]
 pub enum AdapterCommands {
     #[clap(about = "Install adapters")]
-    Install,
+    Install {
+        #[clap(short, long, help = "Fetch adapters from remote")]
+        fetch_remote: bool,
+    },
     #[clap(about = "Uninstall adapters")]
     Uninstall,
     #[clap(about = "List installed adapters, show all adapters if --all is set")]
@@ -455,7 +440,9 @@ pub async fn handle_adapter(commands: &AdapterCommands) -> Result<()> {
     let adapter_manager = AdapterManager::new(None)?;
 
     match commands {
-        AdapterCommands::Install => adapter_manager.install_adapters().await,
+        AdapterCommands::Install { fetch_remote } => {
+            adapter_manager.install_adapters(*fetch_remote).await
+        }
         AdapterCommands::Uninstall => adapter_manager.uninstall_adapters().await,
         AdapterCommands::List { all } => adapter_manager.list_adapters(*all).await,
     }
@@ -470,7 +457,7 @@ mod tests {
     async fn test_fetch_regsitry_adapters() {
         let manager = AdapterManager::default();
 
-        let adapters_map = manager.fetch_regsitry_adapters().await.unwrap();
+        let adapters_map = manager.fetch_regsitry_adapters(false).await.unwrap();
         assert!(adapters_map.len() > 0);
         for adapter in adapters_map.values() {
             println!("{}", adapter.name);
