@@ -3,6 +3,7 @@
 //! This module handles plugin management including installation, removal,
 //! listing, searching, and updating plugins from various sources.
 
+use crate::config::get_cache_dir;
 use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::NbTomlEditor;
@@ -34,6 +35,8 @@ pub enum PluginCommands {
         upgrade: bool,
         #[clap(short, long, help = "Reinstall the plugin")]
         reinstall: bool,
+        #[clap(short, long, help = "Fetch plugins from remote")]
+        fetch_remote: bool,
     },
     #[clap(about = "Uninstall a plugin")]
     Uninstall {
@@ -56,6 +59,8 @@ pub enum PluginCommands {
             help = "Limit the number of search results"
         )]
         limit: usize,
+        #[clap(short, long, help = "Fetch plugins from remote")]
+        fetch_remote: bool,
     },
     #[clap(about = "Update plugin(s)")]
     Update {
@@ -80,13 +85,18 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
             index,
             upgrade,
             reinstall,
+            fetch_remote,
         } => {
             let options = InstallOptions::new(name, *upgrade, *reinstall, index.as_deref())?;
-            manager.install(options).await
+            manager.install(options, *fetch_remote).await
         }
         PluginCommands::Uninstall { name } => manager.uninstall(name).await,
         PluginCommands::List { outdated } => manager.list(*outdated).await,
-        PluginCommands::Search { query, limit } => manager.search_plugins(query, *limit).await,
+        PluginCommands::Search {
+            query,
+            limit,
+            fetch_remote,
+        } => manager.search_plugins(query, *limit, *fetch_remote).await,
         PluginCommands::Update {
             name,
             all,
@@ -147,7 +157,7 @@ pub struct PluginManager {
     /// Working directory
     work_dir: PathBuf,
     /// Registry plugins, key is package name
-    registry_plugins: OnceLock<Vec<RegistryPlugin>>,
+    registry_plugins: OnceLock<HashMap<String, RegistryPlugin>>,
 }
 
 impl Default for PluginManager {
@@ -267,11 +277,11 @@ impl PluginManager {
         })
     }
 
-    pub async fn install(&mut self, options: InstallOptions<'_>) -> Result<()> {
+    pub async fn install(&mut self, options: InstallOptions<'_>, fetch_remote: bool) -> Result<()> {
         if options.git_url.is_some() {
             return self.install_from_github(options).await;
         }
-        if let Ok(registry_plugin) = self.get_registry_plugin(options.name).await {
+        if let Ok(registry_plugin) = self.get_registry_plugin(options.name, fetch_remote).await {
             return self.install_registry_plugin(registry_plugin, options).await;
         }
 
@@ -384,7 +394,7 @@ impl PluginManager {
     pub async fn uninstall(&self, name: &str) -> Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
-        if let Ok(registry_plugin) = self.get_registry_plugin(name).await {
+        if let Ok(registry_plugin) = self.get_registry_plugin(name, false).await {
             self.uninstall_registry_plugin(registry_plugin).await
         } else {
             self.uninstall_unregistered_plugin(name).await
@@ -528,10 +538,17 @@ impl PluginManager {
     }
 
     /// Search plugins in registry
-    pub async fn search_plugins(&self, query: &str, limit: usize) -> Result<()> {
+    pub async fn search_plugins(
+        &self,
+        query: &str,
+        limit: usize,
+        fetch_remote: bool,
+    ) -> Result<()> {
         debug!("Searching plugins for: {}", query);
 
-        let results = self.search_registry_plugins(query, limit).await?;
+        let results = self
+            .search_registry_plugins(query, limit, fetch_remote)
+            .await?;
 
         if results.is_empty() {
             warn!("No plugins found for '{}'.", query);
@@ -622,10 +639,29 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn fetch_registry_plugins(&self) -> Result<&Vec<RegistryPlugin>> {
+    pub fn get_cache_file(&self) -> PathBuf {
+        get_cache_dir().join("plugins.json")
+    }
+
+    pub async fn fetch_registry_plugins(
+        &self,
+        fetch_remote: bool,
+    ) -> Result<&HashMap<String, RegistryPlugin>> {
         if let Some(plugins) = self.registry_plugins.get() {
             return Ok(plugins);
         }
+
+        let cache_file = self.get_cache_file();
+        if !fetch_remote && cache_file.exists() {
+            let plugins: HashMap<String, RegistryPlugin> =
+                serde_json::from_slice(&std::fs::read(&cache_file)?)?;
+            self.registry_plugins
+                .set(plugins)
+                .map_err(|_| NbrError::cache("Failed to parse plugin info"))?;
+            debug!("Loaded plugins from cache: {}", cache_file.display());
+            return Ok(self.registry_plugins.get().unwrap());
+        }
+
         let spinner = terminal_utils::create_spinner("Fetching plugins from registry...");
         let plugins_json_url = "https://registry.nonebot.dev/plugins.json";
         let response = self
@@ -641,23 +677,28 @@ impl PluginManager {
             .map_err(|e| NbrError::plugin(format!("Failed to parse plugin info: {}", e)))?;
 
         spinner.finish_and_clear();
-        self.registry_plugins.set(plugins).unwrap();
+        let plugins_map = plugins
+            .iter()
+            .map(|p| (p.project_link.clone(), p.clone()))
+            .collect::<HashMap<String, RegistryPlugin>>();
+        self.registry_plugins
+            .set(plugins_map.clone())
+            .map_err(|_| NbrError::cache("Failed to cache plugin info"))?;
+
+        // 缓存到文件
+        std::fs::write(cache_file, serde_json::to_string(&plugins_map)?)
+            .map_err(|_| NbrError::cache("Failed to cache plugin info"))?;
 
         Ok(self.registry_plugins.get().unwrap())
     }
 
-    pub async fn get_plugins_map(&self) -> Result<HashMap<&str, &RegistryPlugin>> {
-        let plugins = self.fetch_registry_plugins().await?;
-        let plugins_map = plugins
-            .iter()
-            .map(|p| (p.project_link.as_str(), p))
-            .collect::<HashMap<&str, &RegistryPlugin>>();
-        Ok(plugins_map)
-    }
-
     /// Get plugin from registry
-    async fn get_registry_plugin(&self, package_name: &str) -> Result<&RegistryPlugin> {
-        let plugins = self.get_plugins_map().await?;
+    async fn get_registry_plugin(
+        &self,
+        package_name: &str,
+        fetch_remote: bool,
+    ) -> Result<&RegistryPlugin> {
+        let plugins = self.fetch_registry_plugins(fetch_remote).await?;
         let plugin = plugins
             .get(package_name)
             .ok_or_else(|| NbrError::not_found(format!("Plugin '{}' not found", package_name)))?;
@@ -669,8 +710,9 @@ impl PluginManager {
         &self,
         query: &str,
         limit: usize,
+        fetch_remote: bool,
     ) -> Result<Vec<&RegistryPlugin>> {
-        let plugins_map = self.get_plugins_map().await?;
+        let plugins_map = self.fetch_registry_plugins(fetch_remote).await?;
 
         let results: Vec<&RegistryPlugin> = plugins_map
             .values()
@@ -681,7 +723,6 @@ impl PluginManager {
                     || plugin.author.contains(query)
             })
             .take(limit)
-            .cloned()
             .collect();
 
         Ok(results)
@@ -757,7 +798,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_regsitry_plugins_map() {
         let plugin_manager = PluginManager::default();
-        let plugins = plugin_manager.get_plugins_map().await.unwrap();
+        let plugins = plugin_manager.fetch_registry_plugins(false).await.unwrap();
         for (_, plugin) in plugins {
             dbg!(plugin);
         }
@@ -767,7 +808,7 @@ mod tests {
     async fn test_get_registry_plugin() {
         let plugin_manager = PluginManager::default();
         let plugin = plugin_manager
-            .get_registry_plugin("nonebot-plugin-status")
+            .get_registry_plugin("nonebot-plugin-status", false)
             .await
             .unwrap();
         dbg!(plugin);
