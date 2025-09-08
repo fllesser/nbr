@@ -792,10 +792,12 @@ impl PluginManager {
 
 #[cfg(test)]
 mod tests {
+    use rstest::{fixture, rstest};
+
     use super::*;
 
-    #[tokio::test]
-    async fn test_get_registry_plugins_map() {
+    #[fixture]
+    async fn set_up_registry_plugins() {
         let plugin_manager = PluginManager::default();
         let plugins = plugin_manager.fetch_registry_plugins(true).await.unwrap();
         for plugin in plugins.values() {
@@ -803,16 +805,28 @@ mod tests {
         }
     }
 
+    #[rstest]
+    #[tokio::test]
+    async fn test_get_registry_plugins_map() {
+        let plugin_manager = PluginManager::default();
+        let plugins = plugin_manager.fetch_registry_plugins(false).await.unwrap();
+        for plugin in plugins.values() {
+            dbg!(plugin);
+        }
+    }
+
+    #[rstest]
     #[tokio::test]
     async fn test_get_registry_plugin() {
         let plugin_manager = PluginManager::default();
         let plugin = plugin_manager
-            .get_registry_plugin("nonebot-plugin-status", true)
+            .get_registry_plugin("nonebot-plugin-status", false)
             .await
             .unwrap();
         dbg!(plugin);
     }
 
+    #[rstest]
     #[tokio::test]
     async fn test_get_installed_plugins() {
         let work_dir = Path::new("awesome-bot").to_path_buf();

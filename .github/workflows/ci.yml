@@ -146,10 +146,6 @@ jobs:
           enable-cache: true
           version: ${{ env.UV_VERSION }}
 
-      - name: "Install Python"
-        run: uv python install --no-bin ${{ env.PYTHON_VERSION }}
-
-
       - name: "Cargo test"
         run: |
           cargo nextest show-config test-groups
@@ -183,9 +179,6 @@ jobs:
         with:
           enable-cache: true
           version: ${{ env.UV_VERSION }}
-
-      - name: "Install Python"
-        run: uv python install --no-bin ${{ env.PYTHON_VERSION }}
 
       - name: "Cargo test"
         run: |
