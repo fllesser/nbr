@@ -560,44 +560,35 @@ fn create_example_plugin(output_dir: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
-    #[test]
-    fn test_generate_env_files() {
+    use super::*;
+    use crate::cli::adapter::RegistryAdapter;
+
+    #[tokio::test]
+    async fn test_create_project() {
         let options = ProjectOptions {
             name: "awesome-bot".to_string(),
             template: Template::Bootstrap,
             output_dir: PathBuf::from("awesome-bot"),
-            drivers: vec![
-                "FastAPI".to_string(),
-                "HTTPX".to_string(),
-                "webosockets".to_string(),
-            ],
-            adapters: vec![],
-            plugins: vec![],
+            drivers: vec![],
+            adapters: vec![RegistryAdapter {
+                name: "OneBot V11".to_string(),
+                module_name: "nonebot.adapters.onebot.v11".to_string(),
+                project_link: "nonebot-adapter-onebot".to_string(),
+                version: "2.4.6".to_string(),
+                author: "yanyongyu".to_string(),
+                desc: "OneBot V11 协议".to_string(),
+                homepage: Some("https://onebot.adapters.nonebot.dev".to_string()),
+                tags: vec![],
+                is_official: true,
+                time: "2024-10-24T07:34:56.115315Z".to_string(),
+            }],
+            plugins: vec![BuiltinPlugin::Echo.to_string()],
             python_version: "3.10".to_string(),
             environment: Environment::Dev,
-            dev_tools: vec![],
+            dev_tools: vec![DevTool::PreCommit, DevTool::Ruff, DevTool::Basedpyright],
             gen_dockerfile: true,
         };
-        generate_env_files(&options).unwrap();
-        generate_dockerfile(&options).unwrap();
-    }
-
-    #[test]
-    fn test_generate_ruff_config() {
-        append_ruff_config(&PathBuf::from("awesome-bot")).unwrap();
-    }
-
-    #[test]
-    fn test_select_template() {
-        let template = select_template().unwrap();
-        println!("{:?}", template);
-    }
-
-    #[test]
-    fn test_select_drivers() {
-        let drivers = select_drivers().unwrap();
-        println!("{:?}", drivers);
+        create_project(&options).await.unwrap();
     }
 }
