@@ -368,18 +368,25 @@ mod tests {
         dbg!(package);
     }
 
-    #[test]
-    fn test_add() {
+    #[tokio::test]
+    async fn test_list() {
+        let packages = list(false).await.unwrap();
+        println!("{:?}", packages);
+    }
+
+    #[tokio::test]
+    async fn test_add_and_remove() {
+        // add
         let result = add(vec!["nonebot-plugin-abs"])
             .working_dir(working_dir())
             .upgrade(true)
             .run();
         assert!(result.is_ok());
-    }
 
-    #[tokio::test]
-    async fn test_list() {
-        let packages = list(false).await.unwrap();
-        println!("{:?}", packages);
+        // remove
+        let result = remove(vec!["nonebot-plugin-abs"])
+            .working_dir(working_dir())
+            .run();
+        assert!(result.is_ok());
     }
 }

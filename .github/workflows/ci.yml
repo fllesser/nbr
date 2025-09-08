@@ -107,7 +107,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
 
-      - name: "cargo test create_project"
+      - name: "Cargo test create_project"
         run: cargo test cli::create::tests::test_create_project
 
       - name: "Cargo test"
@@ -150,7 +150,7 @@ jobs:
           enable-cache: true
           version: ${{ env.UV_VERSION }}
       
-      - name: "cargo test create_project"
+      - name: "Cargo test create_project"
         run: cargo test cli::create::tests::test_create_project
   
       - name: "Cargo test"
@@ -187,7 +187,7 @@ jobs:
           enable-cache: true
           version: ${{ env.UV_VERSION }}
 
-      - name: "cargo test create_project"
+      - name: "Cargo test create_project"
         run: cargo test cli::create::tests::test_create_project
   
       - name: "Cargo test"
