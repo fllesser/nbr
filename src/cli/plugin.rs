@@ -795,7 +795,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_get_regsitry_plugins_map() {
+    async fn test_get_registry_plugins_map() {
         let plugin_manager = PluginManager::default();
         let plugins = plugin_manager.fetch_registry_plugins(false).await.unwrap();
         for plugin in plugins.values() {
