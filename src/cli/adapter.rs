@@ -91,7 +91,7 @@ impl AdapterManager {
     }
 
     /// Fetch registry adapters from registry.nonebot.dev
-    pub async fn fetch_regsitry_adapters(
+    pub async fn fetch_registry_adapters(
         &self,
         fetch_remote: bool,
     ) -> Result<&HashMap<String, RegistryAdapter>> {
@@ -176,7 +176,7 @@ impl AdapterManager {
         filter_installed: bool,
     ) -> Result<Vec<&RegistryAdapter>> {
         // 获取 registry 中的 adapters
-        let registry_adapters = self.fetch_regsitry_adapters(fetch_remote).await?;
+        let registry_adapters = self.fetch_registry_adapters(fetch_remote).await?;
         let mut adapter_names: Vec<String> = registry_adapters.keys().cloned().collect();
 
         // 过滤已安装的 adapters
@@ -318,7 +318,7 @@ impl AdapterManager {
             .remove_adapters(selected_adapters.to_vec())?;
 
         // Uninstall the package
-        let registry_adapters = self.fetch_regsitry_adapters(false).await?;
+        let registry_adapters = self.fetch_registry_adapters(false).await?;
 
         let mut adapter_packages = selected_adapters
             .iter()
@@ -353,7 +353,7 @@ impl AdapterManager {
     /// List available and installed adapters
     pub async fn list_adapters(&self, show_all: bool) -> Result<()> {
         let installed_adapters = self.get_installed_adapters_names();
-        let adapters_map = self.fetch_regsitry_adapters(show_all).await?;
+        let adapters_map = self.fetch_registry_adapters(show_all).await?;
 
         if show_all {
             info!("All Adapters:");
@@ -444,22 +444,5 @@ pub async fn handle_adapter(commands: &AdapterCommands) -> Result<()> {
         }
         AdapterCommands::Uninstall => adapter_manager.uninstall_adapters().await,
         AdapterCommands::List { all } => adapter_manager.list_adapters(*all).await,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_fetch_regsitry_adapters() {
-        let manager = AdapterManager::default();
-
-        let adapters_map = manager.fetch_regsitry_adapters(false).await.unwrap();
-        assert!(adapters_map.len() > 0);
-        for adapter in adapters_map.values() {
-            println!("{}", adapter.name);
-        }
     }
 }

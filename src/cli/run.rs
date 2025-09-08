@@ -359,7 +359,7 @@ pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
     runner.run().await
 }
 
-/// Find Python executabled
+/// Find Python executable
 fn find_python_executable(work_dir: &Path) -> Result<String> {
     #[cfg(target_os = "windows")]
     let python_path = work_dir.join(".venv").join("Scripts").join("python.exe");

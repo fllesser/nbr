@@ -101,9 +101,6 @@ mod tests {
     #[tokio::test]
     async fn test_generate_bot_file() {
         let work_dir = Path::new("awesome-bot");
-        if !work_dir.exists() {
-            return;
-        }
         generate_bot_file(work_dir, true).await.unwrap();
     }
 }

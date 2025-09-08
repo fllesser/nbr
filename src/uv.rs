@@ -85,8 +85,11 @@ pub async fn list(outdated: bool) -> Result<Vec<Package>> {
     Ok(serde_json::from_str(&stdout)?)
 }
 
-pub async fn show_package_info(package: &str) -> Result<Package> {
-    let stdout = show(package).run_async().await?;
+pub async fn show_package_info(package: &str, working_dir: Option<&Path>) -> Result<Package> {
+    let stdout = show(package)
+        .working_dir_opt(working_dir)
+        .run_async()
+        .await?;
 
     let mut lines = stdout.lines();
     let name = lines
@@ -232,25 +235,16 @@ impl<'a> CmdBuilder<'a> {
         self
     }
 
+    pub fn working_dir_opt(&mut self, working_dir: Option<&'a Path>) -> &mut Self {
+        self.working_dir = working_dir;
+        self
+    }
+
     /// Set the timeout in seconds
     pub fn timeout(&mut self, timeout_secs: u16) -> &mut Self {
         self.timeout_secs = timeout_secs;
         self
     }
-
-    // pub fn run(&mut self, quiet: bool) -> Result<()> {
-    //     let spinner = if quiet {
-    //         self.quiet();
-    //         None
-    //     } else {
-    //         Some(terminal_utils::create_spinner("Executing uv command..."))
-    //     };
-    //     process_utils::execute_interactive("uv", &self.args, self.working_dir)?;
-    //     if let Some(spinner) = spinner {
-    //         spinner.finish_and_clear();
-    //     }
-    //     Ok(())
-    // }
 
     pub fn run(&self) -> Result<()> {
         process_utils::execute_interactive(self.cmd, &self.args, self.working_dir)
@@ -367,23 +361,32 @@ mod tests {
 
     #[tokio::test]
     async fn test_show_package_info() {
-        let package = show_package_info("pip").await.unwrap();
+        let package = show_package_info("nonebot2", Some(working_dir()))
+            .await
+            .unwrap();
         package.display_info();
         dbg!(package);
-    }
-
-    #[test]
-    fn test_add() {
-        let result = add(vec!["nonebot-plugin-abs"])
-            .working_dir(&working_dir())
-            .upgrade(true)
-            .run();
-        assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_list() {
         let packages = list(false).await.unwrap();
         println!("{:?}", packages);
+    }
+
+    #[tokio::test]
+    async fn test_add_and_remove() {
+        // add
+        let result = add(vec!["nonebot-plugin-abs"])
+            .working_dir(working_dir())
+            .upgrade(true)
+            .run();
+        assert!(result.is_ok());
+
+        // remove
+        let result = remove(vec!["nonebot-plugin-abs"])
+            .working_dir(working_dir())
+            .run();
+        assert!(result.is_ok());
     }
 }

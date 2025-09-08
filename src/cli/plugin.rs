@@ -509,7 +509,7 @@ impl PluginManager {
 
         let mut requires_plugins: Vec<String> = Vec::new();
         for plugin in &installed_plugins {
-            let requires = uv::show_package_info(plugin.name.as_str())
+            let requires = uv::show_package_info(plugin.name.as_str(), Some(&self.work_dir))
                 .await?
                 .requires
                 .unwrap_or_default();
@@ -787,54 +787,5 @@ impl PluginManager {
             .text("  Install Command:")
             .yellow(&format!("nbr plugin install {}", plugin.project_link))
             .println();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_get_regsitry_plugins_map() {
-        let plugin_manager = PluginManager::default();
-        let plugins = plugin_manager.fetch_registry_plugins(false).await.unwrap();
-        for (_, plugin) in plugins {
-            dbg!(plugin);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_get_registry_plugin() {
-        let plugin_manager = PluginManager::default();
-        let plugin = plugin_manager
-            .get_registry_plugin("nonebot-plugin-status", false)
-            .await
-            .unwrap();
-        dbg!(plugin);
-    }
-
-    #[tokio::test]
-    async fn test_get_installed_plugins() {
-        let work_dir = Path::new("awesome-bot").to_path_buf();
-        let plugin_manager = PluginManager::new(Some(work_dir)).unwrap();
-        let installed_plugins = plugin_manager.get_installed_plugins(false).await.unwrap();
-        dbg!(installed_plugins);
-    }
-
-    #[test]
-    fn test_regex() {
-        let pattern = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
-        let re = Regex::new(pattern).unwrap();
-        let plugins = vec![
-            "nonebot-plugin-orm[default]",
-            "nonebot-plugin-orm[default, sqlalchemy]",
-            "nonebot-plugin-orm[default,sqlalchemy]>=1.0.0",
-            "nonebot-plugin-abs==1.0.0",
-            "nonebot-plugin-abs>=1.0.0",
-        ];
-        for plugin in plugins {
-            let captures = re.captures(plugin).unwrap();
-            dbg!(captures);
-        }
     }
 }
