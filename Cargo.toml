@@ -66,10 +66,10 @@ regex = "1.11"
 # url = "2.5"
 
 # Time handling
-chrono = { version = "0.4", features = ["serde"] }
+# chrono = { version = "0.4", features = ["serde"] }
 
 # Config file parsing
-config = "0.15.13"
+# config = "0.15.13"
 
 # Cross-platform support
 # crossterm = "0.29.0"
@@ -97,8 +97,8 @@ strum = { version = "0.27.2", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.8"
-assert_cmd = "2.0"
-predicates = "3.0"
+# assert_cmd = "2.0"
+# predicates = "3.0"
 rstest = "0.26.1"
 
 

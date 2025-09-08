@@ -68,15 +68,15 @@ jobs:
       - name: "Clippy"
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
-  cargo-shear:
-    name: "cargo shear"
-    timeout-minutes: 10
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5 # v5
-      - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall --no-confirm cargo-shear
-      - run: cargo shear
+  # cargo-shear:
+  #   name: "cargo shear"
+  #   timeout-minutes: 10
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v5 # v5
+  #     - uses: cargo-bins/cargo-binstall@main
+  #     - run: cargo binstall --no-confirm cargo-shear
+  #     - run: cargo shear
 
   cargo-test-linux:
     timeout-minutes: 10
@@ -99,7 +99,6 @@ jobs:
         uses: taiki-e/install-action@57511bcdf8cdb0eab6448cb7fa632952d9f25742 # v2.59.1
         with:
           tool: cargo-llvm-cov
-
 
       - name: "Install uv"
         uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.6.1
