@@ -1,24 +1,23 @@
-FROM ghcr.io/astral-sh/uv:debian-slim AS builder
+FROM ghcr.io/astral-sh/uv:debian-slim
+
+RUN apt-get update && apt-get install -y git curl ffmpeg && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install nbr (ensure we get the correct architecture)
+RUN curl -Lf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | \
+    tar -xzf - -C /usr/local/bin/ nbr && \
+    chmod +x /usr/local/bin/nbr
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --python {} --frozen --no-dev --no-install-project --link-mode copy
 
-# Copy project files
-COPY pyproject.toml uv.lock .env* README.md ./
-COPY src/ ./src/
+COPY . .
 
-# Install Python dependencies
-RUN uv sync --no-dev --frozen --python {}
-
-# Install nbr (ensure we get the correct architecture)
-RUN curl -Lf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf - -C /usr/local/bin/ nbr && \
-    chmod +x /usr/local/bin/nbr
-
-# if you use nonebot-plugin-orm
 # RUN uv tool run --from nb-cli nb orm upgrade
-
 EXPOSE 8080
+
+ENV TZ=Asia/Shanghai
 
 CMD ["nbr", "run"]
