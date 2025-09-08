@@ -797,7 +797,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_registry_plugins_map() {
         let plugin_manager = PluginManager::default();
-        let plugins = plugin_manager.fetch_registry_plugins(false).await.unwrap();
+        let plugins = plugin_manager.fetch_registry_plugins(true).await.unwrap();
         for plugin in plugins.values() {
             dbg!(plugin);
         }
@@ -807,7 +807,7 @@ mod tests {
     async fn test_get_registry_plugin() {
         let plugin_manager = PluginManager::default();
         let plugin = plugin_manager
-            .get_registry_plugin("nonebot-plugin-status", false)
+            .get_registry_plugin("nonebot-plugin-status", true)
             .await
             .unwrap();
         dbg!(plugin);
