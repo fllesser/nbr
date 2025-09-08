@@ -57,8 +57,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5 # v5
 
-      - name: Create Dev Drive
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+      # - name: Create Dev Drive
+      #   run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
 
       - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2.8.0
 

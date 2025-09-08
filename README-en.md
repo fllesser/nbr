@@ -22,7 +22,7 @@ A fast and efficient Rust implementation of the NoneBot command-line interface f
 
 ### Install uv
 <details>
-<summary>Use astral offical install script(recommended)</summary>
+<summary>Use astral official install script(recommended)</summary>
 
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
