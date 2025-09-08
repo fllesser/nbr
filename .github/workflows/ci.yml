@@ -100,16 +100,11 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: "Cargo test without uv"
-        run: cargo llvm-cov nextest --no-report
 
       - name: "Install uv"
         uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.6.1
         with:
           version: ${{ env.UV_VERSION }}
-
-      - name: "Install Python"
-        run: uv python install --no-bin ${{ env.PYTHON_VERSION }}
 
       - name: "Cargo test"
         run: |
