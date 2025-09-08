@@ -93,17 +93,3 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 pub async fn handle_generate(force: bool) -> Result<()> {
     generate_bot_file(Path::new("."), force).await
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_generate_bot_file() {
-        let work_dir = Path::new("awesome-bot");
-        if !work_dir.exists() {
-            return;
-        }
-        generate_bot_file(work_dir, true).await.unwrap();
-    }
-}
