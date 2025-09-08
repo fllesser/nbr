@@ -102,12 +102,12 @@ impl AdapterManager {
         // 从缓存中获取
         let cache_file = self.get_cache_file();
         if !fetch_remote && cache_file.exists() {
+            debug!("Loading adapters from cache: {}", cache_file.display());
             let adapters: HashMap<String, RegistryAdapter> =
-                serde_json::from_slice(&std::fs::read(&cache_file).unwrap()).unwrap();
+                serde_json::from_slice(&std::fs::read(&cache_file)?)?;
             self.registry_adapters
                 .set(adapters)
                 .map_err(|_| NbrError::cache("Failed to parse adapter info"))?;
-            debug!("Loaded adapters from cache: {}", cache_file.display());
             return Ok(self.registry_adapters.get().unwrap());
         }
 
@@ -139,8 +139,7 @@ impl AdapterManager {
             .map_err(|_| NbrError::cache("Failed to cache adapter info"))?;
 
         // 缓存到文件
-        std::fs::write(cache_file, serde_json::to_string(&adapters_map)?)
-            .map_err(|_| NbrError::cache("Failed to cache adapter info"))?;
+        std::fs::write(cache_file, serde_json::to_string(&adapters_map)?)?;
 
         Ok(self.registry_adapters.get().unwrap())
     }

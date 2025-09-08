@@ -653,12 +653,12 @@ impl PluginManager {
 
         let cache_file = self.get_cache_file();
         if !fetch_remote && cache_file.exists() {
+            debug!("Loading plugins from cache: {}", cache_file.display());
             let plugins: HashMap<String, RegistryPlugin> =
                 serde_json::from_slice(&std::fs::read(&cache_file)?)?;
             self.registry_plugins
                 .set(plugins)
                 .map_err(|_| NbrError::cache("Failed to parse plugin info"))?;
-            debug!("Loaded plugins from cache: {}", cache_file.display());
             return Ok(self.registry_plugins.get().unwrap());
         }
 
@@ -686,8 +686,7 @@ impl PluginManager {
             .map_err(|_| NbrError::cache("Failed to cache plugin info"))?;
 
         // 缓存到文件
-        std::fs::write(cache_file, serde_json::to_string(&plugins_map)?)
-            .map_err(|_| NbrError::cache("Failed to cache plugin info"))?;
+        std::fs::write(cache_file, serde_json::to_string(&plugins_map)?)?;
 
         Ok(self.registry_plugins.get().unwrap())
     }
