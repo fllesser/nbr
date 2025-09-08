@@ -68,15 +68,15 @@ jobs:
       - name: "Clippy"
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
-  # cargo-shear:
-  #   name: "cargo shear"
-  #   timeout-minutes: 10
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v5 # v5
-  #     - uses: cargo-bins/cargo-binstall@main
-  #     - run: cargo binstall --no-confirm cargo-shear
-  #     - run: cargo shear
+  cargo-shear:
+    name: "cargo shear"
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5 # v5
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall --no-confirm cargo-shear
+      - run: cargo shear
 
   cargo-test-linux:
     timeout-minutes: 10

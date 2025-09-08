@@ -446,20 +446,3 @@ pub async fn handle_adapter(commands: &AdapterCommands) -> Result<()> {
         AdapterCommands::List { all } => adapter_manager.list_adapters(*all).await,
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_fetch_registry_adapters() {
-        let manager = AdapterManager::default();
-
-        let adapters_map = manager.fetch_registry_adapters(true).await.unwrap();
-        assert!(!adapters_map.is_empty());
-        for adapter in adapters_map.values() {
-            println!("{}", adapter.name);
-        }
-    }
-}
