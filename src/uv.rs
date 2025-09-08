@@ -359,6 +359,15 @@ mod tests {
         println!("uv version: {}", version);
     }
 
+    #[tokio::test]
+    async fn test_show_package_info() {
+        let package = show_package_info("nonebot2", Some(working_dir()))
+            .await
+            .unwrap();
+        package.display_info();
+        dbg!(package);
+    }
+
     #[test]
     fn test_add() {
         let result = add(vec!["nonebot-plugin-abs"])

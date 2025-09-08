@@ -81,6 +81,8 @@ jobs:
   cargo-test-linux:
     timeout-minutes: 10
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     name: "cargo test | ubuntu"
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
@@ -104,6 +106,9 @@ jobs:
         uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6 # v6.6.1
         with:
           version: ${{ env.UV_VERSION }}
+
+      - name: "cargo test create_project"
+        run: cargo test cli::create::tests::test_create_project
 
       - name: "Cargo test"
         run: |
@@ -144,7 +149,10 @@ jobs:
         with:
           enable-cache: true
           version: ${{ env.UV_VERSION }}
-
+      
+      - name: "cargo test create_project"
+        run: cargo test cli::create::tests::test_create_project
+  
       - name: "Cargo test"
         run: |
           cargo nextest show-config test-groups
@@ -179,6 +187,9 @@ jobs:
           enable-cache: true
           version: ${{ env.UV_VERSION }}
 
+      - name: "cargo test create_project"
+        run: cargo test cli::create::tests::test_create_project
+  
       - name: "Cargo test"
         run: |
           cargo nextest show-config test-groups
