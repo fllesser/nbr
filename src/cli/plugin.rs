@@ -509,7 +509,7 @@ impl PluginManager {
 
         let mut requires_plugins: Vec<String> = Vec::new();
         for plugin in &installed_plugins {
-            let requires = uv::show_package_info(plugin.name.as_str())
+            let requires = uv::show_package_info(plugin.name.as_str(), Some(&self.work_dir))
                 .await?
                 .requires
                 .unwrap_or_default();

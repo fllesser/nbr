@@ -193,7 +193,7 @@ impl EnvironmentChecker {
 
     /// Get NoneBot information
     async fn get_nonebot_info(&self, python_info: &PythonInfo) -> Result<NoneBotInfo> {
-        let package = uv::show_package_info("nonebot2").await?;
+        let package = uv::show_package_info("nonebot2", Some(&self.work_dir)).await?;
         // Check if NoneBot is installed
         let version = package.version;
         let location = package.location.unwrap_or("Unknown".to_string());
