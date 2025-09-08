@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn test_add() {
         let result = add(vec!["nonebot-plugin-abs"])
-            .working_dir(&working_dir())
+            .working_dir(working_dir())
             .upgrade(true)
             .run();
         assert!(result.is_ok());

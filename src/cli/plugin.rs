@@ -798,7 +798,7 @@ mod tests {
     async fn test_get_regsitry_plugins_map() {
         let plugin_manager = PluginManager::default();
         let plugins = plugin_manager.fetch_registry_plugins(false).await.unwrap();
-        for (_, plugin) in plugins {
+        for plugin in plugins.values() {
             dbg!(plugin);
         }
     }

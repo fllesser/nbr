@@ -457,7 +457,7 @@ mod tests {
         let manager = AdapterManager::default();
 
         let adapters_map = manager.fetch_regsitry_adapters(false).await.unwrap();
-        assert!(adapters_map.len() > 0);
+        assert!(!adapters_map.is_empty());
         for adapter in adapters_map.values() {
             println!("{}", adapter.name);
         }
