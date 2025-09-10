@@ -639,8 +639,9 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn get_cache_file(&self) -> PathBuf {
-        get_cache_dir().join("plugins.json")
+    pub fn get_cache_file(&self) -> Result<PathBuf> {
+        let cache_dir = get_cache_dir()?;
+        Ok(cache_dir.join("plugins.json"))
     }
 
     pub async fn fetch_registry_plugins(
@@ -651,7 +652,7 @@ impl PluginManager {
             return Ok(plugins);
         }
 
-        let cache_file = self.get_cache_file();
+        let cache_file = self.get_cache_file()?;
         if !fetch_remote && cache_file.exists() {
             debug!("Loading plugins from cache: {}", cache_file.display());
             let plugins: HashMap<String, RegistryPlugin> =
@@ -687,7 +688,6 @@ impl PluginManager {
 
         // 缓存到文件
         std::fs::write(cache_file, serde_json::to_string(&plugins_map)?)?;
-
         Ok(self.registry_plugins.get().unwrap())
     }
 
