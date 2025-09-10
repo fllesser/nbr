@@ -86,8 +86,9 @@ impl AdapterManager {
         })
     }
 
-    fn get_cache_file(&self) -> PathBuf {
-        get_cache_dir().join("adapters.json")
+    fn get_cache_file(&self) -> Result<PathBuf> {
+        let cache_dir = get_cache_dir()?;
+        Ok(cache_dir.join("adapters.json"))
     }
 
     /// Fetch registry adapters from registry.nonebot.dev
@@ -100,7 +101,7 @@ impl AdapterManager {
         }
 
         // 从缓存中获取
-        let cache_file = self.get_cache_file();
+        let cache_file = self.get_cache_file()?;
         if !fetch_remote && cache_file.exists() {
             debug!("Loading adapters from cache: {}", cache_file.display());
             let adapters: HashMap<String, RegistryAdapter> =
