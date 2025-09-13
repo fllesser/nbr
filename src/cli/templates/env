@@ -12,8 +12,3 @@ NICKNAME=["{}"]
 # localstore(https://github.com/nonebot/plugin-localstore)
 # 使用 docker 建议设置为 true
 LOCALSTORE_USE_CWD=false
-
-# Adapter configurations
-# OneBot V11
-# ONEBOT_ACCESS_TOKEN=
-# ONEBOT_SECRET=

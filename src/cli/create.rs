@@ -3,7 +3,8 @@ use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
 
-use crate::cli::adapter::{AdapterManager, RegistryAdapter};
+use super::adapter::{AdapterManager, RegistryAdapter};
+use super::driver::{Driver, DriverManager};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -48,17 +49,6 @@ pub enum Template {
     Bootstrap,
     #[clap(help = "Simple bot template with basic plugins")]
     Simple,
-}
-
-#[derive(ValueEnum, Debug, Clone, Display)]
-#[clap(rename_all = "lowercase")]
-#[allow(clippy::upper_case_acronyms)]
-pub enum Driver {
-    FastAPI,
-    HTTPX,
-    WebSockets,
-    Quark,
-    AIOHTTP,
 }
 
 #[derive(ValueEnum, Debug, Clone, Display)]
@@ -113,7 +103,6 @@ pub async fn handle_create(args: CreateArgs) -> Result<()> {
     info!("     {}", "nbr run\n");
     // Show additional setup instructions
     // show_setup_instructions(&options).await?;
-
     Ok(())
 }
 
@@ -175,7 +164,7 @@ async fn gather_project_options(
     // 选择驱动
     let drivers = match args.drivers {
         Some(drivers) => drivers.into_iter().map(|d| d.to_string()).collect(),
-        None => select_drivers()?,
+        None => DriverManager::select_drivers(&[true; 3])?,
     };
 
     let adapters = match args.adapters {
@@ -258,28 +247,6 @@ fn select_environment() -> Result<Environment> {
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
     Ok(envs[selected_idx].clone())
-}
-
-fn select_drivers() -> Result<Vec<String>> {
-    let drivers = Driver::value_variants();
-    let selected_drivers = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which driver(s) would you like to use")
-        .items(drivers)
-        // 默认选择前三个
-        .defaults(&[true; 3])
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
-
-    let selected_drivers: Vec<String> = selected_drivers
-        .into_iter()
-        .map(|i| drivers[i].to_string())
-        .collect();
-
-    if selected_drivers.is_empty() {
-        return select_drivers();
-    }
-
-    Ok(selected_drivers)
 }
 
 fn select_template() -> Result<Template> {
@@ -455,12 +422,10 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
 }
 
 fn generate_env_files(options: &ProjectOptions) -> Result<()> {
-    let driver = options
-        .drivers
-        .iter()
-        .map(|d| format!("~{}", d.to_lowercase()))
-        .collect::<Vec<String>>()
-        .join("+");
+    // ~httpx+~fastapi
+    let driver = DriverManager::gen_drivers_for_env(&options.drivers);
+
+    // log level
     let log_level = match options.environment {
         Environment::Dev => "DEBUG",
         Environment::Prod => "INFO",
@@ -570,7 +535,7 @@ mod tests {
             name: "awesome-bot".to_string(),
             template: Template::Bootstrap,
             output_dir: PathBuf::from("awesome-bot"),
-            drivers: vec![],
+            drivers: vec![Driver::FastAPI.to_string(), Driver::HTTPX.to_string()],
             adapters: vec![RegistryAdapter {
                 name: "OneBot V11".to_string(),
                 module_name: "nonebot.adapters.onebot.v11".to_string(),
