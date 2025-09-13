@@ -373,7 +373,7 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     pyproject.project.name = options.name.to_string();
 
     // 补齐驱动依赖
-    let drivers = options.drivers.join(",").to_string().to_lowercase();
+    let drivers = options.drivers.join(",").to_string();
     pyproject
         .project
         .dependencies

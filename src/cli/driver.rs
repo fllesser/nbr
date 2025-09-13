@@ -31,6 +31,7 @@ pub(crate) async fn handle_driver(commands: &DriverCommands) -> Result<()> {
 #[derive(ValueEnum, Debug, Clone, Display)]
 #[clap(rename_all = "lowercase")]
 #[allow(clippy::upper_case_acronyms)]
+#[strum(serialize_all = "lowercase")] // strum display, to_string()
 pub enum Driver {
     FastAPI,
     HTTPX,
@@ -50,13 +51,13 @@ impl DriverManager {
         };
 
         // uv add
-        let package = format!("nonebot2[{}]", drivers.join(",").to_lowercase());
+        let package = format!("nonebot2[{}]", drivers.join(","));
         uv::add(vec![&package]).run()?;
 
         // 更新 env 文件
         let env_files = [Path::new(".env.dev"), Path::new(".env.prod")];
 
-        for env_file in env_files {
+        for env_file in &env_files {
             if !env_file.exists() {
                 continue;
             }
@@ -70,15 +71,20 @@ impl DriverManager {
             let all_drivers = isd_drivers
                 .into_iter()
                 .chain(drivers.iter().cloned())
-                .collect::<HashSet<String>>();
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+
+            println!("all_drivers: {:?}", all_drivers);
 
             let env_content = env_content.replace(
-                r"DRIVER=.*",
+                r"DRIVER=[^\s]*",
                 &format!(
                     "DRIVER={}",
-                    DriverManager::gen_drivers_for_env(&all_drivers.into_iter().collect())
+                    DriverManager::gen_drivers_for_env(&all_drivers)
                 ),
             );
+            println!("env_content: {}", env_content);
             fs::write(env_file, env_content)?;
         }
 
@@ -115,21 +121,16 @@ impl DriverManager {
     pub(super) fn gen_drivers_for_env(drivers: &Vec<String>) -> String {
         drivers
             .iter()
-            .map(|d| format!("~{}", d.to_lowercase()))
+            .map(|driver| String::from("~") + driver)
             .collect::<Vec<String>>()
             .join("+")
     }
 
     fn extract_drivers_from_env(env_content: &str) -> Vec<String> {
-        let re = Regex::new(r"DRIVER=(~[^+]+(?:\+~[^+]+)*)").unwrap();
-        if let Some(caps) = re.captures(env_content) {
-            let driver_value = caps.get(1).unwrap().as_str();
-            driver_value
-                .split('+')
-                .map(|s| s.trim_start_matches('~').to_string())
-                .collect()
-        } else {
-            Vec::new()
-        }
+        // DRIVER=~fastapi+~httpx+~websockets, 取出 [fastapi, httpx, websockets]
+        let re = Regex::new(r"DRIVER=(?:[^,\n]*?)~(\w+)").unwrap();
+        re.captures_iter(env_content)
+            .map(|cap| cap[1].to_string())
+            .collect()
     }
 }
