@@ -55,6 +55,11 @@ pub enum NbrCommands {
         #[clap(subcommand)]
         commands: adapter::AdapterCommands,
     },
+    #[clap(about = "Manage drivers")]
+    Driver {
+        #[clap(subcommand)]
+        commands: driver::DriverCommands,
+    },
     #[clap(about = "Generate bot entry file")]
     Generate {
         #[clap(short, long)]
@@ -109,6 +114,7 @@ async fn main() -> Result<()> {
         NbrCommands::Run { file, reload } => run::handle_run(file, reload).await?,
         NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await?,
         NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await?,
+        NbrCommands::Driver { commands } => driver::handle_driver(&commands).await?,
         NbrCommands::Generate { force } => generate::handle_generate(force).await?,
         NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
         NbrCommands::Init { .. } => unimplemented!(),
