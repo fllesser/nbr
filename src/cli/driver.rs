@@ -46,7 +46,7 @@ impl DriverManager {
     async fn install_driver(drivers: &Option<Vec<Driver>>) -> Result<()> {
         // 选择 driver
         let drivers = match drivers {
-            Some(drivers) => drivers.into_iter().map(|d| d.to_string()).collect(),
+            Some(drivers) => drivers.iter().map(|d| d.to_string()).collect(),
             None => DriverManager::select_drivers(&[])?,
         };
 
@@ -118,7 +118,7 @@ impl DriverManager {
     }
 
     /// 生成 env DRIVER 字符串
-    pub(super) fn gen_drivers_for_env(drivers: &Vec<String>) -> String {
+    pub(super) fn gen_drivers_for_env(drivers: &[String]) -> String {
         drivers
             .iter()
             .map(|driver| String::from("~") + driver)
