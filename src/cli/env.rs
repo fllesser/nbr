@@ -8,7 +8,6 @@ use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{self, Package};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -49,16 +48,6 @@ pub struct NoneBotInfo {
     pub location: String,
     pub adapters: Vec<Package>,
     pub plugins: Vec<Package>,
-}
-
-/// Adapter information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AdapterInfo {
-    pub name: String,
-    pub version: String,
-    pub location: String,
-    pub package_name: String,
-    pub module_name: String,
 }
 
 /// Project information
