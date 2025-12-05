@@ -2,8 +2,6 @@ use anyhow::Context;
 use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
-
-use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 use std::collections::HashSet;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -11,8 +9,9 @@ use std::path::{Path, PathBuf};
 use strum::Display;
 use tracing::info;
 
+use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
+use crate::pyproject::{Adapter, DependencyGroupItem, PyProjectConfig};
 use crate::uv;
 
 #[derive(Args, Debug)]
@@ -431,26 +430,49 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
         }
     }
 
-    pyproject.dependency_groups.as_mut().unwrap().dev = Some(dev_deps);
+    // Create test dependency group
+    let test_group_items: Vec<DependencyGroupItem> = vec![
+        DependencyGroupItem::String("nonebug>=0.3.7,<1.0.0".to_string()),
+        DependencyGroupItem::String("pytest-asyncio>=1.3.0,<2.0.0".to_string()),
+    ];
+
+    // Convert dev_deps strings to DependencyGroupItem::String
+    let mut dev_group_items: Vec<DependencyGroupItem> = vec![
+        // Include test group first
+        DependencyGroupItem::IncludeGroup {
+            include_group: String::from("test"),
+        },
+    ];
+
+    // Add dev dependencies
+    dev_group_items.extend(dev_deps.into_iter().map(DependencyGroupItem::String));
+
+    // Insert both test and dev groups
+    let dep_groups = pyproject.dependency_groups.as_mut().unwrap();
+    dep_groups
+        .groups
+        .insert("test".to_string(), test_group_items);
+    dep_groups.groups.insert("dev".to_string(), dev_group_items);
 
     // 补齐 tool.nonebot
     let nonebot_mut = pyproject.tool.as_mut().unwrap().nonebot.as_mut().unwrap();
     nonebot_mut.plugin_dirs = Some(vec![format!("src/plugins")]);
     nonebot_mut.builtin_plugins = Some(options.plugins.clone());
 
+    nonebot_mut.adapters = Some(
+        options
+            .adapters
+            .iter()
+            .map(|a| Adapter {
+                name: a.name.to_string(),
+                module_name: a.module_name.to_string(),
+            })
+            .collect(),
+    );
     // 写入文件
     let content = toml::to_string(&pyproject)?;
-    //fs::write(options.output_dir.join("pyproject.toml"), content)?;
-    let adapters = options
-        .adapters
-        .iter()
-        .map(|a| Adapter {
-            name: a.name.to_string(),
-            module_name: a.module_name.to_string(),
-        })
-        .collect();
     let save_path = options.output_dir.join("pyproject.toml");
-    NbTomlEditor::with_str(&content, &save_path)?.add_adapters(adapters)?;
+    fs::write(save_path, content)?;
     Ok(())
 }
 

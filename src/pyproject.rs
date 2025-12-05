@@ -12,25 +12,41 @@ use toml_edit::{Array, Document, DocumentMut, InlineTable, Table};
 pub struct PyProjectConfig {
     pub project: Project,
     pub dependency_groups: Option<DependencyGroups>,
-    pub tool: Option<Tool>,
     pub build_system: Option<BuildSystem>,
+    pub tool: Option<Tool>,
 }
 
 impl Default for PyProjectConfig {
     fn default() -> Self {
         Self {
             project: Project::default(),
-            tool: Some(Tool::default()),
+            dependency_groups: None,
             build_system: Some(BuildSystem::default()),
-            dependency_groups: Some(DependencyGroups::default()),
+            tool: Some(Tool::default()),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+/// Represents a single item in a dependency group, which can be either
+/// a PEP 508 dependency specifier string or an include-group reference
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(untagged)]
+pub enum DependencyGroupItem {
+    /// A standard PEP 508 dependency specifier (e.g., "pytest>=7.0")
+    String(String),
+    /// A dependency group include (e.g., { include-group = "test" })
+    IncludeGroup {
+        #[serde(rename = "include-group")]
+        include_group: String,
+    },
+}
+
+/// Dependency groups as defined in PEP 735
+/// Each group contains a list of dependency items (strings or include-group references)
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct DependencyGroups {
-    pub dev: Option<Vec<String>>,
-    pub test: Option<Vec<String>>,
+    #[serde(flatten)]
+    pub groups: HashMap<String, Vec<DependencyGroupItem>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -380,5 +396,155 @@ mod tests {
         let pyproject = PyProjectConfig::parse(Some(toml_path)).unwrap();
         let nonebot = pyproject.nonebot().unwrap();
         dbg!(nonebot);
+    }
+
+    #[test]
+    fn test_dependency_groups_with_include() {
+        let toml_content = r#"
+[project]
+name = "test-project"
+version = "0.1.0"
+description = "Test project"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+test = ["pytest>=7.0", "coverage"]
+typing = ["mypy", "types-requests"]
+dev = [
+    { include-group = "test" },
+    { include-group = "typing" },
+    "ruff"
+]
+"#;
+        let pyproject = PyProjectConfig::parse_from_str(toml_content).unwrap();
+        let dep_groups = pyproject.dependency_groups.unwrap();
+
+        // Check test group
+        let test_group = dep_groups.groups.get("test").unwrap();
+        assert_eq!(test_group.len(), 2);
+        assert!(matches!(&test_group[0], DependencyGroupItem::String(s) if s == "pytest>=7.0"));
+        assert!(matches!(&test_group[1], DependencyGroupItem::String(s) if s == "coverage"));
+
+        // Check dev group with include-group
+        let dev_group = dep_groups.groups.get("dev").unwrap();
+        assert_eq!(dev_group.len(), 3);
+        assert!(
+            matches!(&dev_group[0], DependencyGroupItem::IncludeGroup { include_group } if include_group == "test")
+        );
+        assert!(
+            matches!(&dev_group[1], DependencyGroupItem::IncludeGroup { include_group } if include_group == "typing")
+        );
+        assert!(matches!(&dev_group[2], DependencyGroupItem::String(s) if s == "ruff"));
+    }
+
+    #[test]
+    fn test_dependency_groups_serialization() {
+        // Create a PyProjectConfig with dependency groups
+        let mut pyproject = PyProjectConfig::default();
+        let mut groups = std::collections::HashMap::new();
+
+        // Add test group
+        groups.insert(
+            "test".to_string(),
+            vec![
+                DependencyGroupItem::String("pytest>=7.0".to_string()),
+                DependencyGroupItem::String("coverage".to_string()),
+            ],
+        );
+
+        // Add dev group with include-group
+        groups.insert(
+            "dev".to_string(),
+            vec![
+                DependencyGroupItem::IncludeGroup {
+                    include_group: "test".to_string(),
+                },
+                DependencyGroupItem::String("ruff".to_string()),
+            ],
+        );
+
+        pyproject.dependency_groups = Some(DependencyGroups { groups });
+
+        // Serialize to TOML
+        let toml_str = toml::to_string(&pyproject).unwrap();
+
+        println!("Serialized TOML:\n{}", toml_str);
+
+        // Verify the serialized TOML contains the expected structure
+        assert!(toml_str.contains("[dependency-groups]"));
+        assert!(toml_str.contains("test = ["));
+        assert!(toml_str.contains("\"pytest>=7.0\""));
+        assert!(toml_str.contains("dev = ["));
+        assert!(toml_str.contains("include-group = \"test\""));
+
+        // Parse it back and verify
+        let parsed: PyProjectConfig = toml::from_str(&toml_str).unwrap();
+        let parsed_groups = parsed.dependency_groups.unwrap();
+        assert_eq!(parsed_groups.groups.len(), 2);
+    }
+
+    #[test]
+    fn test_dev_group_includes_test_first() {
+        // Simulate what generate_pyproject_file does
+        let mut pyproject = PyProjectConfig::default();
+
+        let dev_deps = vec!["ruff>=0.14.8".to_string(), "pre-commit>=4.3.0".to_string()];
+
+        // Create test dependency group
+        let test_group_items: Vec<DependencyGroupItem> = vec![
+            DependencyGroupItem::String("pytest>=7.0".to_string()),
+            DependencyGroupItem::String("coverage".to_string()),
+        ];
+
+        // Convert dev_deps strings to DependencyGroupItem::String
+        let mut dev_group_items: Vec<DependencyGroupItem> = vec![
+            // Include test group first
+            DependencyGroupItem::IncludeGroup {
+                include_group: String::from("test"),
+            },
+        ];
+
+        // Add dev dependencies
+        dev_group_items.extend(dev_deps.into_iter().map(DependencyGroupItem::String));
+
+        // Insert both test and dev groups
+        let dep_groups = pyproject.dependency_groups.as_mut().unwrap();
+        dep_groups
+            .groups
+            .insert("test".to_string(), test_group_items);
+        dep_groups.groups.insert("dev".to_string(), dev_group_items);
+
+        // Verify the order in memory
+        let dev_group = dep_groups.groups.get("dev").unwrap();
+        assert_eq!(dev_group.len(), 3);
+
+        // First item should be include-group
+        assert!(
+            matches!(&dev_group[0], DependencyGroupItem::IncludeGroup { include_group } if include_group == "test")
+        );
+
+        // Then the dev dependencies
+        assert!(matches!(&dev_group[1], DependencyGroupItem::String(s) if s == "ruff>=0.14.8"));
+        assert!(
+            matches!(&dev_group[2], DependencyGroupItem::String(s) if s == "pre-commit>=4.3.0")
+        );
+
+        // Serialize and check order is preserved
+        let toml_str = toml::to_string(&pyproject).unwrap();
+
+        // The include-group should appear before other items in the serialized form
+        let dev_line_start = toml_str.find("dev = [").expect("dev group not found");
+        let include_pos = toml_str[dev_line_start..]
+            .find("include-group")
+            .expect("include-group not found");
+        let ruff_pos = toml_str[dev_line_start..]
+            .find("ruff")
+            .expect("ruff not found");
+
+        assert!(
+            include_pos < ruff_pos,
+            "include-group should come before ruff in serialized TOML"
+        );
     }
 }
