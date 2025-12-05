@@ -2,7 +2,6 @@
 name = "nbr"
 version = "0.3.14"
 edition = "2024"
-authors = ["fllesser <fllessive@gmail.com>"]
 description = "CLI for NoneBot2 - A Rust implementation"
 license = "MIT"
 repository = "https://github.com/nonebot/nbr"
@@ -10,39 +9,42 @@ readme = "README.md"
 keywords = ["nonebot", "cli", "chatbot", "bot", "nbr"]
 categories = ["command-line-utilities"]
 
+[package.metadata]
+authors = [{ name = "fllesser", email = "fllessive@gmail.com" }]
+
 [[bin]]
 name = "nbr"
 path = "src/main.rs"
 
 [dependencies]
 # CLI framework
-clap = { version = "4.5", features = ["derive", "color", "suggestions"] }
+clap = { version = "4.5.53", features = ["derive", "color", "suggestions"] }
 
 # Async runtime
-tokio = { version = "1.47.1", features = [
-    "signal",
-    "process",
-    "rt-multi-thread",
-    "macros",
+tokio = { version = "1.48.0", features = [
+  "signal",
+  "process",
+  "rt-multi-thread",
+  "macros",
 ] }
 
 # HTTP client
-reqwest = { version = "0.12.22", features = [
-    "json",
-    "rustls-tls",
-    "stream",
+reqwest = { version = "0.12.24", features = [
+  "json",
+  "rustls-tls",
+  "stream",
 ], default-features = false }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.143"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
 # serde_yaml = "0.9"
 
 # TOML handling
-toml = "0.9.5"
+toml = "0.9.8"
 
 # Terminal UI and progress bars
-indicatif = "0.18.0"
+indicatif = "0.18.3"
 console = "0.16.0"
 dialoguer = "0.12"
 
@@ -50,8 +52,8 @@ dialoguer = "0.12"
 # colored = "3.0.0"
 
 # Error handling
-anyhow = "1.0"
-thiserror = "2.0.15"
+anyhow = "1.0.100"
+thiserror = "2.0.17"
 
 # Git operations
 # git2 = { version = "0.20.2", default-features = false }
@@ -60,33 +62,33 @@ thiserror = "2.0.15"
 directories = "6.0"
 
 # Regex support
-regex = "1.11"
+regex = "1.12"
 
 # File watching
 notify = "8.2.0"
 
 # System information
-sysinfo = { version = "0.37.0", features = ["disk"] }
+sysinfo = { version = "0.37.2", features = ["disk"] }
 
 # Futures utilities
 futures-util = "0.3"
 
 # Logging
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = [
-    "env-filter",
-    "time",
-    "ansi",
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3.22", features = [
+  "env-filter",
+  "time",
+  "ansi",
 ] }
 
-toml_edit = "0.23.4"
-tracing-core = "0.1.34"
+toml_edit = "0.23.7"
+tracing-core = "0.1.35"
 ansi_term = "0.12"
 strum = { version = "0.27.2", features = ["derive"] }
 
 
 [dev-dependencies]
-tempfile = "3.8"
+tempfile = "3.23"
 
 
 [profile.release]
