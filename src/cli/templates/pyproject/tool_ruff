@@ -1,7 +1,6 @@
 
 [tool.ruff]
-line-length = 120
-target-version = "py310"
+line-length = 88
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -32,17 +31,12 @@ ignore = [
   "RUF003", # ambiguous-unicode-character-comment
   "W191",   # indentation contains tabs
   "TID252", # relative import
-  # "I001",   # isort: imports are incorrectly sorted
 ]
 
 [tool.ruff.lint.isort]
-force-sort-within-sections = true
+length-sort = true
 known-first-party = ["tests/*"]
 extra-standard-library = ["typing_extensions"]
-
-[tool.ruff.lint.flake8-pytest-style]
-fixture-parentheses = false
-mark-parentheses = false
 
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
