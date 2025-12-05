@@ -425,7 +425,7 @@ fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
     let mut dev_deps = vec![];
     for tool in options.dev_tools.iter() {
         match tool {
-            DevTool::Ruff => dev_deps.push("ruff>=0.12.10".to_string()),
+            DevTool::Ruff => dev_deps.push("ruff>=0.14.8".to_string()),
             DevTool::PreCommit => dev_deps.push("pre-commit>=4.3.0".to_string()),
             _ => {}
         }
