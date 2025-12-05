@@ -20,7 +20,7 @@ impl Default for PyProjectConfig {
     fn default() -> Self {
         Self {
             project: Project::default(),
-            dependency_groups: None,
+            dependency_groups: Some(DependencyGroups::default()),
             build_system: Some(BuildSystem::default()),
             tool: Some(Tool::default()),
         }
@@ -43,7 +43,7 @@ pub enum DependencyGroupItem {
 
 /// Dependency groups as defined in PEP 735
 /// Each group contains a list of dependency items (strings or include-group references)
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct DependencyGroups {
     #[serde(flatten)]
     pub groups: HashMap<String, Vec<DependencyGroupItem>>,
