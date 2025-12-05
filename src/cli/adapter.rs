@@ -49,6 +49,16 @@ pub struct RegistryAdapter {
     pub version: String,
 }
 
+// registry adapter into adapter
+impl From<&RegistryAdapter> for Adapter {
+    fn from(adapter: &RegistryAdapter) -> Self {
+        Self {
+            name: adapter.name.clone(),
+            module_name: adapter.module_name.clone(),
+        }
+    }
+}
+
 /// Adapter manager
 pub struct AdapterManager {
     /// HTTP client for registry requests
