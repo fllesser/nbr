@@ -74,10 +74,9 @@ impl Default for Project {
         Self {
             name: String::from("awesome-bot"),
             version: String::from("0.1.0"),
-            description: String::from("your bot description"),
+            description: String::from("a nonebot project"),
             requires_python: String::from(">=3.10"),
             dependencies: vec![],
-
             authors: Some(vec![]),
             readme: Some(String::from("README.md")),
             urls: None,
@@ -134,7 +133,7 @@ pub struct BuildSystem {
 impl Default for BuildSystem {
     fn default() -> Self {
         Self {
-            requires: vec!["uv_build>=0.8.3,<0.9.0".to_string()],
+            requires: vec!["uv_build>=0.9.0,<0.10.0".to_string()],
             build_backend: "uv_build".to_string(),
         }
     }

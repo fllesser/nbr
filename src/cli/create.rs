@@ -11,7 +11,10 @@ use tracing::info;
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
 use crate::error::{NbrError, Result};
-use crate::pyproject::{Adapter, DependencyGroupItem, PyProjectConfig};
+use crate::pyproject::{
+    BuildSystem, DependencyGroupItem, DependencyGroups, NbTomlEditor, Nonebot, Project,
+    PyProjectConfig, Tool,
+};
 use crate::uv;
 
 #[derive(Args, Debug)]
@@ -83,7 +86,16 @@ pub enum DevTool {
     Ruff,
     Basedpyright,
     PreCommit,
-    Pylance,
+}
+
+impl DevTool {
+    pub fn to_dependency(&self) -> String {
+        match self {
+            Self::Ruff => "ruff>=0.14.8".to_string(),
+            Self::Basedpyright => "basedpyright>=1.35.0".to_string(),
+            Self::PreCommit => "pre-commit>=4.3.0".to_string(),
+        }
+    }
 }
 
 pub struct ProjectOptions {
@@ -354,7 +366,7 @@ async fn create_project(options: &ProjectOptions) -> Result<()> {
 
 async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     create_project_structure(options)?;
-    generate_pyproject_file(options)?;
+    generate_pyporject_config(options)?;
     generate_env_files(options)?;
     generate_readme_file(options)?;
     generate_gitignore(&options.output_dir)?;
@@ -366,7 +378,6 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
 
 fn install_dependencies(options: &ProjectOptions) -> Result<()> {
     uv::sync(Some(&options.python_version))
-        .arg("--all-groups")
         .working_dir(&options.output_dir)
         .run()
 }
@@ -400,79 +411,77 @@ fn create_project_structure(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
-fn generate_pyproject_file(options: &ProjectOptions) -> Result<()> {
-    let mut pyproject = PyProjectConfig::default();
-    pyproject.project.name = options.name.to_string();
-
+fn collect_dependencies(options: &ProjectOptions) -> Vec<String> {
     // 补齐驱动依赖
+    let mut dependencies = vec![];
     let drivers = options.drivers.join(",").to_string().to_lowercase();
-    pyproject
-        .project
-        .dependencies
-        .push(format!("nonebot2[{}]>=2.4.3", drivers));
+    dependencies.push(format!("nonebot2[{}]>=2.4.3", drivers));
 
     let adapter_deps = options
         .adapters
         .iter()
         .map(|a| format!("{}>={}", a.project_link, a.version))
-        .collect::<HashSet<String>>(); // 沟槽的 onebot 12
+        .collect::<HashSet<String>>(); // 沟槽的 onebot 12 适配器
 
-    // 补齐 dependencies
-    pyproject.project.dependencies.extend(adapter_deps);
+    dependencies.extend(adapter_deps);
+    dependencies
+}
 
-    // 补齐 dependency_groups.dev group
-    let mut dev_deps = vec![];
-    for tool in options.dev_tools.iter() {
-        match tool {
-            DevTool::Ruff => dev_deps.push("ruff>=0.14.8".to_string()),
-            DevTool::PreCommit => dev_deps.push("pre-commit>=4.3.0".to_string()),
-            _ => {}
-        }
-    }
+// 收集依赖组
+fn collect_dependency_groups(options: &ProjectOptions) -> DependencyGroups {
+    let mut dep_groups = DependencyGroups::default();
+    let mut dev_deps: Vec<DependencyGroupItem> = options
+        .dev_tools
+        .iter()
+        .map(|t| DependencyGroupItem::String(t.to_dependency()))
+        .collect();
+    dev_deps.push(DependencyGroupItem::IncludeGroup {
+        include_group: "test".to_string(),
+    });
 
-    // Create test dependency group
-    let test_group_items: Vec<DependencyGroupItem> = vec![
-        DependencyGroupItem::String("nonebug>=0.3.7,<1.0.0".to_string()),
-        DependencyGroupItem::String("pytest-asyncio>=1.3.0,<2.0.0".to_string()),
-    ];
-
-    // Convert dev_deps strings to DependencyGroupItem::String
-    let mut dev_group_items: Vec<DependencyGroupItem> = vec![
-        // Include test group first
-        DependencyGroupItem::IncludeGroup {
-            include_group: String::from("test"),
-        },
-    ];
-
-    // Add dev dependencies
-    dev_group_items.extend(dev_deps.into_iter().map(DependencyGroupItem::String));
-
-    // Insert both test and dev groups
-    let dep_groups = pyproject.dependency_groups.as_mut().unwrap();
+    dep_groups.groups.insert(
+        "test".to_string(),
+        vec![
+            DependencyGroupItem::String("nonebug>=0.3.7,<1.0.0".to_string()),
+            DependencyGroupItem::String("pytest-asyncio>=1.3.0,<2.0.0".to_string()),
+        ],
+    );
+    dep_groups.groups.insert("dev".to_string(), dev_deps);
     dep_groups
-        .groups
-        .insert("test".to_string(), test_group_items);
-    dep_groups.groups.insert("dev".to_string(), dev_group_items);
+}
 
-    // 补齐 tool.nonebot
-    let nonebot_mut = pyproject.tool.as_mut().unwrap().nonebot.as_mut().unwrap();
-    nonebot_mut.plugin_dirs = Some(vec![format!("src/plugins")]);
-    nonebot_mut.builtin_plugins = Some(options.plugins.clone());
-
-    nonebot_mut.adapters = Some(
+fn generate_pyporject_config(options: &ProjectOptions) -> Result<()> {
+    let pyproject = PyProjectConfig {
+        project: Project {
+            name: options.name.to_string(),
+            version: String::from("0.1.0"),
+            description: String::from("a nonebot project"),
+            authors: None,
+            readme: Some("README.md".to_string()),
+            urls: None,
+            requires_python: format!(">={}", options.python_version),
+            dependencies: collect_dependencies(options),
+        },
+        dependency_groups: Some(collect_dependency_groups(options)),
+        build_system: Some(BuildSystem::default()),
+        tool: Some(Tool {
+            nonebot: Some(Nonebot {
+                builtin_plugins: Some(options.plugins.clone()),
+                plugin_dirs: Some(vec![format!("src/plugins")]),
+                adapters: Some(vec![]),
+                plugins: Some(vec![]),
+            }),
+        }),
+    };
+    let content = toml::to_string(&pyproject)?;
+    let save_path = options.output_dir.join("pyproject.toml");
+    NbTomlEditor::with_str(&content, &save_path)?.add_adapters(
         options
             .adapters
             .iter()
-            .map(|a| Adapter {
-                name: a.name.to_string(),
-                module_name: a.module_name.to_string(),
-            })
-            .collect(),
-    );
-    // 写入文件
-    let content = toml::to_string(&pyproject)?;
-    let save_path = options.output_dir.join("pyproject.toml");
-    fs::write(save_path, content)?;
+            .map(|a| a.into())
+            .collect::<Vec<_>>(),
+    )?;
     Ok(())
 }
 
@@ -519,7 +528,6 @@ fn generate_dev_tools_config(options: &ProjectOptions) -> Result<()> {
             DevTool::Ruff => append_ruff_config(&options.output_dir)?,
             DevTool::Basedpyright => append_pyright_config(&options.output_dir)?,
             DevTool::PreCommit => generate_pre_commit_config(&options.output_dir)?,
-            DevTool::Pylance => {}
         }
     }
     Ok(())
