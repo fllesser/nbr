@@ -1,6 +1,6 @@
 [package]
 name = "nbr"
-version = "0.3.14"
+version = "0.3.15"
 edition = "2024"
 description = "CLI for NoneBot2 - A Rust implementation"
 license = "MIT"

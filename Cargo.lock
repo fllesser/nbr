@@ -782,7 +782,7 @@ dependencies = [
 
 [[package]]
 name = "nbr"
-version = "0.3.14"
+version = "0.3.15"
 dependencies = [
  "ansi_term",
  "anyhow",
