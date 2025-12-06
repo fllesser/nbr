@@ -263,10 +263,7 @@ impl AdapterManager {
         // Add to configuration
         let adapters = selected_adapters
             .iter()
-            .map(|a| Adapter {
-                name: a.name.clone(),
-                module_name: a.module_name.clone(),
-            })
+            .map(|a| (*a).into())
             .collect::<Vec<Adapter>>();
 
         // Add adapters to configuration
