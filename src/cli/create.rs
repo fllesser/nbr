@@ -122,9 +122,6 @@ pub async fn handle_create(args: CreateArgs) -> Result<()> {
     info!("🚀 Next steps:\n");
     info!("     {}", format!("cd {}", options.name));
     info!("     {}", "nbr run\n");
-    // Show additional setup instructions
-    // show_setup_instructions(&options).await?;
-
     Ok(())
 }
 
@@ -146,9 +143,9 @@ fn check_directory_exists(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn confirm_gen_dockerfile() -> Result<bool> {
+fn confirm_gen_docker() -> Result<bool> {
     let gen_dockerfile = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt("Would you like to generate a Dockerfile")
+        .with_prompt("Would you like to generate Dockerfile and Docker Compose configuration?")
         .default(true)
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
@@ -224,7 +221,7 @@ async fn gather_project_options(
     // 是否生成 Dockerfile
     let gen_dockerfile = match args.gen_dockerfile {
         Some(gen_dockerfile) => gen_dockerfile,
-        None => confirm_gen_dockerfile()?,
+        None => confirm_gen_docker()?,
     };
 
     Ok(ProjectOptions {
@@ -600,7 +597,7 @@ mod tests {
             name: "awesome-bot".to_string(),
             template: Template::Bootstrap,
             output_dir: PathBuf::from("awesome-bot"),
-            drivers: vec![],
+            drivers: vec!["fastapi".to_string(), "httpx".to_string()],
             adapters: vec![RegistryAdapter {
                 name: "OneBot V11".to_string(),
                 module_name: "nonebot.adapters.onebot.v11".to_string(),
