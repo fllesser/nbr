@@ -15,8 +15,8 @@ concurrency:
 env:
   # UV_VERSION should not greater than MAX_UV_VERSION in `languages/python/uv`.
   # Otherwise, tests jobs will install their own uv, and now it has concurrent issue.
-  UV_VERSION: '0.8.14'
-  PYTHON_VERSION: '3.12.11'
+  UV_VERSION: "0.9.16"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   typos:
