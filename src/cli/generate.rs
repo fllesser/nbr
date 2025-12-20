@@ -57,18 +57,18 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
         .as_ref()
         .unwrap_or(&vec![])
         .iter()
-        .map(|a| (a.name.replace(" ", ""), a.module_name.to_owned()))
+        .map(|a| (a.alias(), a.module_name.to_owned()))
         .collect::<Vec<_>>();
 
     let adapters_import = name_module_tuples
         .iter()
-        .map(|(prefix, module)| format!("from {module} import Adapter as {prefix}Adapter"))
+        .map(|(alias, module)| format!("from {module} import Adapter as {alias}"))
         .collect::<Vec<_>>()
         .join("\n");
 
     let adapters_register = name_module_tuples
         .iter()
-        .map(|(prefix, _)| format!("driver.register_adapter({prefix}Adapter)"))
+        .map(|(alias, _)| format!("driver.register_adapter({alias})"))
         .collect::<Vec<_>>()
         .join("\n");
 

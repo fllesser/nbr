@@ -45,7 +45,7 @@ toml = "0.9.8"
 
 # Terminal UI and progress bars
 indicatif = "0.18.3"
-console = "0.16.0"
+console = "0.16.2"
 dialoguer = "0.12"
 
 # Colored output
@@ -74,15 +74,15 @@ sysinfo = { version = "0.37.2", features = ["disk"] }
 futures-util = "0.3"
 
 # Logging
-tracing = "0.1.43"
+tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = [
   "env-filter",
   "time",
   "ansi",
 ] }
 
-toml_edit = "0.23.7"
-tracing-core = "0.1.35"
+toml_edit = "0.23.9"
+tracing-core = "0.1.36"
 ansi_term = "0.12"
 strum = { version = "0.27.2", features = ["derive"] }
 

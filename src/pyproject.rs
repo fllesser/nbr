@@ -123,6 +123,23 @@ pub struct Adapter {
     pub module_name: String,
 }
 
+impl Adapter {
+    pub fn alias(&self) -> String {
+        // nonebot.adapters.telegram -> TelegramAdapter
+        // nonebot.adapters.onebot.v11 -> OnebotV11Adapter
+        let camel_case = self
+            .module_name
+            .trim_start_matches("nonebot.adapters.")
+            .split('.')
+            .map(|part| {
+                let (first, rest) = part.split_at(1);
+                first.to_ascii_uppercase() + rest
+            })
+            .collect::<String>();
+        format!("{}Adapter", camel_case)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub struct BuildSystem {
@@ -280,8 +297,8 @@ impl NbTomlEditor {
         // 交互逻辑 已经排除了已经安装的 adapter
         for adapter in adapters {
             let mut inline_table = InlineTable::new();
-            inline_table.insert("name", adapter.name);
-            inline_table.insert("module_name", adapter.module_name);
+            inline_table.insert("name", adapter.name.into());
+            inline_table.insert("module_name", adapter.module_name.into());
             adapters_arr_mut.push(inline_table);
         }
         Self::fmt_toml_array(adapters_arr_mut);
@@ -336,8 +353,8 @@ impl NbTomlEditor {
         adapters_arr_mut.clear();
         adapters_arr_mut.extend(adapters.into_iter().map(|adapter| {
             let mut inline_table = InlineTable::new();
-            inline_table.insert("name", adapter.name);
-            inline_table.insert("module_name", adapter.module_name);
+            inline_table.insert("name", adapter.name.into());
+            inline_table.insert("module_name", adapter.module_name.into());
             inline_table
         }));
         self.save()
