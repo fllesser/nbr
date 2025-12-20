@@ -132,11 +132,8 @@ impl Adapter {
             .trim_start_matches("nonebot.adapters.")
             .split('.')
             .map(|part| {
-                let mut chars = part.chars();
-                match chars.next() {
-                    None => String::new(),
-                    Some(first) => first.to_uppercase().chain(chars).collect(),
-                }
+                let (first, rest) = part.split_at(1);
+                first.to_ascii_uppercase() + rest
             })
             .collect::<String>();
         format!("{}Adapter", camel_case)
