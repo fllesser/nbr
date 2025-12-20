@@ -81,7 +81,7 @@ tracing-subscriber = { version = "0.3.22", features = [
   "ansi",
 ] }
 
-toml_edit = "0.23.9"
+toml_edit = "0.24.0"
 tracing-core = "0.1.36"
 ansi_term = "0.12"
 strum = { version = "0.27.2", features = ["derive"] }
