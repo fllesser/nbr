@@ -18,7 +18,7 @@ A fast and efficient Rust implementation of the NoneBot command-line interface f
 ### Required
 - **Rust** (1.85+) - for building the CLI tool
 - **Python** (3.10+) - for running NoneBot2 projects
-- **uv** (0.80+) - for Python package management
+- **uv** (0.9.0+) - for Python package management
 
 ### Install uv
 <details>

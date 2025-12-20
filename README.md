@@ -20,9 +20,11 @@
 ## 📋 先决条件
 
 ### 必需
-- **uv** (0.8.3+) - 用于 Python 依赖管理
+
+- **uv** (0.9.0+) - 用于 Python 依赖管理
 
 ### 安装 uv
+
 <details>
 <summary>使用 astral 官方安装脚本(推荐)</summary>
 
@@ -49,7 +51,7 @@
 
     curl -Lf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz | tar -xzf - -C /usr/local/bin/ nbr && \
     chmod +x /usr/local/bin/nbr
-    
+
 </details>
 
 <details>
@@ -62,6 +64,7 @@
 将二进制文件移动到 PATH
 
     sudo mv nbr /Users/$USER/.local/bin/
+
 </details>
 
 <details>
@@ -74,6 +77,7 @@
 将二进制文件移动到 PATH
 
     ...
+
 </details>
 
 </details>
@@ -85,9 +89,7 @@
 
 </details>
 
-
 ## 📖 使用
-
 
 <details>
 <summary>项目管理</summary>
@@ -98,12 +100,11 @@
 
 非询问式创建
 
-    nbr create awesome-bot -p 3.12 -t bootstrap --adapters "OneBot V11" --drivers fastapi,httpx,websockets --env dev --plugins echo --dev-tools ruff,basedpyright,pre-commit --gen-dockerfile true -f
+    nbr create awesome-bot -p 3.12 -t bootstrap --adapters "OneBot V11" --drivers fastapi,httpx,websockets --env dev --plugins echo --dev-tools ruff,basedpyright,pre-commit --gen-dockerfile true --create-venv true -f
 
 运行 NoneBot2 项目，选项 `-r` / `--reload` 重新加载项目
 
     nbr run
-
 
 </details>
 
@@ -157,7 +158,6 @@
 
 </details>
 
-
 <details>
 <summary>环境管理</summary>
 
@@ -170,7 +170,6 @@
     nbr env info
 
 </details>
-
 
 ## 🤝 贡献
 
