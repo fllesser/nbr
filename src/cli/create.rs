@@ -17,32 +17,6 @@ use crate::pyproject::{
 };
 use crate::uv;
 
-#[derive(Args, Debug)]
-pub struct CreateArgs {
-    #[clap()]
-    name: Option<String>,
-    #[clap(short, long, value_enum)]
-    template: Option<Template>,
-    #[clap(short, long)]
-    output: Option<String>,
-    #[clap(short, long)]
-    force: bool,
-    #[clap(short, long)]
-    python: Option<String>,
-    #[clap(long, value_enum, num_args = 1.., value_delimiter = ',')]
-    drivers: Option<Vec<Driver>>,
-    #[clap(short, long, num_args = 0.., value_delimiter = ',')]
-    adapters: Option<Vec<String>>,
-    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
-    plugins: Option<Vec<BuiltinPlugin>>,
-    #[clap(short, long, value_enum)]
-    env: Option<Environment>,
-    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
-    dev_tools: Option<Vec<DevTool>>,
-    #[clap(long, help = "Generate Dockerfile")]
-    gen_dockerfile: Option<bool>,
-}
-
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lowercase")]
 pub enum Template {
@@ -98,6 +72,34 @@ impl DevTool {
     }
 }
 
+#[derive(Args, Debug)]
+pub struct CreateArgs {
+    #[clap()]
+    name: Option<String>,
+    #[clap(short, long, value_enum)]
+    template: Option<Template>,
+    #[clap(short, long)]
+    output: Option<String>,
+    #[clap(short, long)]
+    force: bool,
+    #[clap(short, long)]
+    python: Option<String>,
+    #[clap(long, value_enum, num_args = 1.., value_delimiter = ',')]
+    drivers: Option<Vec<Driver>>,
+    #[clap(short, long, num_args = 0.., value_delimiter = ',')]
+    adapters: Option<Vec<String>>,
+    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
+    plugins: Option<Vec<BuiltinPlugin>>,
+    #[clap(short, long, value_enum)]
+    env: Option<Environment>,
+    #[clap(long, value_enum, num_args = 0.., value_delimiter = ',')]
+    dev_tools: Option<Vec<DevTool>>,
+    #[clap(long, help = "Generate Dockerfile")]
+    gen_dockerfile: Option<bool>,
+    #[clap(long, help = "Create virtual environment now")]
+    create_venv: Option<bool>,
+}
+
 pub struct ProjectOptions {
     pub name: String,
     pub template: Template,
@@ -109,6 +111,7 @@ pub struct ProjectOptions {
     pub environment: Environment,
     pub dev_tools: Vec<DevTool>,
     pub gen_dockerfile: bool,
+    pub create_venv: bool,
 }
 
 pub async fn handle_create(args: CreateArgs) -> Result<()> {
@@ -143,6 +146,7 @@ fn check_directory_exists(output_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Confirm whether to generate Dockerfile and Docker Compose configuration
 fn confirm_gen_docker() -> Result<bool> {
     let gen_dockerfile = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to generate Dockerfile and Docker Compose configuration?")
@@ -150,6 +154,16 @@ fn confirm_gen_docker() -> Result<bool> {
         .interact()
         .map_err(|e| NbrError::io(e.to_string()))?;
     Ok(gen_dockerfile)
+}
+
+/// Confirm whether to create a virtual environment now
+fn confirm_create_venv() -> Result<bool> {
+    let create_venv = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt("Would you like to create a virtual environment now?")
+        .default(true)
+        .interact()
+        .map_err(|e| NbrError::io(e.to_string()))?;
+    Ok(create_venv)
 }
 
 async fn gather_project_options(
@@ -223,6 +237,11 @@ async fn gather_project_options(
         Some(gen_dockerfile) => gen_dockerfile,
         None => confirm_gen_docker()?,
     };
+    // 是否创建虚拟环境
+    let create_venv = match args.create_venv {
+        Some(create_venv) => create_venv,
+        None => confirm_create_venv()?,
+    };
 
     Ok(ProjectOptions {
         name,
@@ -235,6 +254,7 @@ async fn gather_project_options(
         environment,
         dev_tools,
         gen_dockerfile,
+        create_venv,
     })
 }
 
@@ -374,9 +394,12 @@ async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
 }
 
 fn install_dependencies(options: &ProjectOptions) -> Result<()> {
-    uv::sync(Some(&options.python_version))
-        .working_dir(&options.output_dir)
-        .run()
+    if options.create_venv {
+        uv::sync(Some(&options.python_version))
+            .working_dir(&options.output_dir)
+            .run()?;
+    }
+    Ok(())
 }
 
 async fn create_simple_project(options: &ProjectOptions) -> Result<()> {
@@ -615,6 +638,7 @@ mod tests {
             environment: Environment::Dev,
             dev_tools: vec![DevTool::PreCommit, DevTool::Ruff, DevTool::Basedpyright],
             gen_dockerfile: true,
+            create_venv: true,
         };
         create_project(&options).await.unwrap();
     }
