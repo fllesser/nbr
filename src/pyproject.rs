@@ -125,14 +125,21 @@ pub struct Adapter {
 
 impl Adapter {
     pub fn alias(&self) -> String {
-        // nonebot.adapters.telegram -> telegram_adapter
-        // nonebot.adapters.onebot.v11 -> onebot_v11_adapter
-        format!(
-            "{}_adapter",
-            self.module_name
-                .trim_start_matches("nonebot.adapters.")
-                .replace(".", "_")
-        )
+        // nonebot.adapters.telegram -> TelegramAdapter
+        // nonebot.adapters.onebot.v11 -> OnebotV11Adapter
+        let camel_case = self
+            .module_name
+            .trim_start_matches("nonebot.adapters.")
+            .split('.')
+            .map(|part| {
+                let mut chars = part.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().chain(chars).collect(),
+                }
+            })
+            .collect::<String>();
+        format!("{}Adapter", camel_case)
     }
 }
 
