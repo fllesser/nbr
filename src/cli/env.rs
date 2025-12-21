@@ -1,9 +1,4 @@
-//! Environment command handler for nbr
-//!
-//! This module handles environment management including showing system information,
-//! checking dependencies, and validating the current project setup.
-
-use crate::EnvCommands;
+use crate::cli::EnvCommands;
 use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::utils::{process_utils, terminal_utils};
