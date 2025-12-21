@@ -1,7 +1,3 @@
-//! Init command handler for nbr
-//!
-//! This module handles initializing NoneBot projects in the current directory,
-//! creating necessary files and directory structure.
 #![allow(dead_code)]
 
 use std::path::PathBuf;

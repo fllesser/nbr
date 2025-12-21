@@ -85,6 +85,7 @@ strum = { version = "0.27.2", features = ["derive"] }
 
 [dev-dependencies]
 tempfile = "3.23"
+insta = { version = "1.42.1", features = ["yaml", "redactions"] }
 
 [profile.release]
 lto = true

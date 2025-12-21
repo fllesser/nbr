@@ -1,8 +1,3 @@
-//! Adapter command handler for nbr
-//!
-//! This module handles adapter management including installation, removal,
-//! and listing adapters for NoneBot applications.
-
 use crate::config::get_cache_dir;
 use crate::error::{NbrError, Result};
 use crate::log::StyledText;

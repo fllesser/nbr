@@ -1,8 +1,3 @@
-//! Generate command handler for nbr
-//!
-//! This module handles generating bot entry files and other project files
-//! with customizable templates and configurations.
-
 use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::PyProjectConfig;
@@ -91,16 +86,6 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 
 /// Handle the generate command
 pub async fn handle_generate(force: bool) -> Result<()> {
-    generate_bot_file(Path::new("."), force).await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_generate_bot_file() {
-        let work_dir = Path::new("awesome-bot");
-        generate_bot_file(work_dir, true).await.unwrap();
-    }
+    let work_dir = std::env::current_dir()?;
+    generate_bot_file(&work_dir, force).await
 }

@@ -1,8 +1,3 @@
-//! Run command handler for nbr
-//!
-//! This module handles running NoneBot applications with various options
-//! including auto-reload, custom host/port, and environment management.
-
 use crate::cli::generate::generate_bot_content;
 use crate::error::{NbrError, Result};
 use crate::log::StyledText;
@@ -416,8 +411,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 }
 
 /// Load environment variables from .env files
-#[allow(unused)]
-fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>> {
+pub fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>> {
     let mut env_vars = HashMap::new();
 
     let env_files = [".env", ".env.dev", ".env.prod"];
@@ -457,31 +451,4 @@ fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>
 
     debug!("Loaded {} environment variables", env_vars.len());
     Ok(env_vars)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use tempfile::tempdir;
-
-    #[test]
-    fn test_load_environment_variables() {
-        let temp_dir = tempdir().unwrap();
-        let env_path = temp_dir.path().join(".env");
-
-        std::fs::write(
-            &env_path,
-            "TEST_VAR=test_value\nANOTHER_VAR=\"quoted value\"",
-        )
-        .unwrap();
-
-        let result = load_environment_variables(temp_dir.path());
-        assert!(result.is_ok());
-
-        let env_vars = result.unwrap();
-        assert_eq!(env_vars.len(), 2);
-        assert!(env_vars.contains_key("TEST_VAR"));
-        assert!(env_vars.contains_key("ANOTHER_VAR"));
-    }
 }

@@ -1,8 +1,3 @@
-//! Plugin command handler for nbr
-//!
-//! This module handles plugin management including installation, removal,
-//! listing, searching, and updating plugins from various sources.
-
 use crate::config::get_cache_dir;
 use crate::error::{NbrError, Result};
 use crate::log::StyledText;

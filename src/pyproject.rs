@@ -366,55 +366,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add_adapters() {
-        let toml_path = Path::new("awesome-bot");
-        let mut editor = NbTomlEditor::with_work_dir(Some(toml_path)).unwrap();
-        editor
-            .add_adapters(vec![Adapter {
-                name: "OneBot V11".to_string(),
-                module_name: "nonebot.adapters.onebot.v12".to_string(),
-            }])
-            .unwrap();
-        editor
-            .add_adapters(vec![Adapter {
-                name: "OneBot V12".to_string(),
-                module_name: "nonebot.adapters.onebot.v12".to_string(),
-            }])
-            .unwrap();
-    }
-
-    #[test]
-    fn test_add_plugins() {
-        let toml_path = Path::new("awesome-bot");
-        let mut editor = NbTomlEditor::with_work_dir(Some(toml_path)).unwrap();
-
-        editor
-            .add_plugins(vec![
-                "nonebot_plugin_status",
-                "nonebot_plugin_alconna",
-                "nonebot_plugin_waiter",
-            ])
-            .unwrap();
-    }
-
-    #[test]
-    fn test_remove_plugins() {
-        let toml_path = Path::new("awesome-bot");
-        let mut editor = NbTomlEditor::with_work_dir(Some(toml_path)).unwrap();
-        editor
-            .remove_plugins(vec!["nonebot_plugin_status"])
-            .unwrap();
-    }
-
-    #[test]
-    fn test_parse_toml_to_nonebot() {
-        let toml_path = Path::new("awesome-bot");
-        let pyproject = PyProjectConfig::parse(Some(toml_path)).unwrap();
-        let nonebot = pyproject.nonebot().unwrap();
-        dbg!(nonebot);
-    }
-
-    #[test]
     fn test_dependency_groups_with_include() {
         let toml_content = r#"
 [project]
