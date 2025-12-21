@@ -1,0 +1,6 @@
+---
+source: tests/test_uv.rs
+assertion_line: 24
+expression: packages
+---
+[]

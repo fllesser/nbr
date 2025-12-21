@@ -1,0 +1,23 @@
+---
+source: tests/test_create.rs
+expression: env_dev_content
+---
+HOST=127.0.0.1
+PORT=8080
+DRIVER=~fastapi
+LOG_LEVEL=DEBUG
+
+SUPERUSERS=[""]
+
+# Command prefix
+COMMAND_START=["", "/"]
+NICKNAME=["test-bot"]
+
+# localstore(https://github.com/nonebot/plugin-localstore)
+# 使用 docker 建议设置为 true
+LOCALSTORE_USE_CWD=false
+
+# Adapter configurations
+# OneBot V11
+# ONEBOT_ACCESS_TOKEN=
+# ONEBOT_SECRET=

@@ -7,7 +7,8 @@ async fn test_create_project_snapshot() {
 
     // Snapshot pyproject.toml
     let pyproject_content = fs::read_to_string(output_dir.join("pyproject.toml")).unwrap();
-    insta::assert_snapshot!(pyproject_content);
+    let pyproject_toml: toml::Value = toml::from_str(&pyproject_content).unwrap();
+    insta::assert_yaml_snapshot!(pyproject_toml);
 
     // Snapshot .env.dev
     let env_dev_content = fs::read_to_string(output_dir.join(".env.dev")).unwrap();

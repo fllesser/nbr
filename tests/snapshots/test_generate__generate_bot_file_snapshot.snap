@@ -1,0 +1,23 @@
+---
+source: tests/test_generate.rs
+assertion_line: 14
+expression: bot_py_content
+---
+import nonebot
+
+# Import Adapters 
+from nonebot.adapters.onebot.v11 import Adapter as OnebotV11Adapter
+
+nonebot.init()
+driver = nonebot.get_driver()
+
+# Register Adapters 
+driver.register_adapter(OnebotV11Adapter)
+
+# Load Builtin Plugins
+nonebot.load_builtin_plugins("echo")
+
+nonebot.load_from_toml("pyproject.toml")
+
+if __name__ == "__main__":
+    nonebot.run()

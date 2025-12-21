@@ -1,6 +1,5 @@
 target/
 awesome-bot/
-snapshots/
 
 .DS_Store
 lcov.info
