@@ -6,7 +6,6 @@ pub mod init;
 pub mod plugin;
 pub mod run;
 
-use crate::error::Result;
 use clap::{ArgAction, Parser, Subcommand};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -33,17 +32,18 @@ pub struct Cli {
 }
 
 impl Cli {
-    pub async fn run(self) -> Result<()> {
+    pub async fn run(self) -> anyhow::Result<()> {
         match self.commands {
-            NbrCommands::Create(create_args) => create::handle_create(create_args).await,
-            NbrCommands::Run { file, reload } => run::handle_run(file, reload).await,
-            NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await,
-            NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await,
-            NbrCommands::Generate { force } => generate::handle_generate(force).await,
-            NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await,
+            NbrCommands::Create(create_args) => create::handle_create(create_args).await?,
+            NbrCommands::Run { file, reload } => run::handle_run(file, reload).await?,
+            NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await?,
+            NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await?,
+            NbrCommands::Generate { force } => generate::handle_generate(force).await?,
+            NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
             NbrCommands::Init { .. } => unimplemented!(),
             NbrCommands::Cache { .. } => unimplemented!(),
         }
+        Ok(())
     }
 }
 

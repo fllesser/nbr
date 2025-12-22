@@ -1,9 +1,9 @@
 use crate::config::get_cache_dir;
-use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::utils::terminal_utils;
 use crate::uv;
+use anyhow::Result;
 use clap::Subcommand;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, MultiSelect};
@@ -80,8 +80,7 @@ impl AdapterManager {
         let client = Client::builder()
             .timeout(Duration::from_secs(15))
             .user_agent("nbr")
-            .build()
-            .map_err(NbrError::Network)?;
+            .build()?;
 
         Ok(Self {
             client,
@@ -113,24 +112,19 @@ impl AdapterManager {
                 serde_json::from_slice(&std::fs::read(&cache_file)?)?;
             self.registry_adapters
                 .set(adapters)
-                .map_err(|_| NbrError::cache("Failed to parse adapter info"))?;
+                .map_err(|_| anyhow::anyhow!("Failed to parse adapter info"))?;
             return Ok(self.registry_adapters.get().unwrap());
         }
 
         // 从 registry 获取
         let spinner = terminal_utils::create_spinner("Fetching adapters from registry...");
         let adapters_json_url = "https://registry.nonebot.dev/adapters.json";
-        let response = self
-            .client
-            .get(adapters_json_url)
-            .send()
-            .await
-            .map_err(NbrError::Network)?;
+        let response = self.client.get(adapters_json_url).send().await?;
 
         let adapters: Vec<RegistryAdapter> = response
             .json()
             .await
-            .map_err(|e| NbrError::plugin(format!("Failed to parse adapter info: {}", e)))?;
+            .map_err(|e| anyhow::anyhow!("Failed to parse adapter info: {}", e))?;
 
         // 解析成功后，结束 spinner
         spinner.finish_and_clear();
@@ -142,7 +136,7 @@ impl AdapterManager {
 
         self.registry_adapters
             .set(adapters_map.clone())
-            .map_err(|_| NbrError::cache("Failed to cache adapter info"))?;
+            .map_err(|_| anyhow::anyhow!("Failed to cache adapter info"))?;
 
         // 缓存到文件
         std::fs::write(cache_file, serde_json::to_string(&adapters_map)?)?;
@@ -198,9 +192,7 @@ impl AdapterManager {
             let selections = MultiSelect::with_theme(&ColorfulTheme::default())
                 .with_prompt("Which adapter(s) would you like to use")
                 .items(&adapter_names)
-                //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
-                .interact()
-                .map_err(|e| NbrError::io(e.to_string()))?;
+                .interact()?;
 
             selections
                 .into_iter()
@@ -237,8 +229,7 @@ impl AdapterManager {
         if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(&prompt)
             .default(true)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
         {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
@@ -306,9 +297,7 @@ impl AdapterManager {
             let selections = MultiSelect::with_theme(&ColorfulTheme::default())
                 .with_prompt("Select installed adapter(s) to uninstall")
                 .items(&installed_adapters)
-                //.defaults(&vec![true; adapter_names.len().min(1)]) // Select first adapter by default
-                .interact()
-                .map_err(|e| NbrError::io(e.to_string()))?;
+                .interact()?;
 
             selections
                 .into_iter()
@@ -443,9 +432,10 @@ pub async fn handle_adapter(commands: &AdapterCommands) -> Result<()> {
 
     match commands {
         AdapterCommands::Install { fetch_remote } => {
-            adapter_manager.install_adapters(*fetch_remote).await
+            adapter_manager.install_adapters(*fetch_remote).await?
         }
-        AdapterCommands::Uninstall => adapter_manager.uninstall_adapters().await,
-        AdapterCommands::List { all } => adapter_manager.list_adapters(*all).await,
+        AdapterCommands::Uninstall => adapter_manager.uninstall_adapters().await?,
+        AdapterCommands::List { all } => adapter_manager.list_adapters(*all).await?,
     }
+    Ok(())
 }

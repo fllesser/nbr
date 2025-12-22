@@ -1,6 +1,6 @@
-use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::PyProjectConfig;
+use anyhow::{Context, Result};
 
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
@@ -19,8 +19,7 @@ pub async fn generate_bot_file(work_dir: &Path, force: bool) -> Result<()> {
         && !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!("File '{filename}' already exists. Overwrite"))
             .default(false)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
     {
         error!("File generation cancelled.");
         return Ok(());
@@ -30,8 +29,7 @@ pub async fn generate_bot_file(work_dir: &Path, force: bool) -> Result<()> {
     let content = generate_bot_content(work_dir)?;
 
     // Write file
-    fs::write(&bot_path, content)
-        .map_err(|e| NbrError::io(format!("Failed to write bot file: {}", e)))?;
+    fs::write(&bot_path, content).context("Failed to write bot file")?;
 
     StyledText::new(" ")
         .green_bold("✓ Successfully generated bot file:")
@@ -45,7 +43,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
     let pyproject = PyProjectConfig::parse(Some(work_dir))?;
     let nonebot = pyproject
         .nonebot()
-        .ok_or(NbrError::not_found("No tool.nonebot in pyproject.toml"))?;
+        .ok_or_else(|| anyhow::anyhow!("No tool.nonebot in pyproject.toml"))?;
 
     let name_module_tuples = nonebot
         .adapters
@@ -87,5 +85,6 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 /// Handle the generate command
 pub async fn handle_generate(force: bool) -> Result<()> {
     let work_dir = std::env::current_dir()?;
-    generate_bot_file(&work_dir, force).await
+    generate_bot_file(&work_dir, force).await?;
+    Ok(())
 }

@@ -1,8 +1,6 @@
-use crate::{
-    error::{NbrError, Result},
-    log::StyledText,
-    utils::{process_utils, terminal_utils},
-};
+use crate::log::StyledText;
+use crate::utils::{process_utils, terminal_utils};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::{
     hash::{Hash, Hasher},
@@ -57,12 +55,11 @@ pub async fn is_installed(package: &str) -> bool {
 pub async fn self_version() -> Result<String> {
     let args = vec!["self", "version", "--short"];
     CmdBuilder::uv(args).run_async().await.map_err(|_| {
-        let message = concat!(
+        anyhow::anyhow!(concat!(
             "uv not found. You can run\n\n",
             "   curl -LsSf https://astral.sh/uv/install.sh | sh\n\n",
             "to install or get more information from https://astral.sh/blog/uv",
-        );
-        NbrError::environment(message)
+        ))
     })
 }
 

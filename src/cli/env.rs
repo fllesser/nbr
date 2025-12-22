@@ -1,8 +1,8 @@
 use crate::cli::EnvCommands;
-use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{self, Package};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -151,7 +151,7 @@ impl EnvironmentChecker {
     /// Get Python environment information
     async fn get_python_info(&self) -> Result<PythonInfo> {
         let executable = process_utils::find_python()
-            .ok_or_else(|| NbrError::not_found("Python executable not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("Python executable not found"))?;
 
         let version = process_utils::get_python_version(&executable)
             .await
@@ -623,7 +623,8 @@ pub async fn handle_env(commands: &EnvCommands) -> Result<()> {
     let mut checker = EnvironmentChecker::new(work_dir)?;
 
     match commands {
-        EnvCommands::Info => checker.show_info().await,
-        EnvCommands::Check => checker.check_environment().await,
+        EnvCommands::Info => checker.show_info().await?,
+        EnvCommands::Check => checker.check_environment().await?,
     }
+    Ok(())
 }
