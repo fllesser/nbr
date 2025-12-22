@@ -5,7 +5,7 @@ use crate::uv::{self, Package};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use sysinfo::{Disks, System};
 use tracing::{info, warn};
 
@@ -101,7 +101,7 @@ impl EnvironmentChecker {
     /// Show environment information
     pub async fn show_info(&mut self) -> Result<()> {
         let env_info = self.gather_environment_info().await?;
-        self.display_environment_info(&env_info);
+        Self::display_environment_info(&env_info);
         Ok(())
     }
 
@@ -137,7 +137,7 @@ impl EnvironmentChecker {
         let nonebot_info = self.get_nonebot_info(&python_info).await.ok();
         let project_info = self.get_project_info();
         let system_info = self.get_system_info();
-        let env_vars = self.get_relevant_env_vars();
+        let env_vars = Self::get_relevant_env_vars();
         spinner.finish_and_clear();
         Ok(EnvironmentInfo {
             python_info,
@@ -150,8 +150,7 @@ impl EnvironmentChecker {
 
     /// Get Python environment information
     async fn get_python_info(&self) -> Result<PythonInfo> {
-        let executable = process_utils::find_python()
-            .ok_or_else(|| anyhow::anyhow!("Python executable not found"))?;
+        let executable = find_python_executable(&self.work_dir)?;
 
         let version = process_utils::get_python_version(&executable)
             .await
@@ -180,8 +179,8 @@ impl EnvironmentChecker {
         let version = package.version;
         let location = package.location.unwrap_or("Unknown".to_string());
 
-        let adapters = self.get_installed_adapters(&python_info.site_packages);
-        let plugins = self.get_installed_plugins(&python_info.site_packages);
+        let adapters = Self::get_installed_adapters(&python_info.site_packages);
+        let plugins = Self::get_installed_plugins(&python_info.site_packages);
 
         Ok(NoneBotInfo {
             version,
@@ -192,7 +191,7 @@ impl EnvironmentChecker {
     }
 
     /// Get installed adapters
-    fn get_installed_adapters(&self, packages: &[Package]) -> Vec<Package> {
+    fn get_installed_adapters(packages: &[Package]) -> Vec<Package> {
         packages
             .iter()
             .filter(|p| p.name.starts_with("nonebot-adapter-"))
@@ -201,7 +200,7 @@ impl EnvironmentChecker {
     }
 
     /// Get installed plugins
-    fn get_installed_plugins(&self, packages: &[Package]) -> Vec<Package> {
+    fn get_installed_plugins(packages: &[Package]) -> Vec<Package> {
         packages
             .iter()
             .filter(|p| p.name.starts_with("nonebot") && p.name.contains("plugin"))
@@ -295,7 +294,7 @@ impl EnvironmentChecker {
     }
 
     /// Get relevant environment variables
-    fn get_relevant_env_vars(&self) -> HashMap<String, String> {
+    fn get_relevant_env_vars() -> HashMap<String, String> {
         let mut env_vars = HashMap::new();
         let relevant_vars = [
             "PYTHONPATH",
@@ -319,9 +318,8 @@ impl EnvironmentChecker {
     }
 
     /// Display environment information
-    fn display_environment_info(&self, env_info: &EnvironmentInfo) {
+    fn display_environment_info(env_info: &EnvironmentInfo) {
         // Operating System
-
         // Python Environment
         info!("Python Environment:");
         StyledText::new(" ")
@@ -627,4 +625,23 @@ pub async fn handle(commands: &EnvCommands) -> Result<()> {
         EnvCommands::Check => checker.check_environment().await?,
     }
     Ok(())
+}
+
+/// Find Python executable
+pub fn find_python_executable(work_dir: &Path) -> Result<String> {
+    #[cfg(target_os = "windows")]
+    let python_executable = work_dir.join(".venv").join("Scripts").join("python.exe");
+
+    #[cfg(not(target_os = "windows"))]
+    let python_executable = work_dir.join(".venv").join("bin").join("python");
+
+    if python_executable.exists() {
+        return Ok(python_executable.to_string_lossy().to_string());
+    }
+    // Fall back to system Python
+    process_utils::find_python().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Python executable not found. Please use `uv sync -p {{version}}` to install Python",
+        )
+    })
 }

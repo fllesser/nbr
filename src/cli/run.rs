@@ -1,3 +1,4 @@
+use super::env;
 use crate::cli::generate::generate_bot_content;
 use crate::log::StyledText;
 use crate::utils::process_utils;
@@ -13,7 +14,6 @@ use std::time::Duration;
 use tokio::signal;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
-
 /// Bot process manager
 pub struct BotRunner {
     /// Bot entry file path
@@ -336,7 +336,7 @@ pub async fn handle(file: Option<String>, reload: bool) -> Result<()> {
     // Find bot file
     let bot_file_path = work_dir.join(bot_file);
     // Find Python executable
-    let python_executable = find_python_executable(&work_dir)?;
+    let python_executable = env::find_python_executable(&work_dir)?;
     // Create and run bot
     let mut runner = BotRunner::new(bot_file_path, python_executable, reload, work_dir)?;
     StyledText::new(" ")
@@ -346,25 +346,6 @@ pub async fn handle(file: Option<String>, reload: bool) -> Result<()> {
 
     runner.run().await?;
     Ok(())
-}
-
-/// Find Python executable
-fn find_python_executable(work_dir: &Path) -> Result<String> {
-    #[cfg(target_os = "windows")]
-    let python_executable = work_dir.join(".venv").join("Scripts").join("python.exe");
-
-    #[cfg(not(target_os = "windows"))]
-    let python_executable = work_dir.join(".venv").join("bin").join("python");
-
-    if python_executable.exists() {
-        return Ok(python_executable.to_string_lossy().to_string());
-    }
-    // Fall back to system Python
-    process_utils::find_python().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Python executable not found. Please use `uv sync -p {{version}}` to install Python",
-        )
-    })
 }
 
 /// Verify Python environment
