@@ -4,8 +4,8 @@ use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{self, Package};
 use anyhow::Result;
 use std::collections::HashMap;
-use std::env;
 use std::path::{Path, PathBuf};
+use std::{env, fmt};
 use sysinfo::{Disks, System};
 use tracing::{info, warn};
 
@@ -53,7 +53,6 @@ pub struct ProjectInfo {
     pub bot_file: Option<PathBuf>,
     pub plugins_dir: Option<PathBuf>,
     pub is_git_repo: bool,
-    pub virtual_env: Option<PathBuf>,
 }
 
 /// System information
@@ -73,6 +72,48 @@ pub struct DiskUsage {
     pub total_space: u64,
     pub available_space: u64,
     pub usage_percentage: f32,
+}
+
+/// Issues found in the environment
+#[derive(Debug, Clone)]
+pub enum Issue {
+    /// Python version < 3.10
+    PythonVersionTooLow,
+    /// NoneBot is not installed
+    NoneBotNotInstalled,
+    /// Virtual environment is not activated
+    VirtualEnvNotActivated,
+    /// No virtual environment detected
+    NoVirtualEnvironmentDetected,
+    /// uv is not installed
+    UvNotInstalled,
+    /// Git is not installed
+    GitNotInstalled,
+    /// Git repository is not initialized
+    GitRepoNotInitialized,
+    /// Plugins directory is not configured
+    PluginsDirNotConfigured,
+    /// Low system memory available (< 512 MB)
+    LowSystemMemory,
+    /// Low disk space available (< 512 MB)
+    LowDiskSpace,
+}
+
+impl fmt::Display for Issue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::PythonVersionTooLow => write!(f, "Python version too low (< 3.10)"),
+            Self::NoneBotNotInstalled => write!(f, "NoneBot is not installed"),
+            Self::VirtualEnvNotActivated => write!(f, "Virtual environment is not activated"),
+            Self::NoVirtualEnvironmentDetected => write!(f, "No virtual environment detected"),
+            Self::UvNotInstalled => write!(f, "uv is not installed"),
+            Self::GitNotInstalled => write!(f, "Git is not installed"),
+            Self::GitRepoNotInitialized => write!(f, "Git repository is not initialized"),
+            Self::PluginsDirNotConfigured => write!(f, "Plugins directory is not configured"),
+            Self::LowSystemMemory => write!(f, "Low system memory available (< 512 MB)"),
+            Self::LowDiskSpace => write!(f, "Low disk space available (< 512 MB)"),
+        }
+    }
 }
 
 /// Environment checker
@@ -238,16 +279,12 @@ impl EnvironmentChecker {
         // Check if it's a git repository
         let is_git_repo = self.work_dir.join(".git").exists();
 
-        // Check for virtual environment
-        let virtual_env = self.get_virtual_env();
-
         Some(ProjectInfo {
             name,
             root_path,
             bot_file,
             plugins_dir,
             is_git_repo,
-            virtual_env,
         })
     }
 
@@ -440,13 +477,6 @@ impl EnvironmentChecker {
                     }
                 })
                 .println();
-
-            if let Some(ref venv) = project.virtual_env {
-                StyledText::new(" ")
-                    .text("  virtual environment:")
-                    .cyan(venv.display().to_string())
-                    .println();
-            }
         } else {
             info!("Project:");
             StyledText::new(" ")
@@ -504,56 +534,39 @@ impl EnvironmentChecker {
     }
 
     /// Check for environment issues
-    fn check_for_issues(&self, env_info: &EnvironmentInfo) -> Vec<String> {
+    fn check_for_issues(&self, env_info: &EnvironmentInfo) -> Vec<Issue> {
         let mut issues = Vec::new();
 
         // Check Python version
         if !env_info.python_info.version.contains("3.") {
-            issues.push("Python 3.10+ is required for NoneBot2".to_string());
-        } else {
-            // Extract version number for more detailed check
-            if let Some(version_str) = env_info.python_info.version.split_whitespace().nth(1)
-                && let Some(version_parts) = version_str.split('.').collect::<Vec<_>>().get(0..2)
-                && let (Ok(major), Ok(minor)) = (
-                    version_parts[0].parse::<u32>(),
-                    version_parts[1].parse::<u32>(),
-                )
-                && (major < 3 || (major == 3 && minor < 8))
-            {
-                issues.push("Python 3.10+ is recommended for NoneBot2".to_string());
-            }
+            issues.push(Issue::PythonVersionTooLow);
         }
 
         // Check if NoneBot is installed
         if env_info.nonebot_info.is_none() {
-            issues.push("NoneBot2 is not installed".to_string());
+            issues.push(Issue::NoneBotNotInstalled);
         }
 
         // Check if uv is available
         if env_info.python_info.uv_version.is_none() {
-            issues.push("uv is not available".to_string());
+            issues.push(Issue::UvNotInstalled);
         }
 
         // Check virtual environment
         if env_info.python_info.virtual_env.is_none() {
-            issues.push(
-                "No virtual environment detected (recommended for project isolation)".to_string(),
-            );
+            issues.push(Issue::NoVirtualEnvironmentDetected);
         }
 
         // Check system resources
         let available_gb = env_info.system_info.available_memory as f64 / 1_073_741_824.0;
         if available_gb < 0.5 {
-            issues.push("Low system memory available (< 512 MB)".to_string());
+            issues.push(Issue::LowSystemMemory);
         }
 
         // Check disk space
         for disk in &env_info.system_info.disk_usage {
             if disk.usage_percentage > 95.0 {
-                issues.push(format!(
-                    "Disk space critically low on {} ({:.1}% used)",
-                    disk.mount_point, disk.usage_percentage
-                ));
+                issues.push(Issue::LowDiskSpace);
             }
         }
 
@@ -561,55 +574,77 @@ impl EnvironmentChecker {
     }
 
     /// Show recommendations based on issues
-    fn show_recommendations(&self, issues: &[String]) {
+    fn show_recommendations(&self, issues: &[Issue]) {
         for issue in issues {
-            if issue.contains("Python 3.10+") {
-                StyledText::new("")
-                    .text("  • Install Python 3.10 or later from ")
-                    .cyan("https://python.org")
-                    .println();
-            } else if issue.contains("NoneBot2 is not installed") {
-                StyledText::new("")
-                    .text("  • Install NoneBot2: ")
-                    .cyan("uv add nonebot2[fastapi]")
-                    .println();
-            } else if issue.contains("uv is not available") {
-                StyledText::new("")
-                    .text("  • Install uv from ")
-                    .cyan("https://astral.sh/blog/uv")
-                    .println();
-            } else if issue.contains("virtual environment") {
-                StyledText::new("")
-                    .text("  • Create a virtual environment: ")
-                    .cyan("uv venv")
-                    .println();
-                StyledText::new("")
-                    .text("  • Activate it: ")
-                    .cyan("source .venv/bin/activate")
-                    .text(" (Linux/Mac) or ")
-                    .cyan(".venv\\Scripts\\activate")
-                    .text(" (Windows)")
-                    .println();
-            } else if issue.contains("memory") {
-                println!("  • Close unnecessary applications to free up memory");
-                println!("  • Consider upgrading system RAM");
-            } else if issue.contains("Disk space") {
-                println!("  • Free up disk space by removing unnecessary files");
-                println!("  • Consider moving the project to a drive with more space");
-            } else if issue.contains("bot entry file") {
-                StyledText::new("")
-                    .text("  • Create a bot entry file: ")
-                    .cyan("nb generate bot.py")
-                    .println();
-            } else if issue.contains(".env") {
-                StyledText::new("")
-                    .text("  • Create environment file: ")
-                    .cyan("cp .env.example .env")
-                    .println();
-                StyledText::new("")
-                    .text("  • Or create a new project: ")
-                    .cyan("nb create")
-                    .println();
+            match issue {
+                Issue::PythonVersionTooLow => {
+                    StyledText::new("")
+                        .text("  • Install Python 3.10 or later from ")
+                        .cyan("https://python.org")
+                        .println();
+                }
+                Issue::NoneBotNotInstalled => {
+                    StyledText::new("")
+                        .text("  • Install NoneBot2: ")
+                        .cyan("uv add nonebot2[fastapi]")
+                        .println();
+                }
+                Issue::UvNotInstalled => {
+                    StyledText::new("")
+                        .text("  • Install uv from ")
+                        .cyan("https://astral.sh/blog/uv")
+                        .println();
+                }
+                Issue::NoVirtualEnvironmentDetected => {
+                    StyledText::new("")
+                        .text("  • Create a virtual environment: ")
+                        .cyan("uv venv")
+                        .println();
+                    StyledText::new("")
+                        .text("  • Activate it: ")
+                        .cyan("source .venv/bin/activate")
+                        .text(" (Linux/Mac) or ")
+                        .cyan(".venv\\Scripts\\activate")
+                        .text(" (Windows)")
+                        .println();
+                }
+                Issue::LowSystemMemory => {
+                    StyledText::new("")
+                        .text("  • Close unnecessary applications to free up memory")
+                        .println();
+                }
+                Issue::LowDiskSpace => {
+                    StyledText::new("")
+                        .text("  • Free up disk space by removing unnecessary files")
+                        .println();
+                }
+                Issue::PluginsDirNotConfigured => {
+                    StyledText::new("")
+                        .text("  • Configure plugins directory in bot.py: ")
+                        .cyan("PLUGINS_DIR = \"plugins\"")
+                        .println();
+                }
+                Issue::VirtualEnvNotActivated => {
+                    StyledText::new("")
+                        .text("  • Activate the virtual environment: ")
+                        .cyan("source .venv/bin/activate")
+                        .text(" (Linux/Mac) or ")
+                        .cyan(".venv\\Scripts\\activate")
+                        .text(" (Windows)")
+                        .println();
+                }
+                Issue::GitNotInstalled => {
+                    StyledText::new("")
+                        .text("  • Install Git from ")
+                        .cyan("https://git-scm.com")
+                        .println();
+                }
+                Issue::GitRepoNotInitialized => {
+                    StyledText::new("")
+                        .text("  • Initialize a Git repository: ")
+                        .cyan("git init")
+                        .println();
+                }
             }
         }
     }
