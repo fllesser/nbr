@@ -116,6 +116,81 @@ impl fmt::Display for Issue {
     }
 }
 
+impl Issue {
+    pub fn show_recommendation(&self) {
+        match self {
+            Issue::PythonVersionTooLow => {
+                StyledText::new("")
+                    .text("  • Install Python 3.10 or later from ")
+                    .cyan("https://python.org")
+                    .println();
+            }
+            Issue::NoneBotNotInstalled => {
+                StyledText::new("")
+                    .text("  • Install NoneBot2: ")
+                    .cyan("uv add nonebot2[fastapi]")
+                    .println();
+            }
+            Issue::UvNotInstalled => {
+                StyledText::new("")
+                    .text("  • Install uv from ")
+                    .cyan("https://astral.sh/blog/uv")
+                    .println();
+            }
+            Issue::NoVirtualEnvironmentDetected => {
+                StyledText::new("")
+                    .text("  • Create a virtual environment: ")
+                    .cyan("uv venv")
+                    .println();
+                StyledText::new("")
+                    .text("  • Activate it: ")
+                    .cyan("source .venv/bin/activate")
+                    .text(" (Linux/Mac) or ")
+                    .cyan(".venv\\Scripts\\activate")
+                    .text(" (Windows)")
+                    .println();
+            }
+            Issue::LowSystemMemory => {
+                StyledText::new("")
+                    .text("  • Close unnecessary applications to free up memory")
+                    .println();
+            }
+            Issue::LowDiskSpace => {
+                StyledText::new("")
+                    .text("  • Free up disk space by removing unnecessary files")
+                    .println();
+            }
+            Issue::PluginsDirNotConfigured => {
+                StyledText::new("")
+                    .text("  • Configure plugins directory in bot.py: ")
+                    .cyan("PLUGINS_DIR = \"plugins\"")
+                    .println();
+            }
+            Issue::VirtualEnvNotActivated => {
+                StyledText::new("")
+                    .text("  • Activate the virtual environment: ")
+                    .cyan("source .venv/bin/activate")
+                    .text(" (Linux/Mac) or ")
+                    .cyan(".venv\\Scripts\\activate")
+                    .text(" (Windows)")
+                    .println();
+            }
+            Issue::GitNotInstalled => {
+                StyledText::new("")
+                    .text("  • Install Git from ")
+                    .cyan("https://git-scm.com")
+                    .println();
+            }
+            Issue::GitRepoNotInitialized => {
+                StyledText::new("")
+                    .text("  • Initialize a Git repository: ")
+                    .cyan("git init")
+                    .println();
+            }
+        }
+    }
+}
+
 /// Environment checker
 pub struct EnvironmentChecker {
     /// Working directory
@@ -164,7 +239,9 @@ impl EnvironmentChecker {
             }
 
             info!("\nRecommendations:");
-            self.show_recommendations(&issues);
+            for issue in issues {
+                issue.show_recommendation();
+            }
         }
 
         Ok(())
@@ -571,82 +648,6 @@ impl EnvironmentChecker {
         }
 
         issues
-    }
-
-    /// Show recommendations based on issues
-    fn show_recommendations(&self, issues: &[Issue]) {
-        for issue in issues {
-            match issue {
-                Issue::PythonVersionTooLow => {
-                    StyledText::new("")
-                        .text("  • Install Python 3.10 or later from ")
-                        .cyan("https://python.org")
-                        .println();
-                }
-                Issue::NoneBotNotInstalled => {
-                    StyledText::new("")
-                        .text("  • Install NoneBot2: ")
-                        .cyan("uv add nonebot2[fastapi]")
-                        .println();
-                }
-                Issue::UvNotInstalled => {
-                    StyledText::new("")
-                        .text("  • Install uv from ")
-                        .cyan("https://astral.sh/blog/uv")
-                        .println();
-                }
-                Issue::NoVirtualEnvironmentDetected => {
-                    StyledText::new("")
-                        .text("  • Create a virtual environment: ")
-                        .cyan("uv venv")
-                        .println();
-                    StyledText::new("")
-                        .text("  • Activate it: ")
-                        .cyan("source .venv/bin/activate")
-                        .text(" (Linux/Mac) or ")
-                        .cyan(".venv\\Scripts\\activate")
-                        .text(" (Windows)")
-                        .println();
-                }
-                Issue::LowSystemMemory => {
-                    StyledText::new("")
-                        .text("  • Close unnecessary applications to free up memory")
-                        .println();
-                }
-                Issue::LowDiskSpace => {
-                    StyledText::new("")
-                        .text("  • Free up disk space by removing unnecessary files")
-                        .println();
-                }
-                Issue::PluginsDirNotConfigured => {
-                    StyledText::new("")
-                        .text("  • Configure plugins directory in bot.py: ")
-                        .cyan("PLUGINS_DIR = \"plugins\"")
-                        .println();
-                }
-                Issue::VirtualEnvNotActivated => {
-                    StyledText::new("")
-                        .text("  • Activate the virtual environment: ")
-                        .cyan("source .venv/bin/activate")
-                        .text(" (Linux/Mac) or ")
-                        .cyan(".venv\\Scripts\\activate")
-                        .text(" (Windows)")
-                        .println();
-                }
-                Issue::GitNotInstalled => {
-                    StyledText::new("")
-                        .text("  • Install Git from ")
-                        .cyan("https://git-scm.com")
-                        .println();
-                }
-                Issue::GitRepoNotInitialized => {
-                    StyledText::new("")
-                        .text("  • Initialize a Git repository: ")
-                        .cyan("git init")
-                        .println();
-                }
-            }
-        }
     }
 }
 
