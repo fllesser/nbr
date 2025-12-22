@@ -1,44 +1,45 @@
 name: ${PROJECT_NAME}
 
 services:
-    napcat:
-        environment:
-            - NAPCAT_UID=${NAPCAT_UID}
-            - NAPCAT_GID=${NAPCAT_GID}
-            - TZ=Asia/Shanghai
-        ports:
-            - 6099:6099
-        container_name: ${PROJECT_NAME}-napcat
-        volumes:
-          - ./data:/app/data
-          - ./config:/app/config
-          - ./cache:/app/cache
-          - ./config/QQ:/app/.config/QQ
-          - ./config/napcat-config:/app/napcat/config
-        restart: always
-        image: mlikiowa/napcat-docker:latest
-        networks:
-            - ${PROJECT_NAME}-network
-        hostname: Iphone 13 Pro Max
+  napcat:
+    environment:
+      - NAPCAT_UID=0
+      - NAPCAT_GID=0
+      - TZ=Asia/Shanghai
+    ports:
+      - 6099:6099
+    container_name: ${PROJECT_NAME}-napcat
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./cache:/app/cache
+      - ./config/QQ:/app/.config/QQ
+      - ./config/napcat-config:/app/napcat/config
+    restart: always
+    image: mlikiowa/napcat-docker:latest
+    networks:
+      - ${PROJECT_NAME}-network
+    hostname: Iphone 13 Pro Max
 
-    nonebot:
-        build:
-            context: .
-            dockerfile: Dockerfile
-        environment:
-            - TZ=Asia/Shanghai
-        container_name: ${PROJECT_NAME}-nonebot
-        volumes:
-          - ./data:/app/data
-          - ./config:/app/config
-          - ./cache:/app/cache
-        restart: always
-        networks:
-            - ${PROJECT_NAME}-network
+  nonebot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TZ=Asia/Shanghai
+    container_name: ${PROJECT_NAME}-nonebot
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./cache:/app/cache
+    env_file:
+      - .env.dev
+      - .env.prod
+    restart: always
+    networks:
+      - ${PROJECT_NAME}-network
 
 networks:
   ${PROJECT_NAME}-network:
     name: ${PROJECT_NAME}-network
     driver: bridge
-
-# NAPCAT_UID=$(id -u) NAPCAT_GID=$(id -g) docker compose up -d
