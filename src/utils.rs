@@ -1,83 +1,16 @@
-//! Utility functions module for nbr
-//!
-//! This module contains common utility functions used throughout the application.
-#![allow(unused)]
-
 use crate::error::Error;
 use anyhow::{Context, Result};
 use console::Term;
 use indicatif::{ProgressBar, ProgressStyle};
-use regex::Regex;
 use reqwest::Client;
-
 use std::fs;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::Path;
 use std::process::{Output, Stdio};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::{debug, info};
-
-/// File system utilities
-pub mod fs_utils {
-    use super::*;
-
-    /// Find files matching a pattern
-    pub fn find_files<P: AsRef<Path>>(
-        dir: P,
-        pattern: &str,
-        recursive: bool,
-    ) -> Result<Vec<PathBuf>> {
-        let dir = dir.as_ref();
-        let mut matches = Vec::new();
-        let regex = Regex::new(pattern).context("Invalid regex pattern")?;
-
-        find_files_recursive(dir, &regex, recursive, &mut matches)?;
-        Ok(matches)
-    }
-
-    fn find_files_recursive(
-        dir: &Path,
-        regex: &Regex,
-        recursive: bool,
-        matches: &mut Vec<PathBuf>,
-    ) -> Result<()> {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() {
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str())
-                    && regex.is_match(filename)
-                {
-                    matches.push(path);
-                }
-            } else if path.is_dir() && recursive {
-                find_files_recursive(&path, regex, recursive, matches)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Get file size in a human-readable format
-    pub fn format_file_size(size: u64) -> String {
-        const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-        let mut size = size as f64;
-        let mut unit_index = 0;
-
-        while size >= 1024.0 && unit_index < UNITS.len() - 1 {
-            size /= 1024.0;
-            unit_index += 1;
-        }
-
-        if unit_index == 0 {
-            format!("{} {}", size as u64, UNITS[unit_index])
-        } else {
-            format!("{:.2} {}", size, UNITS[unit_index])
-        }
-    }
-}
 
 /// Process execution utilities
 pub mod process_utils {
@@ -179,10 +112,12 @@ pub mod process_utils {
     }
 
     /// Get Python version
-    pub async fn get_python_version(python_path: &str) -> Result<String> {
-        let output = execute_command_with_output(python_path, &["--version"], None, 10).await?;
+    pub async fn get_python_version(python_executable: &str) -> Result<String> {
+        let output =
+            execute_command_with_output(python_executable, &["--version"], None, 10).await?;
         let version = String::from_utf8_lossy(&output.stdout);
-        Ok(version.trim().to_string())
+        // Python 3.13.8
+        Ok(version.trim_start_matches("Python").trim().to_string())
     }
 }
 
@@ -258,79 +193,6 @@ pub mod net_utils {
     }
 }
 
-/// String utilities
-pub mod string_utils {
-    use super::*;
-
-    /// Validate project name
-    pub fn validate_project_name(name: &str) -> Result<()> {
-        if name.is_empty() {
-            anyhow::bail!("Project name cannot be empty");
-        }
-
-        if name.len() > 100 {
-            anyhow::bail!("Project name is too long (max 100 characters)");
-        }
-
-        let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-        if !re.is_match(name) {
-            anyhow::bail!(
-                "Project name must start with a letter and contain only letters, numbers, underscores, and hyphens"
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Validate package name
-    pub fn validate_package_name(name: &str) -> Result<()> {
-        if name.is_empty() {
-            anyhow::bail!("Package name cannot be empty");
-        }
-
-        let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-        if !re.is_match(name) {
-            anyhow::bail!(
-                "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens"
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Sanitize filename
-    pub fn sanitize_filename(name: &str) -> String {
-        let forbidden_chars: Vec<char> = if cfg!(windows) {
-            vec!['<', '>', ':', '"', '|', '?', '*', '/', '\\']
-        } else {
-            vec!['/', '\0']
-        };
-
-        let mut result = String::new();
-        for ch in name.chars() {
-            if forbidden_chars.contains(&ch) || ch.is_control() {
-                result.push('_');
-            } else {
-                result.push(ch);
-            }
-        }
-
-        // Trim dots and spaces from the end (Windows restriction)
-        result.trim_end_matches(&['.', ' '][..]).to_string()
-    }
-
-    /// Truncate string with ellipsis
-    pub fn truncate_with_ellipsis(s: &str, max_len: usize) -> String {
-        if s.len() <= max_len {
-            s.to_string()
-        } else if max_len <= 3 {
-            "...".to_string()
-        } else {
-            format!("{}...", &s[..max_len - 3])
-        }
-    }
-}
-
 /// Terminal utilities
 pub mod terminal_utils {
     use super::*;
@@ -391,17 +253,6 @@ pub mod terminal_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_project_name_validation() {
-        assert!(string_utils::validate_project_name("valid_project").is_ok());
-        assert!(string_utils::validate_project_name("ValidProject").is_ok());
-        assert!(string_utils::validate_project_name("valid-project").is_ok());
-
-        assert!(string_utils::validate_project_name("").is_err());
-        assert!(string_utils::validate_project_name("1invalid").is_err());
-        assert!(string_utils::validate_project_name("invalid@project").is_err());
-    }
 
     #[tokio::test]
     async fn test_download_file() {

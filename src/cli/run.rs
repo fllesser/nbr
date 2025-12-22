@@ -1,3 +1,4 @@
+use super::env;
 use crate::cli::generate::generate_bot_content;
 use crate::log::StyledText;
 use crate::utils::process_utils;
@@ -13,13 +14,12 @@ use std::time::Duration;
 use tokio::signal;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
-
 /// Bot process manager
 pub struct BotRunner {
     /// Bot entry file path
     bot_file: PathBuf,
     /// Python executable path
-    python_path: String,
+    python_executable: String,
     /// Enable auto-reload
     auto_reload: bool,
     /// Working directory
@@ -36,7 +36,7 @@ impl BotRunner {
     /// Create a new bot runner
     pub fn new(
         bot_file: PathBuf,
-        python_path: String,
+        python_executable: String,
         auto_reload: bool,
         work_dir: PathBuf,
     ) -> Result<Self> {
@@ -50,7 +50,7 @@ impl BotRunner {
 
         let mut runner = Self {
             bot_file,
-            python_path,
+            python_executable,
             auto_reload,
             work_dir,
             current_process,
@@ -280,7 +280,7 @@ impl BotRunner {
     }
 
     fn start_bot_process(&self) -> Result<Child> {
-        let mut cmd = Command::new(self.python_path.clone());
+        let mut cmd = Command::new(self.python_executable.clone());
         if self.bot_file.exists() {
             cmd.arg(&self.bot_file);
         } else {
@@ -336,45 +336,24 @@ pub async fn handle(file: Option<String>, reload: bool) -> Result<()> {
     // Find bot file
     let bot_file_path = work_dir.join(bot_file);
     // Find Python executable
-    let python_path = find_python_executable(&work_dir)?;
+    let python_executable = env::find_python_executable(&work_dir)?;
     // Create and run bot
-    let mut runner = BotRunner::new(bot_file_path, python_path, reload, work_dir)?;
-
+    let mut runner = BotRunner::new(bot_file_path, python_executable, reload, work_dir)?;
     StyledText::new(" ")
         .green("Using Python:")
-        .cyan_underline(&runner.python_path)
+        .cyan_underline(&runner.python_executable)
         .println_bold();
 
     runner.run().await?;
     Ok(())
 }
 
-/// Find Python executable
-fn find_python_executable(work_dir: &Path) -> Result<String> {
-    #[cfg(target_os = "windows")]
-    let python_path = work_dir.join(".venv").join("Scripts").join("python.exe");
-
-    #[cfg(not(target_os = "windows"))]
-    let python_path = work_dir.join(".venv").join("bin").join("python");
-
-    if python_path.exists() {
-        return Ok(python_path.to_string_lossy().to_string());
-    }
-    // Fall back to system Python
-    process_utils::find_python().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Python executable not found. Please use `uv sync -p {{version}}` to install Python",
-        )
-    })
-}
-
 /// Verify Python environment
 #[allow(unused)]
-async fn verify_python_environment(python_path: &str) -> Result<()> {
+async fn verify_python_environment(python_executable: &str) -> Result<()> {
     debug!("Verifying Python environment...");
-
     // Check Python version
-    let version = process_utils::get_python_version(python_path).await?;
+    let version = process_utils::get_python_version(python_executable).await?;
     debug!("Python version: {}", version);
 
     // Verify it's Python 3.10+
@@ -384,7 +363,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 
     // Check if NoneBot is installed
     match process_utils::execute_command_with_output(
-        python_path,
+        python_executable,
         &["-c", "import nonebot"],
         None,
         60,

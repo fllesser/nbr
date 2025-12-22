@@ -180,7 +180,7 @@ impl Package {
             .text(" ")
             .with(|text| {
                 if self.is_outdated() {
-                    text.yellow(&format!("(v{})", self.latest_version.as_ref().unwrap()));
+                    text.yellow(format!("(v{})", self.latest_version.as_ref().unwrap()));
                 }
             })
             .println();

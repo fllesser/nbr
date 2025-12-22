@@ -771,7 +771,7 @@ impl PluginManager {
 
         StyledText::new(" ")
             .text("  Install Command:")
-            .yellow(&format!("nbr plugin install {}", plugin.project_link))
+            .yellow(format!("nbr plugin install {}", plugin.project_link))
             .println();
     }
 }
