@@ -1,83 +1,17 @@
-//! Utility functions module for nbr
-//!
-//! This module contains common utility functions used throughout the application.
-#![allow(unused)]
-
 use crate::error::Error;
 use anyhow::{Context, Result};
 use console::Term;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 use reqwest::Client;
-
 use std::fs;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::Path;
 use std::process::{Output, Stdio};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 use tracing::{debug, info};
-
-/// File system utilities
-pub mod fs_utils {
-    use super::*;
-
-    /// Find files matching a pattern
-    pub fn find_files<P: AsRef<Path>>(
-        dir: P,
-        pattern: &str,
-        recursive: bool,
-    ) -> Result<Vec<PathBuf>> {
-        let dir = dir.as_ref();
-        let mut matches = Vec::new();
-        let regex = Regex::new(pattern).context("Invalid regex pattern")?;
-
-        find_files_recursive(dir, &regex, recursive, &mut matches)?;
-        Ok(matches)
-    }
-
-    fn find_files_recursive(
-        dir: &Path,
-        regex: &Regex,
-        recursive: bool,
-        matches: &mut Vec<PathBuf>,
-    ) -> Result<()> {
-        for entry in fs::read_dir(dir)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.is_file() {
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str())
-                    && regex.is_match(filename)
-                {
-                    matches.push(path);
-                }
-            } else if path.is_dir() && recursive {
-                find_files_recursive(&path, regex, recursive, matches)?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Get file size in a human-readable format
-    pub fn format_file_size(size: u64) -> String {
-        const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-        let mut size = size as f64;
-        let mut unit_index = 0;
-
-        while size >= 1024.0 && unit_index < UNITS.len() - 1 {
-            size /= 1024.0;
-            unit_index += 1;
-        }
-
-        if unit_index == 0 {
-            format!("{} {}", size as u64, UNITS[unit_index])
-        } else {
-            format!("{:.2} {}", size, UNITS[unit_index])
-        }
-    }
-}
 
 /// Process execution utilities
 pub mod process_utils {
@@ -179,10 +113,12 @@ pub mod process_utils {
     }
 
     /// Get Python version
-    pub async fn get_python_version(python_path: &str) -> Result<String> {
-        let output = execute_command_with_output(python_path, &["--version"], None, 10).await?;
+    pub async fn get_python_version(python_executable: &str) -> Result<String> {
+        let output =
+            execute_command_with_output(python_executable, &["--version"], None, 10).await?;
         let version = String::from_utf8_lossy(&output.stdout);
-        Ok(version.trim().to_string())
+        // Python 3.13.8
+        Ok(version.trim_start_matches("Python").trim().to_string())
     }
 }
 
