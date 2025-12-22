@@ -36,6 +36,44 @@ pub struct PythonInfo {
     pub site_packages: Vec<Package>,
 }
 
+impl PythonInfo {
+    pub(crate) fn show(&self) {
+        StyledText::new(" ")
+            .text("  version:")
+            .cyan(&self.version)
+            .println();
+        StyledText::new(" ")
+            .text("  uv version:")
+            .with(|text| {
+                if let Some(uv_version) = self.uv_version.as_ref() {
+                    text.cyan(uv_version);
+                } else {
+                    text.red("Not Installed");
+                }
+            })
+            .println();
+        StyledText::new(" ")
+            .text("  executable:")
+            .cyan(&self.executable)
+            .println();
+        StyledText::new(" ")
+            .text("  virtual environment:")
+            .with(|text| {
+                if let Some(venv) = self.virtual_env.as_ref() {
+                    text.cyan(venv);
+                } else {
+                    text.red("None");
+                }
+            })
+            .println();
+
+        StyledText::new(" ")
+            .text("  installed Packages:")
+            .cyan(self.site_packages.len().to_string())
+            .println();
+    }
+}
+
 /// NoneBot information
 #[derive(Debug, Clone)]
 pub struct NoneBotInfo {
@@ -43,6 +81,45 @@ pub struct NoneBotInfo {
     pub location: String,
     pub adapters: Vec<Package>,
     pub plugins: Vec<Package>,
+}
+
+impl NoneBotInfo {
+    pub(crate) fn show(&self) {
+        StyledText::new(" ")
+            .text("  version:")
+            .cyan(&self.version)
+            .println();
+        StyledText::new(" ")
+            .text("  location:")
+            .cyan(&self.location)
+            .println();
+
+        if !self.adapters.is_empty() {
+            StyledText::new("")
+                .text(format!("  installed {} adapters:", self.adapters.len()))
+                .println();
+            for adapter in &self.adapters {
+                StyledText::new(" ")
+                    .text("    •")
+                    .cyan(&adapter.name)
+                    .green(format!("(v{})", adapter.version))
+                    .println();
+            }
+        }
+
+        if !self.plugins.is_empty() {
+            StyledText::new("")
+                .text(format!("  installed {} plugins:", self.plugins.len()))
+                .println();
+            for plugin in &self.plugins {
+                StyledText::new(" ")
+                    .text("    •")
+                    .cyan(&plugin.name)
+                    .green(format!("(v{})", plugin.version))
+                    .println();
+            }
+        }
+    }
 }
 
 /// Project information
@@ -55,6 +132,44 @@ pub struct ProjectInfo {
     pub is_git_repo: bool,
 }
 
+impl ProjectInfo {
+    pub(crate) fn show(&self) {
+        StyledText::new(" ")
+            .text("  name:")
+            .cyan(&self.name)
+            .println();
+        StyledText::new(" ")
+            .text("  root path:")
+            .cyan(self.root_path.display().to_string())
+            .println();
+
+        if let Some(ref bot_file) = self.bot_file {
+            StyledText::new(" ")
+                .text("  bot file:")
+                .cyan(bot_file.display().to_string())
+                .println();
+        }
+
+        if let Some(ref plugins_dir) = self.plugins_dir {
+            StyledText::new(" ")
+                .text("  plugins directory:")
+                .cyan(plugins_dir.display().to_string())
+                .println();
+        }
+
+        StyledText::new(" ")
+            .text("  git repository:")
+            .with(|text| {
+                if self.is_git_repo {
+                    text.green("Yes");
+                } else {
+                    text.red("No");
+                }
+            })
+            .println();
+    }
+}
+
 /// System information
 #[derive(Debug, Clone)]
 pub struct SystemInfo {
@@ -63,6 +178,42 @@ pub struct SystemInfo {
     pub cpu_count: usize,
     pub cpu_usage: f32,
     pub disk_usage: Vec<DiskUsage>,
+}
+
+impl SystemInfo {
+    pub(crate) fn show(&self) {
+        StyledText::new(" ")
+            .text("  cpu:")
+            .cyan(format!(
+                "{} cores / {:.2}% usage",
+                self.cpu_count, self.cpu_usage
+            ))
+            .println();
+
+        let total_gb = self.total_memory as f64 / 1_073_741_824.0;
+        let available_gb = self.available_memory as f64 / 1_073_741_824.0;
+        StyledText::new(" ")
+            .text("  memory:")
+            .cyan(format!(
+                "available: {available_gb:.3} GB / total: {total_gb:.3} GB",
+            ))
+            .println();
+
+        if !self.disk_usage.is_empty() {
+            StyledText::new("").text("  disk usage:").println();
+            for disk in &self.disk_usage {
+                let total_gb = disk.total_space as f64 / 1_073_741_824.0;
+                let available_gb = disk.available_space as f64 / 1_073_741_824.0;
+                let used_gb = total_gb - available_gb;
+                StyledText::new(" ")
+                    .text("    •")
+                    .cyan(format!("{:.2}% used", disk.usage_percentage))
+                    .cyan(format!("({used_gb:.2} / {total_gb:.2} GB)"))
+                    .cyan(format!("at {}", disk.mount_point))
+                    .println();
+            }
+        }
+    }
 }
 
 /// Disk usage information
@@ -75,7 +226,6 @@ pub struct DiskUsage {
 }
 
 /// Issues found in the environment
-#[derive(Debug, Clone)]
 pub enum Issue {
     /// Python version < 3.10
     PythonVersionTooLow,
@@ -436,171 +586,37 @@ impl EnvironmentChecker {
         // Operating System
         // Python Environment
         info!("Python Environment:");
-        StyledText::new(" ")
-            .text("  version:")
-            .cyan(&env_info.python_info.version)
-            .println();
-        StyledText::new(" ")
-            .text("  uv version:")
-            .with(|text| {
-                if let Some(uv_version) = env_info.python_info.uv_version.as_ref() {
-                    text.cyan(uv_version);
-                } else {
-                    text.red("Not Installed");
-                }
-            })
-            .println();
-        StyledText::new(" ")
-            .text("  executable:")
-            .cyan(&env_info.python_info.executable)
-            .println();
-        StyledText::new(" ")
-            .text("  virtual environment:")
-            .with(|text| {
-                if let Some(venv) = env_info.python_info.virtual_env.as_ref() {
-                    text.cyan(venv);
-                } else {
-                    text.red("None");
-                }
-            })
-            .println();
-
-        StyledText::new(" ")
-            .text("  installed Packages:")
-            .cyan(env_info.python_info.site_packages.len().to_string())
-            .println();
-
-        println!();
+        env_info.python_info.show();
 
         // NoneBot Information
+        info!("\nNoneBot:");
         if let Some(ref nonebot) = env_info.nonebot_info {
-            info!("NoneBot:");
-            StyledText::new(" ")
-                .text("  version:")
-                .cyan(&nonebot.version)
-                .println();
-            StyledText::new(" ")
-                .text("  location:")
-                .cyan(&nonebot.location)
-                .println();
-
-            if !nonebot.adapters.is_empty() {
-                StyledText::new("")
-                    .text(format!("  installed {} adapters:", nonebot.adapters.len()))
-                    .println();
-                for adapter in &nonebot.adapters {
-                    StyledText::new(" ")
-                        .text("    •")
-                        .cyan(&adapter.name)
-                        .green(format!("(v{})", adapter.version))
-                        .println();
-                }
-            }
-
-            if !nonebot.plugins.is_empty() {
-                StyledText::new("")
-                    .text(format!("  installed {} plugins:", nonebot.plugins.len()))
-                    .println();
-                for plugin in &nonebot.plugins {
-                    StyledText::new(" ")
-                        .text("    •")
-                        .cyan(&plugin.name)
-                        .green(format!("(v{})", plugin.version))
-                        .println();
-                }
-            }
+            nonebot.show();
         } else {
-            StyledText::new("").green_bold("NoneBot:").println();
             StyledText::new(" ")
                 .text("  status:")
                 .red("Not installed")
                 .println();
         }
-        println!();
 
         // Project Information
+        info!("\nProject:");
         if let Some(ref project) = env_info.project_info {
-            info!("Project:");
-            StyledText::new(" ")
-                .text("  name:")
-                .cyan(&project.name)
-                .println();
-            StyledText::new(" ")
-                .text("  root path:")
-                .cyan(project.root_path.display().to_string())
-                .println();
-
-            if let Some(ref bot_file) = project.bot_file {
-                StyledText::new(" ")
-                    .text("  bot file:")
-                    .cyan(bot_file.display().to_string())
-                    .println();
-            }
-
-            if let Some(ref plugins_dir) = project.plugins_dir {
-                StyledText::new(" ")
-                    .text("  plugins directory:")
-                    .cyan(plugins_dir.display().to_string())
-                    .println();
-            }
-
-            StyledText::new(" ")
-                .text("  git repository:")
-                .with(|text| {
-                    if project.is_git_repo {
-                        text.green("Yes");
-                    } else {
-                        text.red("No");
-                    }
-                })
-                .println();
+            project.show();
         } else {
-            info!("Project:");
             StyledText::new(" ")
                 .text("  status:")
                 .red("No NoneBot project detected")
                 .println();
         }
-        println!();
 
         // System Resources
-        info!("System Resources:");
-        StyledText::new(" ")
-            .text("  cpu:")
-            .cyan(format!(
-                "{} cores / {:.2}% usage",
-                env_info.system_info.cpu_count, env_info.system_info.cpu_usage
-            ))
-            .println();
-
-        let total_gb = env_info.system_info.total_memory as f64 / 1_073_741_824.0;
-        let available_gb = env_info.system_info.available_memory as f64 / 1_073_741_824.0;
-        StyledText::new(" ")
-            .text("  memory:")
-            .cyan(format!(
-                "available: {available_gb:.3} GB / total: {total_gb:.3} GB",
-            ))
-            .println();
-
-        if !env_info.system_info.disk_usage.is_empty() {
-            StyledText::new("").text("  disk usage:").println();
-            for disk in &env_info.system_info.disk_usage {
-                let total_gb = disk.total_space as f64 / 1_073_741_824.0;
-                let available_gb = disk.available_space as f64 / 1_073_741_824.0;
-                let used_gb = total_gb - available_gb;
-                StyledText::new(" ")
-                    .text("    •")
-                    .cyan(format!("{:.2}% used", disk.usage_percentage))
-                    .cyan(format!("({used_gb:.2} / {total_gb:.2} GB)"))
-                    .cyan(format!("at {}", disk.mount_point))
-                    .println();
-            }
-        }
-        println!();
+        info!("\nSystem Resources:");
+        env_info.system_info.show();
 
         // Environment Variables
         if !env_info.env_vars.is_empty() {
-            info!("Environment Variables:");
+            info!("\nEnvironment Variables:");
             for (key, value) in &env_info.env_vars {
                 StyledText::new(" ")
                     .text(format!(" • {}:", key))
