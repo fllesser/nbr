@@ -12,9 +12,9 @@ RUN curl -Lf https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-
 
 WORKDIR /app
 
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock .python-version ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --python {} --frozen --no-dev --no-install-project --link-mode copy
+    uv sync --frozen --no-dev --no-install-project --link-mode copy
 
 COPY . .
 

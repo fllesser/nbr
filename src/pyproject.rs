@@ -57,7 +57,6 @@ pub struct Project {
     pub description: String,
     pub requires_python: String,
     pub dependencies: Vec<String>,
-
     pub authors: Option<Vec<Author>>,
     pub readme: Option<String>,
     pub urls: Option<HashMap<String, String>>,

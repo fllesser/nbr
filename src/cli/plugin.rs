@@ -70,7 +70,7 @@ pub enum PluginCommands {
     Create,
 }
 
-pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
+pub async fn handle(commands: &PluginCommands) -> Result<()> {
     let mut manager = PluginManager::new(None)?;
     match commands {
         PluginCommands::Install {

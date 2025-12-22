@@ -9,7 +9,9 @@ use std::path::{Path, PathBuf};
 use strum::Display;
 use tracing::info;
 
-use crate::cli::adapter::{AdapterManager, RegistryAdapter};
+use super::adapter::{AdapterManager, RegistryAdapter};
+use super::common;
+use super::docker;
 use crate::error::Error;
 use crate::pyproject::{
     BuildSystem, DependencyGroupItem, DependencyGroups, NbTomlEditor, Nonebot, Project,
@@ -114,7 +116,7 @@ pub struct ProjectOptions {
     pub create_venv: bool,
 }
 
-pub async fn handle_create(args: CreateArgs) -> Result<()> {
+pub async fn handle(args: CreateArgs) -> Result<()> {
     info!("🎉 Creating NoneBot project...");
     let adapter_manager = AdapterManager::default();
     // 补齐项目参数
@@ -184,7 +186,7 @@ async fn gather_project_options(
     // 指定 Python 版本
     let python_version = match args.python {
         Some(version) => version,
-        None => select_python_version()?,
+        None => common::select_python_version()?,
     };
     // 选择模板
     let template = match args.template {
@@ -320,16 +322,6 @@ fn select_template() -> Result<Template> {
     }
 }
 
-fn select_python_version() -> Result<String> {
-    let python_versions = vec!["3.10", "3.11", "3.12", "3.13", "3.14"];
-    let selected_python_version = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which Python version would you like to use")
-        .items(&python_versions)
-        .default(0)
-        .interact()?;
-    Ok(python_versions[selected_python_version].to_string())
-}
-
 fn select_dev_tools() -> Result<Vec<DevTool>> {
     let dev_tools = DevTool::value_variants();
     let selected_dev_tools = MultiSelect::with_theme(&ColorfulTheme::default())
@@ -371,12 +363,12 @@ pub async fn create_project(options: &ProjectOptions) -> Result<()> {
 
 async fn create_bootstrap_project(options: &ProjectOptions) -> Result<()> {
     create_project_structure(options)?;
-    generate_pyporject_config(options)?;
-    generate_env_files(options)?;
-    generate_readme_file(options)?;
-    generate_gitignore(&options.output_dir)?;
-    generate_dev_tools_config(options)?;
-    generate_dockerfile(options)?;
+    create_pyporject_config(options)?;
+    create_env_files(options)?;
+    create_readme_file(options)?;
+    create_gitignore(&options.output_dir)?;
+    create_dev_tools_config(options)?;
+    create_dockerfile(options)?;
     install_dependencies(options)?;
     Ok(())
 }
@@ -458,7 +450,7 @@ fn collect_dependency_groups(options: &ProjectOptions) -> DependencyGroups {
     dep_groups
 }
 
-fn generate_pyporject_config(options: &ProjectOptions) -> Result<()> {
+fn create_pyporject_config(options: &ProjectOptions) -> Result<()> {
     let pyproject = PyProjectConfig {
         project: Project {
             name: options.name.to_string(),
@@ -493,7 +485,7 @@ fn generate_pyporject_config(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
-fn generate_env_files(options: &ProjectOptions) -> Result<()> {
+fn create_env_files(options: &ProjectOptions) -> Result<()> {
     let driver = options
         .drivers
         .iter()
@@ -518,7 +510,7 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
-fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
+fn create_readme_file(options: &ProjectOptions) -> Result<()> {
     let project_name = options.name.clone();
 
     let readme = format!(
@@ -530,33 +522,28 @@ fn generate_readme_file(options: &ProjectOptions) -> Result<()> {
     Ok(())
 }
 
-fn generate_dev_tools_config(options: &ProjectOptions) -> Result<()> {
+fn create_dev_tools_config(options: &ProjectOptions) -> Result<()> {
     for tool in options.dev_tools.iter() {
         match tool {
             DevTool::Ruff => append_ruff_config(&options.output_dir)?,
             DevTool::Basedpyright => append_pyright_config(&options.output_dir)?,
-            DevTool::PreCommit => generate_pre_commit_config(&options.output_dir)?,
+            DevTool::PreCommit => create_pre_commit_config(&options.output_dir)?,
         }
     }
     Ok(())
 }
 
-fn generate_dockerfile(options: &ProjectOptions) -> Result<()> {
+fn create_dockerfile(options: &ProjectOptions) -> Result<()> {
     if options.gen_dockerfile {
-        let dockerfile = format!(include_str!("templates/Dockerfile"), options.python_version);
-        fs::write(options.output_dir.join("Dockerfile"), dockerfile)?;
-
-        let compose_config = include_str!("templates/compose.yml");
-        let compose_config = compose_config.replace("${PROJECT_NAME}", &options.name);
-        fs::write(options.output_dir.join("compose.yml"), compose_config)?;
-
-        let dockerignore = include_str!("templates/.dockerignore");
-        fs::write(options.output_dir.join(".dockerignore"), dockerignore)?;
+        docker::create_dockerfile(&options.output_dir)?;
+        docker::create_dockerignore(&options.output_dir)?;
+        docker::create_python_pin_file(&options.output_dir, &options.python_version)?;
+        docker::create_compose_file(&options.output_dir, &options.name)?;
     }
     Ok(())
 }
 
-fn generate_pre_commit_config(output_dir: &Path) -> Result<()> {
+fn create_pre_commit_config(output_dir: &Path) -> Result<()> {
     let pre_commit_config = include_str!("templates/pre_commit_config");
     fs::write(
         output_dir.join(".pre-commit-config.yaml"),
@@ -586,7 +573,7 @@ fn append_content_to_pyproject(output_dir: &Path, content: &str) -> Result<()> {
     Ok(())
 }
 
-fn generate_gitignore(output_dir: &Path) -> Result<()> {
+fn create_gitignore(output_dir: &Path) -> Result<()> {
     let gitignore = include_str!("templates/gitignore");
     fs::write(output_dir.join(".gitignore"), gitignore)?;
     Ok(())

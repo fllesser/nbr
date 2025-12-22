@@ -329,7 +329,7 @@ impl Drop for BotRunner {
 }
 
 /// Handle the run command
-pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
+pub async fn handle(file: Option<String>, reload: bool) -> Result<()> {
     let bot_file = file.unwrap_or("bot.py".to_string());
     // Load configuration
     let work_dir = std::env::current_dir()?;

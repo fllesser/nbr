@@ -342,42 +342,6 @@ pub mod net_utils {
 pub mod string_utils {
     use super::*;
 
-    /// Convert string to snake_case
-    pub fn to_snake_case(s: &str) -> String {
-        let re = Regex::new(r"([a-z0-9])([A-Z])").unwrap();
-        re.replace_all(s, "${1}_${2}")
-            .to_lowercase()
-            .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == '_' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect::<String>()
-            .split('_')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("_")
-    }
-
-    /// Convert string to PascalCase
-    pub fn to_pascal_case(s: &str) -> String {
-        s.split('_')
-            .filter(|s| !s.is_empty())
-            .map(|word| {
-                let mut chars = word.chars();
-                match chars.next() {
-                    Some(first) => {
-                        first.to_uppercase().collect::<String>() + &chars.collect::<String>()
-                    }
-                    None => String::new(),
-                }
-            })
-            .collect()
-    }
-
     /// Validate project name
     pub fn validate_project_name(name: &str) -> Result<()> {
         if name.is_empty() {
@@ -509,25 +473,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_snake_case() {
-        assert_eq!(string_utils::to_snake_case("CamelCase"), "camel_case");
-        assert_eq!(
-            string_utils::to_snake_case("already_snake"),
-            "already_snake"
-        );
-        assert_eq!(string_utils::to_snake_case("mixedCASE"), "mixed_case");
-    }
-
-    #[test]
-    fn test_pascal_case() {
-        assert_eq!(string_utils::to_pascal_case("snake_case"), "SnakeCase");
-        assert_eq!(
-            string_utils::to_pascal_case("already_pascal"),
-            "AlreadyPascal"
-        );
-    }
-
-    #[test]
     fn test_project_name_validation() {
         assert!(string_utils::validate_project_name("valid_project").is_ok());
         assert!(string_utils::validate_project_name("ValidProject").is_ok());
@@ -542,10 +487,11 @@ mod tests {
     async fn test_download_file() {
         let url =
             "https://github.com/fllesser/nbr/releases/latest/download/nbr-Linux-musl-x86_64.tar.gz";
-        let destination = Path::new("nbr.tar.gz");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let destination = temp_dir.path().join("nbr.tar.gz");
         let show_progress = true;
-        let result = net_utils::download_file(url, destination, show_progress).await;
-        fs::remove_file(destination).unwrap();
+        let result = net_utils::download_file(url, &destination, show_progress).await;
+        temp_dir.close().unwrap();
         assert!(result.is_ok());
     }
 }
