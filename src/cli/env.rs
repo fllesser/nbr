@@ -355,7 +355,7 @@ impl EnvironmentChecker {
 
         StyledText::new(" ")
             .text("  installed Packages:")
-            .cyan(&env_info.python_info.site_packages.len().to_string())
+            .cyan(env_info.python_info.site_packages.len().to_string())
             .println();
 
         println!();
@@ -374,26 +374,26 @@ impl EnvironmentChecker {
 
             if !nonebot.adapters.is_empty() {
                 StyledText::new("")
-                    .text(&format!("  installed {} adapters:", nonebot.adapters.len()))
+                    .text(format!("  installed {} adapters:", nonebot.adapters.len()))
                     .println();
                 for adapter in &nonebot.adapters {
                     StyledText::new(" ")
                         .text("    •")
                         .cyan(&adapter.name)
-                        .green(&format!("(v{})", adapter.version))
+                        .green(format!("(v{})", adapter.version))
                         .println();
                 }
             }
 
             if !nonebot.plugins.is_empty() {
                 StyledText::new("")
-                    .text(&format!("  installed {} plugins:", nonebot.plugins.len()))
+                    .text(format!("  installed {} plugins:", nonebot.plugins.len()))
                     .println();
                 for plugin in &nonebot.plugins {
                     StyledText::new(" ")
                         .text("    •")
                         .cyan(&plugin.name)
-                        .green(&format!("(v{})", plugin.version))
+                        .green(format!("(v{})", plugin.version))
                         .println();
                 }
             }
@@ -415,20 +415,20 @@ impl EnvironmentChecker {
                 .println();
             StyledText::new(" ")
                 .text("  root path:")
-                .cyan(&project.root_path.display().to_string())
+                .cyan(project.root_path.display().to_string())
                 .println();
 
             if let Some(ref bot_file) = project.bot_file {
                 StyledText::new(" ")
                     .text("  bot file:")
-                    .cyan(&bot_file.display().to_string())
+                    .cyan(bot_file.display().to_string())
                     .println();
             }
 
             if let Some(ref plugins_dir) = project.plugins_dir {
                 StyledText::new(" ")
                     .text("  plugins directory:")
-                    .cyan(&plugins_dir.display().to_string())
+                    .cyan(plugins_dir.display().to_string())
                     .println();
             }
 
@@ -446,7 +446,7 @@ impl EnvironmentChecker {
             if let Some(ref venv) = project.virtual_env {
                 StyledText::new(" ")
                     .text("  virtual environment:")
-                    .cyan(&venv.display().to_string())
+                    .cyan(venv.display().to_string())
                     .println();
             }
         } else {
@@ -462,7 +462,7 @@ impl EnvironmentChecker {
         info!("System Resources:");
         StyledText::new(" ")
             .text("  cpu:")
-            .cyan(&format!(
+            .cyan(format!(
                 "{} cores / {:.2}% usage",
                 env_info.system_info.cpu_count, env_info.system_info.cpu_usage
             ))
@@ -472,7 +472,7 @@ impl EnvironmentChecker {
         let available_gb = env_info.system_info.available_memory as f64 / 1_073_741_824.0;
         StyledText::new(" ")
             .text("  memory:")
-            .cyan(&format!(
+            .cyan(format!(
                 "available: {available_gb:.3} GB / total: {total_gb:.3} GB",
             ))
             .println();
@@ -485,9 +485,9 @@ impl EnvironmentChecker {
                 let used_gb = total_gb - available_gb;
                 StyledText::new(" ")
                     .text("    •")
-                    .cyan(&format!("{:.2}% used", disk.usage_percentage))
-                    .cyan(&format!("({used_gb:.2} / {total_gb:.2} GB)"))
-                    .cyan(&format!("at {}", disk.mount_point))
+                    .cyan(format!("{:.2}% used", disk.usage_percentage))
+                    .cyan(format!("({used_gb:.2} / {total_gb:.2} GB)"))
+                    .cyan(format!("at {}", disk.mount_point))
                     .println();
             }
         }
@@ -498,7 +498,7 @@ impl EnvironmentChecker {
             info!("Environment Variables:");
             for (key, value) in &env_info.env_vars {
                 StyledText::new(" ")
-                    .text(&format!(" • {}:", key))
+                    .text(format!(" • {}:", key))
                     .cyan(value)
                     .println();
             }
