@@ -1,4 +1,5 @@
 pub mod adapter;
+pub mod common;
 pub mod create;
 pub mod docker;
 pub mod env;
@@ -41,7 +42,7 @@ impl Cli {
             NbrCommands::Adapter { commands } => adapter::handle(&commands).await?,
             NbrCommands::Generate { force } => generate::handle(force).await?,
             NbrCommands::Env { commands } => env::handle(&commands).await?,
-            NbrCommands::Docker { commands } => docker::handle(&commands).await?,
+            NbrCommands::Docker { commands } => docker::handle(&commands)?,
             NbrCommands::Init { .. } => unimplemented!(),
             NbrCommands::Cache { .. } => unimplemented!(),
         }
@@ -117,10 +118,10 @@ pub enum CacheCommands {
 
 #[derive(Subcommand)]
 pub enum DockerCommands {
-    #[clap(about = "Run Docker container")]
+    #[clap(about = "Run Docker container [UNIMPLEMENTED]")]
     Run,
-    #[clap(about = "Build Docker image")]
+    #[clap(about = "Build Docker image [UNIMPLEMENTED]")]
     Build,
-    #[clap(about = "Generate Docker config(Dockerfile, compose.yml, .dockerignore)")]
+    #[clap(about = "Generate Docker configs")]
     Gen,
 }

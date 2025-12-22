@@ -10,6 +10,7 @@ use strum::Display;
 use tracing::info;
 
 use super::adapter::{AdapterManager, RegistryAdapter};
+use super::common;
 use super::docker;
 use crate::error::Error;
 use crate::pyproject::{
@@ -185,7 +186,7 @@ async fn gather_project_options(
     // 指定 Python 版本
     let python_version = match args.python {
         Some(version) => version,
-        None => select_python_version()?,
+        None => common::select_python_version()?,
     };
     // 选择模板
     let template = match args.template {
@@ -319,16 +320,6 @@ fn select_template() -> Result<Template> {
         1 => Ok(Template::Simple),
         _ => unreachable!(),
     }
-}
-
-fn select_python_version() -> Result<String> {
-    let python_versions = vec!["3.10", "3.11", "3.12", "3.13", "3.14"];
-    let selected_python_version = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Which Python version would you like to use")
-        .items(&python_versions)
-        .default(0)
-        .interact()?;
-    Ok(python_versions[selected_python_version].to_string())
 }
 
 fn select_dev_tools() -> Result<Vec<DevTool>> {
@@ -546,7 +537,7 @@ fn create_dockerfile(options: &ProjectOptions) -> Result<()> {
     if options.gen_dockerfile {
         docker::create_dockerfile(&options.output_dir)?;
         docker::create_dockerignore(&options.output_dir)?;
-        docker::create_python_version_file(&options.output_dir, &options.python_version)?;
+        docker::create_python_pin_file(&options.output_dir, &options.python_version)?;
         docker::create_compose_file(&options.output_dir, &options.name)?;
     }
     Ok(())
