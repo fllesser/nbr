@@ -1,6 +1,6 @@
 [package]
 name = "nbr"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 description = "CLI for NoneBot2 - A Rust implementation"
 license = "MIT"
@@ -29,7 +29,7 @@ tokio = { version = "1.48.0", features = [
 ] }
 
 # HTTP client
-reqwest = { version = "0.12.26", features = [
+reqwest = { version = "0.12.27", features = [
   "json",
   "rustls-tls",
   "stream",
@@ -37,7 +37,7 @@ reqwest = { version = "0.12.26", features = [
 
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
+serde_json = "1.0.146"
 # serde_yaml = "0.9"
 
 # TOML handling
