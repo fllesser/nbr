@@ -1,12 +1,7 @@
-#![allow(dead_code)]
-
-use serde::Deserialize;
-
-use crate::{
-    error::{NbrError, Result},
-    log::StyledText,
-    utils::{process_utils, terminal_utils},
-};
+use crate::log::StyledText;
+use crate::utils::{process_utils, terminal_utils};
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::{
     hash::{Hash, Hasher},
     path::Path,
@@ -60,12 +55,11 @@ pub async fn is_installed(package: &str) -> bool {
 pub async fn self_version() -> Result<String> {
     let args = vec!["self", "version", "--short"];
     CmdBuilder::uv(args).run_async().await.map_err(|_| {
-        let message = concat!(
+        anyhow::anyhow!(concat!(
             "uv not found. You can run\n\n",
             "   curl -LsSf https://astral.sh/uv/install.sh | sh\n\n",
             "to install or get more information from https://astral.sh/blog/uv",
-        );
-        NbrError::environment(message)
+        ))
     })
 }
 
@@ -143,14 +137,12 @@ pub async fn show_package_info(package: &str, working_dir: Option<&Path>) -> Res
     })
 }
 
-#[derive(Debug, Clone, Deserialize, Eq)]
-#[allow(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq)]
 pub struct Package {
     pub name: String,
     pub version: String,
     pub latest_version: Option<String>,
     pub location: Option<String>,
-
     pub requires: Option<Vec<String>>,
     pub requires_by: Option<Vec<String>>,
 }
@@ -341,52 +333,5 @@ impl<'a> AddBuilder<'a> {
             args.push("--reinstall");
         }
         process_utils::execute_interactive("uv", &args, self.working_dir)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    fn working_dir() -> &'static Path {
-        Path::new("awesome-bot")
-    }
-
-    #[tokio::test]
-    async fn test_self_version() {
-        let version = self_version().await.unwrap();
-        println!("uv version: {}", version);
-    }
-
-    #[tokio::test]
-    async fn test_show_package_info() {
-        let package = show_package_info("nonebot2", Some(working_dir()))
-            .await
-            .unwrap();
-        package.display_info();
-        dbg!(package);
-    }
-
-    #[tokio::test]
-    async fn test_list() {
-        let packages = list(false).await.unwrap();
-        println!("{:?}", packages);
-    }
-
-    #[tokio::test]
-    async fn test_add_and_remove() {
-        // add
-        let result = add(vec!["nonebot-plugin-abs"])
-            .working_dir(working_dir())
-            .upgrade(true)
-            .run();
-        assert!(result.is_ok());
-
-        // remove
-        let result = remove(vec!["nonebot-plugin-abs"])
-            .working_dir(working_dir())
-            .run();
-        assert!(result.is_ok());
     }
 }

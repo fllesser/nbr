@@ -1,4 +1,4 @@
-use crate::error::{NbrError, Result as NbrResult};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -166,7 +166,7 @@ impl PyProjectConfig {
     /// # Returns
     ///
     /// 返回解析后的 PyProjectConfig 结构体
-    pub fn parse(work_dir: Option<&Path>) -> NbrResult<Self> {
+    pub fn parse(work_dir: Option<&Path>) -> Result<Self> {
         let toml_path = if let Some(work_dir) = work_dir {
             work_dir.join("pyproject.toml")
         } else {
@@ -174,24 +174,17 @@ impl PyProjectConfig {
         };
 
         if !toml_path.exists() {
-            return Err(NbrError::config(format!(
-                "{} is not exists",
-                toml_path.display()
-            )));
+            anyhow::bail!("{} does not exist", toml_path.display());
         }
 
-        let content = std::fs::read_to_string(toml_path)
-            .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
+        let content =
+            std::fs::read_to_string(toml_path).context("Failed to read pyproject.toml")?;
 
         Self::parse_from_str(&content)
     }
 
-    pub fn parse_from_str(content: &str) -> NbrResult<Self> {
-        toml::from_str(content).map_err(|e| {
-            NbrError::config(format!(
-                "Failed to parse pyproject.toml to PyProjectConfig: {e}"
-            ))
-        })
+    pub fn parse_from_str(content: &str) -> Result<Self> {
+        toml::from_str(content).context("Failed to parse pyproject.toml to PyProjectConfig")
     }
 
     /// 解析当前目录的 pyproject.toml 文件
@@ -200,7 +193,7 @@ impl PyProjectConfig {
     ///
     /// 返回解析后的 PyProjectConfig 结构体
     #[allow(unused)]
-    pub fn parse_current_dir() -> NbrResult<Self> {
+    pub fn parse_current_dir() -> Result<Self> {
         Self::parse(None)
     }
 
@@ -216,23 +209,22 @@ pub struct NbTomlEditor {
 }
 
 impl NbTomlEditor {
-    pub fn with_str(content: &str, save_path: &Path) -> NbrResult<Self> {
+    pub fn with_str(content: &str, save_path: &Path) -> Result<Self> {
         let toml_path = save_path.to_path_buf();
-        let doc = Document::parse(content)
-            .map_err(|e| NbrError::config(format!("Failed to parse pyproject.toml: {}", e)))?;
+        let doc = Document::parse(content).context("Failed to parse pyproject.toml")?;
         let doc_mut = doc.into_mut();
         Ok(Self { toml_path, doc_mut })
     }
 
-    pub fn with_work_dir(work_dir: Option<&Path>) -> NbrResult<Self> {
+    pub fn with_work_dir(work_dir: Option<&Path>) -> Result<Self> {
         let toml_path = if let Some(work_dir) = work_dir {
             work_dir.join("pyproject.toml")
         } else {
             Path::new("pyproject.toml").to_path_buf()
         };
 
-        let mut content = std::fs::read_to_string(toml_path.clone())
-            .map_err(|e| NbrError::config(format!("Failed to read pyproject.toml: {}", e)))?;
+        let mut content =
+            std::fs::read_to_string(toml_path.clone()).context("Failed to read pyproject.toml")?;
 
         // 如果 pyproject.toml 中没有 [tool.nonebot] 表，则添加
         if !content.contains("[tool.nonebot]") {
@@ -248,33 +240,31 @@ impl NbTomlEditor {
         Self::with_str(&content, &toml_path)
     }
 
-    fn nonebot_table_mut(&mut self) -> NbrResult<&mut Table> {
+    fn nonebot_table_mut(&mut self) -> Result<&mut Table> {
         self.doc_mut["tool"]["nonebot"]
             .as_table_mut()
-            .ok_or(NbrError::config("tool.nonebot is not table"))
+            .ok_or_else(|| anyhow::anyhow!("tool.nonebot is not a table"))
     }
 
-    fn adapters_array_mut(&mut self) -> NbrResult<&mut Array> {
-        self.nonebot_table_mut()?
+    fn adapters_array_mut(&mut self) -> Result<&mut Array> {
+        let table = self.nonebot_table_mut()?;
+        let item = table
             .get_mut("adapters")
-            .ok_or(NbrError::config("adapters is not found in tool.nonebot"))
-            .and_then(|item| {
-                item.as_array_mut()
-                    .ok_or(NbrError::config("adapters is not array"))
-            })
+            .ok_or_else(|| anyhow::anyhow!("adapters not found in tool.nonebot"))?;
+        item.as_array_mut()
+            .ok_or_else(|| anyhow::anyhow!("adapters is not an array"))
     }
 
-    fn plugins_array_mut(&mut self) -> NbrResult<&mut Array> {
-        self.nonebot_table_mut()?
+    fn plugins_array_mut(&mut self) -> Result<&mut Array> {
+        let table = self.nonebot_table_mut()?;
+        let item = table
             .get_mut("plugins")
-            .ok_or(NbrError::config("plugins is not found in tool.nonebot"))
-            .and_then(|item| {
-                item.as_array_mut()
-                    .ok_or(NbrError::config("plugins is not array"))
-            })
+            .ok_or_else(|| anyhow::anyhow!("plugins not found in tool.nonebot"))?;
+        item.as_array_mut()
+            .ok_or_else(|| anyhow::anyhow!("plugins is not an array"))
     }
 
-    fn save(&self) -> NbrResult<()> {
+    fn save(&self) -> Result<()> {
         std::fs::write(self.toml_path.clone(), self.doc_mut.to_string())?;
         Ok(())
     }
@@ -290,7 +280,7 @@ impl NbTomlEditor {
         }
     }
 
-    pub fn add_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
+    pub fn add_adapters(&mut self, adapters: Vec<Adapter>) -> Result<()> {
         let adapters = adapters.into_iter().collect::<HashSet<Adapter>>();
         let adapters_arr_mut = self.adapters_array_mut()?;
 
@@ -307,7 +297,7 @@ impl NbTomlEditor {
         self.save()
     }
 
-    pub fn remove_adapters(&mut self, adapter_names: Vec<&str>) -> NbrResult<()> {
+    pub fn remove_adapters(&mut self, adapter_names: Vec<&str>) -> Result<()> {
         let adapters_arr_mut = self.adapters_array_mut()?;
         adapters_arr_mut.retain(|a| {
             !adapter_names.contains(&a.as_inline_table().unwrap()["name"].as_str().unwrap())
@@ -315,7 +305,7 @@ impl NbTomlEditor {
         self.save()
     }
 
-    pub fn add_plugins(&mut self, plugins: Vec<&str>) -> NbrResult<()> {
+    pub fn add_plugins(&mut self, plugins: Vec<&str>) -> Result<()> {
         let mut plugins = plugins.into_iter().collect::<HashSet<&str>>();
         let plugins_arr_mut = self.plugins_array_mut()?;
 
@@ -330,7 +320,7 @@ impl NbTomlEditor {
         self.save()
     }
 
-    pub fn remove_plugins(&mut self, plugins: Vec<&str>) -> NbrResult<()> {
+    pub fn remove_plugins(&mut self, plugins: Vec<&str>) -> Result<()> {
         let plugins_arr_mut = self.plugins_array_mut()?;
         plugins_arr_mut.retain(|p| !plugins.contains(&p.as_str().unwrap()));
         Self::fmt_toml_array(plugins_arr_mut);
@@ -338,7 +328,7 @@ impl NbTomlEditor {
     }
 
     /// 重置 tool.nonebot.plugins
-    pub fn reset_plugins(&mut self, plugins: Vec<&str>) -> NbrResult<()> {
+    pub fn reset_plugins(&mut self, plugins: Vec<&str>) -> Result<()> {
         let plugins_arr_mut = self.plugins_array_mut()?;
         plugins_arr_mut.clear();
         plugins_arr_mut.extend(plugins);
@@ -348,7 +338,7 @@ impl NbTomlEditor {
 
     /// 重置 tool.nonebot.adapters
     #[allow(unused)]
-    pub fn reset_adapters(&mut self, adapters: Vec<Adapter>) -> NbrResult<()> {
+    pub fn reset_adapters(&mut self, adapters: Vec<Adapter>) -> Result<()> {
         let adapters_arr_mut = self.adapters_array_mut()?;
         adapters_arr_mut.clear();
         adapters_arr_mut.extend(adapters.into_iter().map(|adapter| {
@@ -364,55 +354,6 @@ impl NbTomlEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_add_adapters() {
-        let toml_path = Path::new("awesome-bot");
-        let mut editor = NbTomlEditor::with_work_dir(Some(toml_path)).unwrap();
-        editor
-            .add_adapters(vec![Adapter {
-                name: "OneBot V11".to_string(),
-                module_name: "nonebot.adapters.onebot.v12".to_string(),
-            }])
-            .unwrap();
-        editor
-            .add_adapters(vec![Adapter {
-                name: "OneBot V12".to_string(),
-                module_name: "nonebot.adapters.onebot.v12".to_string(),
-            }])
-            .unwrap();
-    }
-
-    #[test]
-    fn test_add_plugins() {
-        let toml_path = Path::new("awesome-bot");
-        let mut editor = NbTomlEditor::with_work_dir(Some(toml_path)).unwrap();
-
-        editor
-            .add_plugins(vec![
-                "nonebot_plugin_status",
-                "nonebot_plugin_alconna",
-                "nonebot_plugin_waiter",
-            ])
-            .unwrap();
-    }
-
-    #[test]
-    fn test_remove_plugins() {
-        let toml_path = Path::new("awesome-bot");
-        let mut editor = NbTomlEditor::with_work_dir(Some(toml_path)).unwrap();
-        editor
-            .remove_plugins(vec!["nonebot_plugin_status"])
-            .unwrap();
-    }
-
-    #[test]
-    fn test_parse_toml_to_nonebot() {
-        let toml_path = Path::new("awesome-bot");
-        let pyproject = PyProjectConfig::parse(Some(toml_path)).unwrap();
-        let nonebot = pyproject.nonebot().unwrap();
-        dbg!(nonebot);
-    }
 
     #[test]
     fn test_dependency_groups_with_include() {

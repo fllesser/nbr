@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{Context, Result};
 use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, Input, MultiSelect, Select};
@@ -10,7 +10,7 @@ use strum::Display;
 use tracing::info;
 
 use crate::cli::adapter::{AdapterManager, RegistryAdapter};
-use crate::error::{NbrError, Result};
+use crate::error::Error;
 use crate::pyproject::{
     BuildSystem, DependencyGroupItem, DependencyGroups, NbTomlEditor, Nonebot, Project,
     PyProjectConfig, Tool,
@@ -136,11 +136,10 @@ fn check_directory_exists(output_dir: &Path) -> Result<()> {
                 output_dir.display()
             ))
             .default(false)
-            .interact()
-            .map_err(|e| NbrError::io(e.to_string()))?;
+            .interact()?;
 
         if !should_continue {
-            return Err(NbrError::Cancelled);
+            return Err(Error::Cancelled.into());
         }
     }
     Ok(())
@@ -151,8 +150,7 @@ fn confirm_gen_docker() -> Result<bool> {
     let gen_dockerfile = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to generate Dockerfile and Docker Compose configuration?")
         .default(true)
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
+        .interact()?;
     Ok(gen_dockerfile)
 }
 
@@ -161,8 +159,7 @@ fn confirm_create_venv() -> Result<bool> {
     let create_venv = Confirm::with_theme(&ColorfulTheme::default())
         .with_prompt("Would you like to create a virtual environment now?")
         .default(true)
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
+        .interact()?;
     Ok(create_venv)
 }
 
@@ -258,22 +255,19 @@ async fn gather_project_options(
     })
 }
 
-fn input_project_name() -> Result<String> {
+fn input_project_name() -> anyhow::Result<String> {
     Input::<String>::with_theme(&ColorfulTheme::default())
         .with_prompt("Project name")
         .default("awesome-bot".to_string())
         .validate_with(|input: &String| -> Result<()> {
             if input.contains(" ") {
-                Err(NbrError::invalid_argument(
-                    "Project name cannot contain spaces".to_string(),
-                ))
+                Err(anyhow::anyhow!("Project name cannot contain spaces"))
             } else {
                 Ok(())
             }
         })
         .interact_text()
         .context("Failed to get project name")
-        .map_err(|e| NbrError::io(e.to_string()))
 }
 
 fn select_environment() -> Result<Environment> {
@@ -283,8 +277,7 @@ fn select_environment() -> Result<Environment> {
         .with_prompt("Which environment are you in now")
         .items(envs)
         .default(0)
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
+        .interact()?;
     Ok(envs[selected_idx].clone())
 }
 
@@ -295,8 +288,7 @@ fn select_drivers() -> Result<Vec<String>> {
         .items(drivers)
         // 默认选择前三个
         .defaults(&[true; 3])
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
+        .interact()?;
 
     let selected_drivers: Vec<String> = selected_drivers
         .into_iter()
@@ -319,8 +311,7 @@ fn select_template() -> Result<Template> {
         .with_prompt("Select a template")
         .default(0)
         .items(&template_prompts)
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
+        .interact()?;
 
     match selection {
         0 => Ok(Template::Bootstrap),
@@ -335,8 +326,7 @@ fn select_python_version() -> Result<String> {
         .with_prompt("Which Python version would you like to use")
         .items(&python_versions)
         .default(0)
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
+        .interact()?;
     Ok(python_versions[selected_python_version].to_string())
 }
 
@@ -346,8 +336,7 @@ fn select_dev_tools() -> Result<Vec<DevTool>> {
         .with_prompt("Which dev tool(s) would you like to use")
         .items(dev_tools)
         .defaults(&[true; 3])
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?;
+        .interact()?;
     let selected_dev_tools = selected_dev_tools
         .into_iter()
         .map(|i| dev_tools[i].to_owned())
@@ -362,15 +351,14 @@ fn select_builtin_plugins() -> Result<Vec<String>> {
         .with_prompt("Which builtin plugin(s) would you like to use")
         .items(builtin_plugins)
         .defaults(&vec![true; builtin_plugins.len().min(1)])
-        .interact()
-        .map_err(|e| NbrError::io(e.to_string()))?
+        .interact()?
         .into_iter()
         .map(|i| builtin_plugins[i].to_string())
         .collect();
     Ok(selected_plugins)
 }
 
-async fn create_project(options: &ProjectOptions) -> Result<()> {
+pub async fn create_project(options: &ProjectOptions) -> Result<()> {
     fs::create_dir_all(&options.output_dir).context("Failed to create output directory")?;
 
     match options.template {
@@ -606,40 +594,4 @@ fn create_example_plugin(output_dir: &Path) -> Result<()> {
     let hello_plugin = include_str!("templates/hello.py");
     fs::write(plugins_dir.join("hello.py"), hello_plugin)?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use crate::cli::adapter::RegistryAdapter;
-
-    #[tokio::test]
-    async fn test_create_project() {
-        let options = ProjectOptions {
-            name: "awesome-bot".to_string(),
-            template: Template::Bootstrap,
-            output_dir: PathBuf::from("awesome-bot"),
-            drivers: vec!["fastapi".to_string(), "httpx".to_string()],
-            adapters: vec![RegistryAdapter {
-                name: "OneBot V11".to_string(),
-                module_name: "nonebot.adapters.onebot.v11".to_string(),
-                project_link: "nonebot-adapter-onebot".to_string(),
-                version: "2.4.6".to_string(),
-                author: "yanyongyu".to_string(),
-                desc: "OneBot V11 协议".to_string(),
-                homepage: Some("https://onebot.adapters.nonebot.dev".to_string()),
-                tags: vec![],
-                is_official: true,
-                time: "2024-10-24T07:34:56.115315Z".to_string(),
-            }],
-            plugins: vec![BuiltinPlugin::Echo.to_string()],
-            python_version: "3.10".to_string(),
-            environment: Environment::Dev,
-            dev_tools: vec![DevTool::PreCommit, DevTool::Ruff, DevTool::Basedpyright],
-            gen_dockerfile: true,
-            create_venv: true,
-        };
-        create_project(&options).await.unwrap();
-    }
 }

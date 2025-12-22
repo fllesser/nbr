@@ -1,13 +1,8 @@
-//! Environment command handler for nbr
-//!
-//! This module handles environment management including showing system information,
-//! checking dependencies, and validating the current project setup.
-
-use crate::EnvCommands;
-use crate::error::{NbrError, Result};
+use crate::cli::EnvCommands;
 use crate::log::StyledText;
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{self, Package};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
@@ -92,9 +87,7 @@ pub struct EnvironmentChecker {
 
 impl EnvironmentChecker {
     /// Create a new environment checker
-    pub fn new() -> Result<Self> {
-        //let config_manager = ConfigManager::new()?;
-        let work_dir = std::env::current_dir()?;
+    pub fn new(work_dir: PathBuf) -> Result<Self> {
         let mut system = System::new_all();
         system.refresh_all();
         let disks = Disks::new_with_refreshed_list();
@@ -158,7 +151,7 @@ impl EnvironmentChecker {
     /// Get Python environment information
     async fn get_python_info(&self) -> Result<PythonInfo> {
         let executable = process_utils::find_python()
-            .ok_or_else(|| NbrError::not_found("Python executable not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("Python executable not found"))?;
 
         let version = process_utils::get_python_version(&executable)
             .await
@@ -626,55 +619,12 @@ impl EnvironmentChecker {
 
 /// Handle the env command
 pub async fn handle_env(commands: &EnvCommands) -> Result<()> {
-    let mut checker = EnvironmentChecker::new()?;
+    let work_dir = std::env::current_dir()?;
+    let mut checker = EnvironmentChecker::new(work_dir)?;
 
     match commands {
-        EnvCommands::Info => checker.show_info().await,
-        EnvCommands::Check => checker.check_environment().await,
+        EnvCommands::Info => checker.show_info().await?,
+        EnvCommands::Check => checker.check_environment().await?,
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_environment_checker_creation() {
-        let checker = EnvironmentChecker::new();
-        assert!(checker.is_ok());
-    }
-
-    #[test]
-    fn test_issue_detection() {
-        let env_info = EnvironmentInfo {
-            // os_info: OsInfo {
-            //     name: "Test OS".to_string(),
-            //     version: "1.0".to_string(),
-            //     architecture: "x64".to_string(),
-            //     kernel_version: "1.0.0".to_string(),
-            // },
-            python_info: PythonInfo {
-                version: "Python 3.10.12".to_string(),
-                executable: "python".to_string(),
-                virtual_env: None,
-                uv_version: None,
-                site_packages: vec![],
-            },
-            nonebot_info: None,
-            project_info: None,
-            system_info: SystemInfo {
-                total_memory: 1_073_741_824,   // 1 GB
-                available_memory: 104_857_600, // 100 MB
-                cpu_count: 4,
-                cpu_usage: 50.0,
-                disk_usage: vec![],
-            },
-            env_vars: HashMap::new(),
-        };
-
-        let checker = EnvironmentChecker::new().unwrap();
-
-        let issues = checker.check_for_issues(&env_info);
-        assert!(!issues.is_empty()); // Should have issues with Python 2.7
-    }
+    Ok(())
 }

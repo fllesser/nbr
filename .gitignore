@@ -1,6 +1,6 @@
-/target
-/test_migration.sh
-/awesome-bot
+target/
+awesome-bot/
 
 .DS_Store
 lcov.info
+*.snap.new

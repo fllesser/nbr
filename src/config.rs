@@ -2,8 +2,7 @@
 //!
 //! This module handles loading, saving, and managing configuration files
 //! for both global user settings and project-specific configurations.
-
-use crate::error::Result;
+use anyhow::Result;
 use directories::ProjectDirs;
 use std::fs;
 use std::path::{Path, PathBuf};

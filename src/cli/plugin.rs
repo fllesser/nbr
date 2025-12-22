@@ -1,23 +1,16 @@
-//! Plugin command handler for nbr
-//!
-//! This module handles plugin management including installation, removal,
-//! listing, searching, and updating plugins from various sources.
-
 use crate::config::get_cache_dir;
-use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::pyproject::NbTomlEditor;
 use crate::utils::terminal_utils;
 use crate::uv::{self, CmdBuilder, Package};
+use anyhow::{Context, Result};
 use clap::Subcommand;
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-
 use std::collections::HashMap;
-
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -88,25 +81,26 @@ pub async fn handle_plugin(commands: &PluginCommands) -> Result<()> {
             fetch_remote,
         } => {
             let options = InstallOptions::new(name, *upgrade, *reinstall, index.as_deref())?;
-            manager.install(options, *fetch_remote).await
+            manager.install(options, *fetch_remote).await?
         }
-        PluginCommands::Uninstall { name } => manager.uninstall(name).await,
-        PluginCommands::List { outdated } => manager.list(*outdated).await,
+        PluginCommands::Uninstall { name } => manager.uninstall(name).await?,
+        PluginCommands::List { outdated } => manager.list(*outdated).await?,
         PluginCommands::Search {
             query,
             limit,
             fetch_remote,
-        } => manager.search_plugins(query, *limit, *fetch_remote).await,
+        } => manager.search_plugins(query, *limit, *fetch_remote).await?,
         PluginCommands::Update {
             name,
             all,
             reinstall,
-        } => manager.update(name.as_deref(), *all, *reinstall).await,
-        PluginCommands::Reset => manager.reset().await,
+        } => manager.update(name.as_deref(), *all, *reinstall).await?,
+        PluginCommands::Reset => manager.reset().await?,
         PluginCommands::Create => {
             unimplemented!()
         }
     }
+    Ok(())
 }
 
 // "module_name": "nonebot_plugin_status",
@@ -204,10 +198,7 @@ impl<'a> InstallOptions<'a> {
             let re = Regex::new(GIT_URL_PATTERN).unwrap();
             let captures = re
                 .captures(self.name)
-                .ok_or(NbrError::invalid_argument(format!(
-                    "Invalid plugin name: {}",
-                    self.name
-                )))?;
+                .ok_or_else(|| anyhow::anyhow!("Invalid plugin name: {}", self.name))?;
             self.git_url = Some(self.name);
             self.name = captures.get(0).map(|m| m.as_str()).unwrap();
             self.module_name = Some(self.name.replace("-", "_"));
@@ -217,10 +208,7 @@ impl<'a> InstallOptions<'a> {
         let re = Regex::new(PATTERN).unwrap();
         let captures = re
             .captures(self.name)
-            .ok_or(NbrError::invalid_argument(format!(
-                "Invalid plugin name: {}",
-                self.name
-            )))?;
+            .ok_or_else(|| anyhow::anyhow!("Invalid plugin name: {}", self.name))?;
         self.name = captures.get(1).map(|m| m.as_str()).unwrap();
         self.module_name = Some(self.name.replace("-", "_"));
         self.extras = captures
@@ -253,7 +241,8 @@ impl<'a> InstallOptions<'a> {
             let extras = extras.iter().flat_map(|e| ["--extra", e]);
             args.extend(extras);
         }
-        CmdBuilder::uv(args).run()
+        CmdBuilder::uv(args).run()?;
+        Ok(())
     }
 }
 
@@ -266,7 +255,7 @@ impl PluginManager {
             .timeout(Duration::from_secs(15))
             .user_agent("nbr")
             .build()
-            .map_err(NbrError::Network)?;
+            .context("Failed to build HTTP client")?;
 
         let registry_plugins = OnceLock::new();
 
@@ -277,7 +266,11 @@ impl PluginManager {
         })
     }
 
-    pub async fn install(&mut self, options: InstallOptions<'_>, fetch_remote: bool) -> Result<()> {
+    pub async fn install(
+        &mut self,
+        options: InstallOptions<'_>,
+        fetch_remote: bool,
+    ) -> anyhow::Result<()> {
         if options.git_url.is_some() {
             return self.install_from_github(options).await;
         }
@@ -288,7 +281,7 @@ impl PluginManager {
         self.install_unregistered_plugin(options).await
     }
 
-    pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> Result<()> {
+    pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> anyhow::Result<()> {
         let git_url = options.git_url.unwrap();
         debug!("Installing plugin from github: {}", git_url);
 
@@ -301,8 +294,7 @@ impl PluginManager {
         if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(prompt)
             .default(true)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
         {
             options.install()?;
         } else {
@@ -321,7 +313,10 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn install_unregistered_plugin(&mut self, options: InstallOptions<'_>) -> Result<()> {
+    pub async fn install_unregistered_plugin(
+        &mut self,
+        options: InstallOptions<'_>,
+    ) -> anyhow::Result<()> {
         debug!("Installing unregistered plugin: {}", options.name);
 
         let prompt = StyledText::new(" ")
@@ -332,8 +327,7 @@ impl PluginManager {
         if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(prompt)
             .default(true)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
         {
             options.install()?;
         } else {
@@ -357,7 +351,7 @@ impl PluginManager {
         &self,
         registry_plugin: &RegistryPlugin,
         options: InstallOptions<'_>,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         let package_name = &registry_plugin.project_link;
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
@@ -369,8 +363,7 @@ impl PluginManager {
         if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(prompt)
             .default(true)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
         {
             error!("Installation operation cancelled.");
             return Ok(());
@@ -391,7 +384,7 @@ impl PluginManager {
     }
 
     /// Uninstall a plugin
-    pub async fn uninstall(&self, name: &str) -> Result<()> {
+    pub async fn uninstall(&self, name: &str) -> anyhow::Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
         if let Ok(registry_plugin) = self.get_registry_plugin(name, false).await {
@@ -405,17 +398,16 @@ impl PluginManager {
         debug!("Uninstalling unregistered plugin: {}", package_name);
 
         if !uv::is_installed(package_name).await {
-            return Err(NbrError::not_found(format!(
+            return Err(anyhow::anyhow!(
                 "Plugin '{}' is not installed.",
                 package_name
-            )));
+            ));
         }
 
         if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!("Would you like to uninstall '{package_name}'",))
             .default(false)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
         {
             uv::remove(vec![&package_name])
                 .working_dir(&self.work_dir)
@@ -439,17 +431,16 @@ impl PluginManager {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !uv::is_installed(&package_name).await {
-            return Err(NbrError::not_found(format!(
+            return Err(anyhow::anyhow!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
-            )));
+            ));
         }
         // Confirm uninstallation
         if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(format!("Would you like to uninstall '{package_name}'"))
             .default(false)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
         {
             error!("{}", "Uninstallation operation cancelled.");
             return Ok(());
@@ -469,7 +460,7 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn get_installed_plugins(&self, outdated: bool) -> Result<Vec<Package>> {
+    pub async fn get_installed_plugins(&self, outdated: bool) -> anyhow::Result<Vec<Package>> {
         let installed_packages = uv::list(outdated).await?;
         let installed_plugins = installed_packages
             .into_iter()
@@ -478,7 +469,7 @@ impl PluginManager {
         Ok(installed_plugins)
     }
 
-    pub async fn list(&self, show_outdated: bool) -> Result<()> {
+    pub async fn list(&self, show_outdated: bool) -> anyhow::Result<()> {
         // 获取所有插件
         let mut installed_plugins = self.get_installed_plugins(false).await?;
         // 获取需要更新的插件
@@ -504,7 +495,7 @@ impl PluginManager {
         package_name.starts_with("nonebot") && package_name.contains("plugin")
     }
 
-    pub async fn reset(&self) -> Result<()> {
+    pub async fn reset(&self) -> anyhow::Result<()> {
         let mut installed_plugins = self.get_installed_plugins(false).await?;
 
         let mut requires_plugins: Vec<String> = Vec::new();
@@ -543,7 +534,7 @@ impl PluginManager {
         query: &str,
         limit: usize,
         fetch_remote: bool,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         debug!("Searching plugins for: {}", query);
 
         let results = self
@@ -578,20 +569,21 @@ impl PluginManager {
         plugin_name: Option<&str>,
         update_all: bool,
         reinstall: bool,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         if update_all {
-            self.update_all_plugins().await
+            self.update_all_plugins().await?;
         } else if let Some(name) = plugin_name {
-            self.update_single_plugin(name, reinstall)
+            self.update_single_plugin(name, reinstall)?;
         } else {
-            Err(NbrError::invalid_argument(
+            return Err(anyhow::anyhow!(
                 "Either specify a plugin name or use --all( -a) flag",
-            ))
+            ));
         }
+        Ok(())
     }
 
     /// Update all plugins
-    async fn update_all_plugins(&self) -> Result<()> {
+    async fn update_all_plugins(&self) -> anyhow::Result<()> {
         let outdated_plugins = self.get_installed_plugins(true).await?;
 
         if outdated_plugins.is_empty() {
@@ -610,8 +602,7 @@ impl PluginManager {
                 outdated_plugins.len()
             ))
             .default(true)
-            .interact()
-            .map_err(|e| NbrError::io(format!("Failed to read user input: {}", e)))?
+            .interact()?
         {
             error!("{}", "Update operation cancelled.");
             return Ok(());
@@ -629,7 +620,7 @@ impl PluginManager {
     }
 
     /// Update a single plugin
-    fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> Result<()> {
+    fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> anyhow::Result<()> {
         if reinstall {
             uv::reinstall(package_name)?;
         } else {
@@ -647,7 +638,7 @@ impl PluginManager {
     pub async fn fetch_registry_plugins(
         &self,
         fetch_remote: bool,
-    ) -> Result<&HashMap<String, RegistryPlugin>> {
+    ) -> anyhow::Result<&HashMap<String, RegistryPlugin>> {
         if let Some(plugins) = self.registry_plugins.get() {
             return Ok(plugins);
         }
@@ -659,7 +650,7 @@ impl PluginManager {
                 serde_json::from_slice(&std::fs::read(&cache_file)?)?;
             self.registry_plugins
                 .set(plugins)
-                .map_err(|_| NbrError::cache("Failed to parse plugin info"))?;
+                .map_err(|_| anyhow::anyhow!("Failed to parse plugin info"))?;
             return Ok(self.registry_plugins.get().unwrap());
         }
 
@@ -670,12 +661,12 @@ impl PluginManager {
             .get(plugins_json_url)
             .send()
             .await
-            .map_err(NbrError::Network)?;
+            .context("Network error while fetching plugins")?;
 
         let plugins: Vec<RegistryPlugin> = response
-            .json()
+            .json::<Vec<RegistryPlugin>>()
             .await
-            .map_err(|e| NbrError::plugin(format!("Failed to parse plugin info: {}", e)))?;
+            .context("Failed to parse plugin info")?;
 
         spinner.finish_and_clear();
         let plugins_map = plugins
@@ -684,7 +675,7 @@ impl PluginManager {
             .collect::<HashMap<String, RegistryPlugin>>();
         self.registry_plugins
             .set(plugins_map.clone())
-            .map_err(|_| NbrError::cache("Failed to cache plugin info"))?;
+            .map_err(|_| anyhow::anyhow!("Failed to cache plugin info"))?;
 
         // 缓存到文件
         std::fs::write(cache_file, serde_json::to_string(&plugins_map)?)?;
@@ -696,11 +687,11 @@ impl PluginManager {
         &self,
         package_name: &str,
         fetch_remote: bool,
-    ) -> Result<&RegistryPlugin> {
+    ) -> anyhow::Result<&RegistryPlugin> {
         let plugins = self.fetch_registry_plugins(fetch_remote).await?;
         let plugin = plugins
             .get(package_name)
-            .ok_or_else(|| NbrError::not_found(format!("Plugin '{}' not found", package_name)))?;
+            .with_context(|| format!("Plugin '{}' not found", package_name))?;
         Ok(plugin)
     }
 
@@ -710,7 +701,7 @@ impl PluginManager {
         query: &str,
         limit: usize,
         fetch_remote: bool,
-    ) -> Result<Vec<&RegistryPlugin>> {
+    ) -> anyhow::Result<Vec<&RegistryPlugin>> {
         let plugins_map = self.fetch_registry_plugins(fetch_remote).await?;
 
         let results: Vec<&RegistryPlugin> = plugins_map

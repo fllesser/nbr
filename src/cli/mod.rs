@@ -1,7 +1,3 @@
-//! CLI command handlers module
-//!
-//! This module contains all the command handlers for the nbr tool.
-
 pub mod adapter;
 pub mod create;
 pub mod env;
@@ -9,3 +5,105 @@ pub mod generate;
 pub mod init;
 pub mod plugin;
 pub mod run;
+
+use clap::{ArgAction, Parser, Subcommand};
+
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+// nbr banner
+const BANNER: &str = r#"
+d8b   db  .d88b.  d8b   db d88888b d8888b.  .d88b.  d888888b
+888o  88 .8P  Y8. 888o  88 88'     88  `8D .8P  Y8. `~~88~~'
+88V8o 88 88    88 88V8o 88 88ooooo 88oooY' 88    88    88
+88 V8o88 88    88 88 V8o88 88~~~~~ 88~~~b. 88    88    88
+88  V888 `8b  d8' 88  V888 88.     88   8D `8b  d8'    88
+VP   V8P  `Y88P'  VP   V8P Y88888P Y8888P'  `Y88P'     YP
+"#;
+
+const AUTHOR: &str = "fllesser";
+const ABOUT: &str = "CLI for NoneBot2 - Rust implementation";
+
+#[derive(Parser)]
+#[command(name = "nbr", version = VERSION, about = ABOUT, author = AUTHOR, before_help = BANNER, arg_required_else_help = true)]
+pub struct Cli {
+    #[clap(subcommand)]
+    pub commands: NbrCommands,
+    #[clap(short, long, action = ArgAction::Count, help = "Verbose level, -v: DEBUG, -vv: TRACE")]
+    pub verbose: u8,
+}
+
+impl Cli {
+    pub async fn run(self) -> anyhow::Result<()> {
+        match self.commands {
+            NbrCommands::Create(create_args) => create::handle_create(create_args).await?,
+            NbrCommands::Run { file, reload } => run::handle_run(file, reload).await?,
+            NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await?,
+            NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await?,
+            NbrCommands::Generate { force } => generate::handle_generate(force).await?,
+            NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
+            NbrCommands::Init { .. } => unimplemented!(),
+            NbrCommands::Cache { .. } => unimplemented!(),
+        }
+        Ok(())
+    }
+}
+
+#[derive(Subcommand)]
+pub enum NbrCommands {
+    #[clap(about = "Create a new project")]
+    Create(create::CreateArgs),
+    #[clap(about = "Run the bot")]
+    Run {
+        #[clap()] // 位置参数
+        file: Option<String>,
+        #[clap(short, long)]
+        reload: bool,
+    },
+    #[clap(about = "Manage plugins")]
+    Plugin {
+        #[clap(subcommand)]
+        commands: plugin::PluginCommands,
+    },
+    #[clap(about = "Manage adapters")]
+    Adapter {
+        #[clap(subcommand)]
+        commands: adapter::AdapterCommands,
+    },
+    #[clap(about = "Generate bot entry file")]
+    Generate {
+        #[clap(short, long)]
+        force: bool,
+    },
+    #[clap(about = "unimplemented")]
+    Init {
+        #[clap(short, long)]
+        name: String,
+        #[clap(short, long)]
+        force: bool,
+    },
+    #[clap(about = "Check environment")]
+    Env {
+        #[clap(subcommand)]
+        env_commands: EnvCommands,
+    },
+    #[clap(about = "unimplemented")]
+    Cache {
+        #[clap(subcommand)]
+        cache_commands: CacheCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum EnvCommands {
+    #[clap(about = "Show environment information")]
+    Info,
+    #[clap(about = "Check environment")]
+    Check,
+}
+
+#[derive(Subcommand)]
+pub enum CacheCommands {
+    #[clap(about = "Clear cache")]
+    Clear,
+    #[clap(about = "Show cache information")]
+    Info,
+}

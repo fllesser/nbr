@@ -1,0 +1,22 @@
+---
+source: tests/test_uv.rs
+assertion_line: 13
+expression: package
+---
+name: nonebot2
+version: "[VERSION]"
+latest_version: ~
+location: "[LOCATION]"
+requires:
+  - anyio
+  - exceptiongroup
+  - loguru
+  - pydantic
+  - pygtrie
+  - python-dotenv
+  - typing-extensions
+  - yarl
+requires_by:
+  - nonebot-adapter-onebot
+  - nonebug
+  - test-bot

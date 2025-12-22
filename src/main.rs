@@ -1,119 +1,19 @@
-use anyhow::Result;
-use clap::{ArgAction, Parser, Subcommand};
-
-mod cli;
-mod config;
-mod error;
-mod log;
-mod pyproject;
-mod utils;
-mod uv;
-
-use cli::*;
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-// nbr banner
-const BANNER: &str = r#"
-d8b   db  .d88b.  d8b   db d88888b d8888b.  .d88b.  d888888b
-888o  88 .8P  Y8. 888o  88 88'     88  `8D .8P  Y8. `~~88~~'
-88V8o 88 88    88 88V8o 88 88ooooo 88oooY' 88    88    88
-88 V8o88 88    88 88 V8o88 88~~~~~ 88~~~b. 88    88    88
-88  V888 `8b  d8' 88  V888 88.     88   8D `8b  d8'    88
-VP   V8P  `Y88P'  VP   V8P Y88888P Y8888P'  `Y88P'     YP
-"#;
-
-const AUTHOR: &str = "fllesser";
-const ABOUT: &str = "CLI for NoneBot2 - Rust implementation";
-
-#[derive(Parser)]
-#[command(name = "nbr", version = VERSION, about = ABOUT, author = AUTHOR, before_help = BANNER, arg_required_else_help = true)]
-pub struct CLI {
-    #[clap(subcommand)]
-    pub commands: NbrCommands,
-    #[clap(short, long, action = ArgAction::Count, help = "Verbose level, -v: DEBUG, -vv: TRACE")]
-    pub verbose: u8,
-}
-
-#[derive(Subcommand)]
-pub enum NbrCommands {
-    #[clap(about = "Create a new project")]
-    Create(create::CreateArgs),
-    #[clap(about = "Run the bot")]
-    Run {
-        #[clap()] // 位置参数
-        file: Option<String>,
-        #[clap(short, long)]
-        reload: bool,
-    },
-    #[clap(about = "Manage plugins")]
-    Plugin {
-        #[clap(subcommand)]
-        commands: plugin::PluginCommands,
-    },
-    #[clap(about = "Manage adapters")]
-    Adapter {
-        #[clap(subcommand)]
-        commands: adapter::AdapterCommands,
-    },
-    #[clap(about = "Generate bot entry file")]
-    Generate {
-        #[clap(short, long)]
-        force: bool,
-    },
-    #[clap(about = "unimplemented")]
-    Init {
-        #[clap(short, long)]
-        name: String,
-        #[clap(short, long)]
-        force: bool,
-    },
-    #[clap(about = "Check environment")]
-    Env {
-        #[clap(subcommand)]
-        env_commands: EnvCommands,
-    },
-    #[clap(about = "unimplemented")]
-    Cache {
-        #[clap(subcommand)]
-        cache_commands: CacheCommands,
-    },
-}
-
-#[derive(Subcommand)]
-pub enum EnvCommands {
-    #[clap(about = "Show environment information")]
-    Info,
-    #[clap(about = "Check environment")]
-    Check,
-}
-
-#[derive(Subcommand)]
-pub enum CacheCommands {
-    #[clap(about = "Clear cache")]
-    Clear,
-    #[clap(about = "Show cache information")]
-    Info,
-}
+use clap::Parser;
+use nbr::{cli::Cli, log, uv};
 
 #[tokio::main]
-async fn main() -> Result<()> {
-    let cli = CLI::parse();
-
+async fn main() {
+    let cli = Cli::parse();
     log::init_logging(cli.verbose);
 
-    // Check if uv is installed
-    uv::self_version().await?;
-
-    match cli.commands {
-        NbrCommands::Create(create_args) => create::handle_create(create_args).await?,
-        NbrCommands::Run { file, reload } => run::handle_run(file, reload).await?,
-        NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await?,
-        NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await?,
-        NbrCommands::Generate { force } => generate::handle_generate(force).await?,
-        NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
-        NbrCommands::Init { .. } => unimplemented!(),
-        NbrCommands::Cache { .. } => unimplemented!(),
+    if let Err(err) = run(cli).await {
+        tracing::error!("{err}");
+        std::process::exit(1);
     }
+}
 
+async fn run(cli: Cli) -> anyhow::Result<()> {
+    uv::self_version().await?;
+    cli.run().await?;
     Ok(())
 }

@@ -1,12 +1,7 @@
-//! Run command handler for nbr
-//!
-//! This module handles running NoneBot applications with various options
-//! including auto-reload, custom host/port, and environment management.
-
 use crate::cli::generate::generate_bot_content;
-use crate::error::{NbrError, Result};
 use crate::log::StyledText;
 use crate::utils::process_utils;
+use anyhow::{Context, Result};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::fs;
@@ -82,12 +77,12 @@ impl BotRunner {
             },
             Config::default(),
         )
-        .map_err(|e| NbrError::io(format!("Failed to create file watcher: {}", e)))?;
+        .context("Failed to create file watcher")?;
 
         // Watch the working directory recursively
         watcher
             .watch(&self.work_dir, RecursiveMode::Recursive)
-            .map_err(|e| NbrError::io(format!("Failed to watch directory: {}", e)))?;
+            .context("Failed to watch directory")?;
 
         self.watcher = Some(watcher);
         debug!("File watcher setup for auto-reload");
@@ -124,9 +119,7 @@ impl BotRunner {
     async fn run_once(&mut self) -> Result<()> {
         let mut process = self.start_bot_process()?;
 
-        let exit_status = process
-            .wait()
-            .map_err(|e| NbrError::io(format!("Failed to wait for process: {}", e)))?;
+        let exit_status = process.wait().context("Failed to wait for process")?;
 
         if exit_status.success() {
             info!("Bot process exited successfully");
@@ -280,9 +273,7 @@ impl BotRunner {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
 
-        let process = cmd
-            .spawn()
-            .map_err(|e| NbrError::io(format!("Failed to start bot process: {}", e)))?;
+        let process = cmd.spawn().context("Failed to start bot process")?;
 
         debug!("Bot process started with PID: {}", process.id());
         Ok(process)
@@ -301,9 +292,7 @@ impl BotRunner {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
 
-        let process = cmd
-            .spawn()
-            .map_err(|e| NbrError::io(format!("Failed to start bot process: {}", e)))?;
+        let process = cmd.spawn().context("Failed to start bot process")?;
 
         debug!("Bot process started with PID: {}", process.id());
         Ok(process)
@@ -356,7 +345,8 @@ pub async fn handle_run(file: Option<String>, reload: bool) -> Result<()> {
         .cyan_underline(&runner.python_path)
         .println_bold();
 
-    runner.run().await
+    runner.run().await?;
+    Ok(())
 }
 
 /// Find Python executable
@@ -372,8 +362,8 @@ fn find_python_executable(work_dir: &Path) -> Result<String> {
     }
     // Fall back to system Python
     process_utils::find_python().ok_or_else(|| {
-        NbrError::not_found(
-            "Python executable not found. Please use `uv sync -p {version}` to install Python",
+        anyhow::anyhow!(
+            "Python executable not found. Please use `uv sync -p {{version}}` to install Python",
         )
     })
 }
@@ -389,10 +379,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 
     // Verify it's Python 3.10+
     if !version.contains("Python 3.1") {
-        return Err(NbrError::environment(format!(
-            "Python 3.10+ required, found: {}",
-            version
-        )));
+        return Err(anyhow::anyhow!("Python 3.10+ required, found: {}", version));
     }
 
     // Check if NoneBot is installed
@@ -416,8 +403,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 }
 
 /// Load environment variables from .env files
-#[allow(unused)]
-fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>> {
+pub fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>> {
     let mut env_vars = HashMap::new();
 
     let env_files = [".env", ".env.dev", ".env.prod"];
@@ -428,7 +414,7 @@ fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>
             debug!("Loading environment variables from {}", env_path.display());
 
             let content = fs::read_to_string(&env_path)
-                .map_err(|e| NbrError::io(format!("Failed to read {}: {}", env_file, e)))?;
+                .with_context(|| format!("Failed to read {}", env_file))?;
 
             for line in content.lines() {
                 let line = line.trim();
@@ -457,31 +443,4 @@ fn load_environment_variables(work_dir: &Path) -> Result<HashMap<String, String>
 
     debug!("Loaded {} environment variables", env_vars.len());
     Ok(env_vars)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use tempfile::tempdir;
-
-    #[test]
-    fn test_load_environment_variables() {
-        let temp_dir = tempdir().unwrap();
-        let env_path = temp_dir.path().join(".env");
-
-        std::fs::write(
-            &env_path,
-            "TEST_VAR=test_value\nANOTHER_VAR=\"quoted value\"",
-        )
-        .unwrap();
-
-        let result = load_environment_variables(temp_dir.path());
-        assert!(result.is_ok());
-
-        let env_vars = result.unwrap();
-        assert_eq!(env_vars.len(), 2);
-        assert!(env_vars.contains_key("TEST_VAR"));
-        assert!(env_vars.contains_key("ANOTHER_VAR"));
-    }
 }

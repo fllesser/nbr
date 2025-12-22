@@ -3,7 +3,8 @@
 //! This module contains common utility functions used throughout the application.
 #![allow(unused)]
 
-use crate::error::{NbrError, Result};
+use crate::error::Error;
+use anyhow::{Context, Result};
 use console::Term;
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
@@ -44,9 +45,8 @@ pub mod fs_utils {
     pub fn ensure_dir<P: AsRef<Path>>(path: P) -> Result<()> {
         let path = path.as_ref();
         if !path.exists() {
-            fs::create_dir_all(path).map_err(|e| {
-                NbrError::io(format!("Failed to create directory {:?}: {}", path, e))
-            })?;
+            fs::create_dir_all(path)
+                .with_context(|| format!("Failed to create directory {:?}", path))?;
             debug!("Created directory: {:?}", path);
         }
         Ok(())
@@ -111,8 +111,7 @@ pub mod fs_utils {
     ) -> Result<Vec<PathBuf>> {
         let dir = dir.as_ref();
         let mut matches = Vec::new();
-        let regex = Regex::new(pattern)
-            .map_err(|e| NbrError::invalid_argument(format!("Invalid pattern: {}", e)))?;
+        let regex = Regex::new(pattern).context("Invalid regex pattern")?;
 
         find_files_recursive(dir, &regex, recursive, &mut matches)?;
         Ok(matches)
@@ -174,7 +173,7 @@ pub mod process_utils {
         debug!("Executing command: {} {}", program, args.join(" "));
 
         if program.is_empty() {
-            return Err(NbrError::invalid_argument("Program name cannot be empty"));
+            anyhow::bail!("Program name cannot be empty");
         }
 
         let mut cmd = Command::new(program);
@@ -188,16 +187,12 @@ pub mod process_utils {
             cmd.output().await
         })
         .await
-        .map_err(|_| NbrError::command_execution(format!("{} {}", program, args.join(" ")), -1))?
-        .map_err(|e| NbrError::io(format!("Failed to execute command: {}", e)))?;
+        .with_context(|| format!("Command '{}' timed out", program))?
+        .with_context(|| format!("Failed to execute command: {}", program))?;
 
         if !output.status.success() {
-            let exit_code = output.status.code().unwrap_or(-1);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(NbrError::command_execution(
-                format!("{} {} - {}", program, args.join(" "), stderr),
-                exit_code,
-            ));
+            anyhow::bail!("{} {} failed: {}", program, args.join(" "), stderr);
         }
 
         debug!("Command executed successfully");
@@ -222,14 +217,10 @@ pub mod process_utils {
 
         let status = cmd
             .status()
-            .map_err(|e| NbrError::io(format!("Failed to execute command: {}", e)))?;
+            .with_context(|| format!("Failed to execute command: {}", program))?;
 
         if !status.success() {
-            let exit_code = status.code().unwrap_or(-1);
-            return Err(NbrError::command_execution(
-                format!("{} {}", program, args.join(" ")),
-                exit_code,
-            ));
+            anyhow::bail!("Command '{} {}' failed", program, args.join(" "));
         }
 
         Ok(())
@@ -282,14 +273,14 @@ pub mod net_utils {
     /// Download file with progress bar
     pub async fn download_file(url: &str, destination: &Path, show_progress: bool) -> Result<()> {
         let client = Client::new();
-        let response = client.get(url).send().await.map_err(NbrError::Network)?;
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .with_context(|| format!("Failed to send request to {}", url))?;
 
         if !response.status().is_success() {
-            return Err(NbrError::unknown(format!(
-                "Failed to download {}: HTTP {}",
-                url,
-                response.status()
-            )));
+            anyhow::bail!("Failed to download {}: HTTP {}", url, response.status());
         }
 
         let total_size = response.content_length().unwrap_or(0);
@@ -308,20 +299,16 @@ pub mod net_utils {
         };
 
         let mut file = fs::File::create(destination)
-            .map_err(|e| NbrError::io(format!("Failed to create file: {}", e)))?;
+            .with_context(|| format!("Failed to create file: {:?}", destination))?;
 
         let mut downloaded = 0u64;
         let mut stream = response.bytes_stream();
 
         use futures_util::StreamExt;
         while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(NbrError::Network)?;
-            file.write_all(&chunk).map_err(|e| {
-                NbrError::Io(std::io::Error::other(format!(
-                    "Failed to write to file: {}",
-                    e
-                )))
-            })?;
+            let chunk = chunk.map_err(Error::Network)?;
+            file.write_all(&chunk)
+                .with_context(|| format!("Failed to write to file: {:?}", destination))?;
 
             downloaded += chunk.len() as u64;
             if let Some(ref pb) = pb {
@@ -394,20 +381,18 @@ pub mod string_utils {
     /// Validate project name
     pub fn validate_project_name(name: &str) -> Result<()> {
         if name.is_empty() {
-            return Err(NbrError::validation("Project name cannot be empty"));
+            anyhow::bail!("Project name cannot be empty");
         }
 
         if name.len() > 100 {
-            return Err(NbrError::validation(
-                "Project name is too long (max 100 characters)",
-            ));
+            anyhow::bail!("Project name is too long (max 100 characters)");
         }
 
         let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
         if !re.is_match(name) {
-            return Err(NbrError::validation(
-                "Project name must start with a letter and contain only letters, numbers, underscores, and hyphens",
-            ));
+            anyhow::bail!(
+                "Project name must start with a letter and contain only letters, numbers, underscores, and hyphens"
+            );
         }
 
         Ok(())
@@ -416,14 +401,14 @@ pub mod string_utils {
     /// Validate package name
     pub fn validate_package_name(name: &str) -> Result<()> {
         if name.is_empty() {
-            return Err(NbrError::validation("Package name cannot be empty"));
+            anyhow::bail!("Package name cannot be empty");
         }
 
         let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
         if !re.is_match(name) {
-            return Err(NbrError::validation(
-                "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens",
-            ));
+            anyhow::bail!(
+                "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens"
+            );
         }
 
         Ok(())
@@ -483,7 +468,7 @@ pub mod terminal_utils {
     pub fn clear_screen() -> Result<()> {
         Term::stdout()
             .clear_screen()
-            .map_err(|e| NbrError::io(format!("Failed to clear screen: {}", e)))?;
+            .context("Failed to clear screen")?;
         Ok(())
     }
 
