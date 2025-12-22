@@ -379,7 +379,7 @@ async fn verify_python_environment(python_path: &str) -> Result<()> {
 
     // Verify it's Python 3.10+
     if !version.contains("Python 3.1") {
-        return Err(anyhow::anyhow!("Python 3.10+ required, found: {}", version));
+        anyhow::bail!("Python 3.10+ required, found: {}", version);
     }
 
     // Check if NoneBot is installed

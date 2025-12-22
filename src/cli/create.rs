@@ -263,7 +263,7 @@ fn input_project_name() -> anyhow::Result<String> {
         .default("awesome-bot".to_string())
         .validate_with(|input: &String| -> Result<()> {
             if input.contains(" ") {
-                Err(anyhow::anyhow!("Project name cannot contain spaces"))
+                anyhow::bail!("Project name cannot contain spaces")
             } else {
                 Ok(())
             }

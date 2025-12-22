@@ -398,10 +398,7 @@ impl PluginManager {
         debug!("Uninstalling unregistered plugin: {}", package_name);
 
         if !uv::is_installed(package_name).await {
-            return Err(anyhow::anyhow!(
-                "Plugin '{}' is not installed.",
-                package_name
-            ));
+            anyhow::bail!("Plugin '{}' is not installed.", package_name);
         }
 
         if Confirm::with_theme(&ColorfulTheme::default())
@@ -431,10 +428,10 @@ impl PluginManager {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !uv::is_installed(&package_name).await {
-            return Err(anyhow::anyhow!(
+            anyhow::bail!(
                 "Plugin '{}' is not installed.",
                 registry_plugin.project_link
-            ));
+            );
         }
         // Confirm uninstallation
         if !Confirm::with_theme(&ColorfulTheme::default())
@@ -575,9 +572,7 @@ impl PluginManager {
         } else if let Some(name) = plugin_name {
             self.update_single_plugin(name, reinstall)?;
         } else {
-            return Err(anyhow::anyhow!(
-                "Either specify a plugin name or use --all( -a) flag",
-            ));
+            anyhow::bail!("Either specify a plugin name or use --all( -a) flag",);
         }
         Ok(())
     }
