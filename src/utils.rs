@@ -2,7 +2,6 @@ use crate::error::Error;
 use anyhow::{Context, Result};
 use console::Term;
 use indicatif::{ProgressBar, ProgressStyle};
-use regex::Regex;
 use reqwest::Client;
 use std::fs;
 use std::io::Write;
@@ -194,79 +193,6 @@ pub mod net_utils {
     }
 }
 
-/// String utilities
-pub mod string_utils {
-    use super::*;
-
-    /// Validate project name
-    pub fn validate_project_name(name: &str) -> Result<()> {
-        if name.is_empty() {
-            anyhow::bail!("Project name cannot be empty");
-        }
-
-        if name.len() > 100 {
-            anyhow::bail!("Project name is too long (max 100 characters)");
-        }
-
-        let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-        if !re.is_match(name) {
-            anyhow::bail!(
-                "Project name must start with a letter and contain only letters, numbers, underscores, and hyphens"
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Validate package name
-    pub fn validate_package_name(name: &str) -> Result<()> {
-        if name.is_empty() {
-            anyhow::bail!("Package name cannot be empty");
-        }
-
-        let re = Regex::new(r"^[a-zA-Z][a-zA-Z0-9_-]*$").unwrap();
-        if !re.is_match(name) {
-            anyhow::bail!(
-                "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens"
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Sanitize filename
-    pub fn sanitize_filename(name: &str) -> String {
-        let forbidden_chars: Vec<char> = if cfg!(windows) {
-            vec!['<', '>', ':', '"', '|', '?', '*', '/', '\\']
-        } else {
-            vec!['/', '\0']
-        };
-
-        let mut result = String::new();
-        for ch in name.chars() {
-            if forbidden_chars.contains(&ch) || ch.is_control() {
-                result.push('_');
-            } else {
-                result.push(ch);
-            }
-        }
-
-        // Trim dots and spaces from the end (Windows restriction)
-        result.trim_end_matches(&['.', ' '][..]).to_string()
-    }
-
-    /// Truncate string with ellipsis
-    pub fn truncate_with_ellipsis(s: &str, max_len: usize) -> String {
-        if s.len() <= max_len {
-            s.to_string()
-        } else if max_len <= 3 {
-            "...".to_string()
-        } else {
-            format!("{}...", &s[..max_len - 3])
-        }
-    }
-}
-
 /// Terminal utilities
 pub mod terminal_utils {
     use super::*;
@@ -327,17 +253,6 @@ pub mod terminal_utils {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_project_name_validation() {
-        assert!(string_utils::validate_project_name("valid_project").is_ok());
-        assert!(string_utils::validate_project_name("ValidProject").is_ok());
-        assert!(string_utils::validate_project_name("valid-project").is_ok());
-
-        assert!(string_utils::validate_project_name("").is_err());
-        assert!(string_utils::validate_project_name("1invalid").is_err());
-        assert!(string_utils::validate_project_name("invalid@project").is_err());
-    }
 
     #[tokio::test]
     async fn test_download_file() {
