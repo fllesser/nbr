@@ -2,7 +2,7 @@ mod common;
 use std::fs;
 
 #[tokio::test]
-async fn test_create_project_snapshot() {
+async fn test_create_project() {
     let (_dir, output_dir) = common::create_temp_project(false).await;
 
     // Snapshot pyproject.toml
