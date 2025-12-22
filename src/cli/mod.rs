@@ -1,5 +1,6 @@
 pub mod adapter;
 pub mod create;
+pub mod docker;
 pub mod env;
 pub mod generate;
 pub mod init;
@@ -34,12 +35,13 @@ pub struct Cli {
 impl Cli {
     pub async fn run(self) -> anyhow::Result<()> {
         match self.commands {
-            NbrCommands::Create(create_args) => create::handle_create(create_args).await?,
-            NbrCommands::Run { file, reload } => run::handle_run(file, reload).await?,
-            NbrCommands::Plugin { commands } => plugin::handle_plugin(&commands).await?,
-            NbrCommands::Adapter { commands } => adapter::handle_adapter(&commands).await?,
-            NbrCommands::Generate { force } => generate::handle_generate(force).await?,
-            NbrCommands::Env { env_commands } => env::handle_env(&env_commands).await?,
+            NbrCommands::Create(create_args) => create::handle(create_args).await?,
+            NbrCommands::Run { file, reload } => run::handle(file, reload).await?,
+            NbrCommands::Plugin { commands } => plugin::handle(&commands).await?,
+            NbrCommands::Adapter { commands } => adapter::handle(&commands).await?,
+            NbrCommands::Generate { force } => generate::handle(force).await?,
+            NbrCommands::Env { commands } => env::handle(&commands).await?,
+            NbrCommands::Docker { commands } => docker::handle(&commands).await?,
             NbrCommands::Init { .. } => unimplemented!(),
             NbrCommands::Cache { .. } => unimplemented!(),
         }
@@ -83,12 +85,17 @@ pub enum NbrCommands {
     #[clap(about = "Check environment")]
     Env {
         #[clap(subcommand)]
-        env_commands: EnvCommands,
+        commands: EnvCommands,
     },
     #[clap(about = "unimplemented")]
     Cache {
         #[clap(subcommand)]
-        cache_commands: CacheCommands,
+        commands: CacheCommands,
+    },
+    #[clap(about = "Manage Docker")]
+    Docker {
+        #[clap(subcommand)]
+        commands: DockerCommands,
     },
 }
 
@@ -106,4 +113,14 @@ pub enum CacheCommands {
     Clear,
     #[clap(about = "Show cache information")]
     Info,
+}
+
+#[derive(Subcommand)]
+pub enum DockerCommands {
+    #[clap(about = "Run Docker container")]
+    Run,
+    #[clap(about = "Build Docker image")]
+    Build,
+    #[clap(about = "Generate Docker config(Dockerfile, compose.yml, .dockerignore)")]
+    Gen,
 }

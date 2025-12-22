@@ -618,7 +618,7 @@ impl EnvironmentChecker {
 }
 
 /// Handle the env command
-pub async fn handle_env(commands: &EnvCommands) -> Result<()> {
+pub async fn handle(commands: &EnvCommands) -> Result<()> {
     let work_dir = std::env::current_dir()?;
     let mut checker = EnvironmentChecker::new(work_dir)?;
 

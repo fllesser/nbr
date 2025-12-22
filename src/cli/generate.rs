@@ -83,7 +83,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
 }
 
 /// Handle the generate command
-pub async fn handle_generate(force: bool) -> Result<()> {
+pub async fn handle(force: bool) -> Result<()> {
     let work_dir = std::env::current_dir()?;
     generate_bot_file(&work_dir, force).await?;
     Ok(())

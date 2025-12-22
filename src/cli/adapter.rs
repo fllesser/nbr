@@ -427,7 +427,7 @@ pub enum AdapterCommands {
 }
 
 /// Handle the adapter command
-pub async fn handle_adapter(commands: &AdapterCommands) -> Result<()> {
+pub async fn handle(commands: &AdapterCommands) -> Result<()> {
     let adapter_manager = AdapterManager::new(None)?;
 
     match commands {
