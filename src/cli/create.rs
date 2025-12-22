@@ -506,7 +506,7 @@ fn generate_env_files(options: &ProjectOptions) -> Result<()> {
     };
     let file_name = format!(".env.{}", options.environment);
     let env_content = format!(
-        include_str!("templates/env"),
+        include_str!("templates/.env"),
         driver, log_level, options.name,
     );
     fs::write(
@@ -543,12 +543,15 @@ fn generate_dev_tools_config(options: &ProjectOptions) -> Result<()> {
 
 fn generate_dockerfile(options: &ProjectOptions) -> Result<()> {
     if options.gen_dockerfile {
-        let dockerfile = format!(include_str!("templates/dockerfile"), options.python_version);
+        let dockerfile = format!(include_str!("templates/Dockerfile"), options.python_version);
         fs::write(options.output_dir.join("Dockerfile"), dockerfile)?;
 
         let compose_config = include_str!("templates/compose.yml");
         let compose_config = compose_config.replace("${PROJECT_NAME}", &options.name);
         fs::write(options.output_dir.join("compose.yml"), compose_config)?;
+
+        let dockerignore = include_str!("templates/.dockerignore");
+        fs::write(options.output_dir.join(".dockerignore"), dockerignore)?;
     }
     Ok(())
 }
