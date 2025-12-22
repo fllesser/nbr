@@ -520,7 +520,7 @@ impl PluginManager {
             .reset_plugins(plugins.iter().map(|p| p.as_str()).collect())?;
         StyledText::new(" ")
             .green_bold("✓ Successfully reset nonebot plugins:")
-            .cyan_bold(&plugins.join(", "))
+            .cyan_bold(plugins.join(", "))
             .println();
         Ok(())
     }
@@ -608,7 +608,7 @@ impl PluginManager {
 
         StyledText::new(" ")
             .green_bold("Successfully updated plugin(s):")
-            .cyan_bold(&package_names.join(", "))
+            .cyan_bold(package_names.join(", "))
             .println();
 
         Ok(())

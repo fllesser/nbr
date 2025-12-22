@@ -449,7 +449,6 @@ mod tests {
             });
 
         assert!(!styled_text.is_empty());
-        assert!(styled_text.len() > 0);
 
         // 测试直接输出方法
         styled_text.println();

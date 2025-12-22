@@ -336,7 +336,7 @@ impl AdapterManager {
 
         StyledText::new(" ")
             .green_bold("✓ Successfully uninstalled adapters:")
-            .cyan_bold(&selected_adapters.join(", "))
+            .cyan_bold(selected_adapters.join(", "))
             .println();
 
         Ok(())
