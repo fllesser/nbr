@@ -50,7 +50,7 @@ pub(crate) fn create_python_pin_file(work_dir: &Path, python_version: &str) -> R
 }
 
 pub(crate) fn create_dockerfile(work_dir: &Path) -> Result<()> {
-    let dockerfile = format!(include_str!("templates/Dockerfile"));
+    let dockerfile = include_str!("templates/dockerfile");
     fs::write(work_dir.join("Dockerfile"), dockerfile).context("Failed to write Dockerfile")
 }
 
