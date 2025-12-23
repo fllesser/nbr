@@ -1,10 +1,11 @@
 use ansi_term::{Colour, Style};
+use std::borrow::Cow;
+use std::fmt::Write;
 use tracing_core::Event;
 use tracing_subscriber::fmt::format::Writer;
 use tracing_subscriber::fmt::{FormatEvent, FormatFields};
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
-
 struct CustomFormatter;
 
 impl<S, N> FormatEvent<S, N> for CustomFormatter
@@ -104,8 +105,6 @@ pub fn init_logging(verbose_level: u8) {
         .init();
 }
 
-use std::borrow::Cow;
-
 /// 样式部件枚举，存储样式信息而不是预格式化的字符串
 #[derive(Debug, Clone)]
 enum StylePart<'a> {
@@ -166,10 +165,42 @@ macro_rules! color_style_method {
     };
 }
 
-use std::fmt::{self, Display, Write};
+macro_rules! print_style_method {
+    ($fmt:ident, $print:ident, $style:ident) => {
+        pub fn $print(&self) {
+            println!("{}", self.$fmt());
+        }
 
-impl<'a> Display for StyledText<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        pub fn $fmt(&self) -> String {
+            let mut result = String::new();
+            let mut first = true;
+
+            for part in &self.parts {
+                if !first {
+                    write!(result, "{}", self.sep).unwrap();
+                }
+                first = false;
+
+                let styled_text = match part {
+                    StylePart::Text(text) => Style::new().$style().paint(text.as_ref()),
+                    StylePart::Colored { text, color } => {
+                        Style::new().$style().fg(*color).paint(text.as_ref())
+                    }
+                    StylePart::Styled { text, style } => style.$style().paint(text.as_ref()),
+                    StylePart::ColoredStyled { text, color, style } => {
+                        style.$style().fg(*color).paint(text.as_ref())
+                    }
+                };
+
+                write!(result, "{}", styled_text).unwrap();
+            }
+            result
+        }
+    };
+}
+
+impl<'a> std::fmt::Display for StyledText<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut first = true;
         for part in &self.parts {
             if !first {
@@ -200,43 +231,13 @@ impl<'a> StyledText<'a> {
         println!("{self}");
     }
 
-    pub fn println_bold(&self) {
-        println!("{}", self.fmt_bold());
-    }
-
-    pub fn fmt_bold(&self) -> String {
-        let mut result = String::new();
-        let mut first = true;
-
-        for part in &self.parts {
-            if !first {
-                write!(result, "{}", self.sep).unwrap();
-            }
-            first = false;
-
-            match part {
-                StylePart::Text(text) => {
-                    write!(result, "{}", Style::new().bold().paint(text.as_ref())).unwrap();
-                }
-                StylePart::Colored { text, color } => {
-                    write!(
-                        result,
-                        "{}",
-                        Style::new().bold().fg(*color).paint(text.as_ref())
-                    )
-                    .unwrap();
-                }
-                StylePart::Styled { text, style } => {
-                    write!(result, "{}", style.bold().paint(text.as_ref())).unwrap();
-                }
-                StylePart::ColoredStyled { text, color, style } => {
-                    write!(result, "{}", style.bold().fg(*color).paint(text.as_ref())).unwrap();
-                }
-            }
-        }
-
-        result
-    }
+    print_style_method!(fmt_bold, println_bold, bold);
+    print_style_method!(fmt_blink, println_blink, blink);
+    print_style_method!(fmt_italic, println_italic, italic);
+    print_style_method!(fmt_hidden, println_hidden, hidden);
+    print_style_method!(fmt_reverse, println_reverse, reverse);
+    print_style_method!(fmt_underline, println_underline, underline);
+    print_style_method!(fmt_strikethrough, println_strikethrough, strikethrough);
 
     /// 接收闭包
     pub fn with(&mut self, closure: impl FnOnce(&mut Self)) -> &mut Self {
