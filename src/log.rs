@@ -130,8 +130,7 @@ pub struct StyledText<'a> {
 
 // 更新宏定义：支持静态字符串和动态字符串
 macro_rules! color_method {
-    ($name:ident, $color:expr, $doc:expr) => {
-        #[doc = $doc]
+    ($name:ident, $color:expr) => {
         pub fn $name(&mut self, text: impl Into<Cow<'a, str>>) -> &mut Self {
             self.parts.push(StylePart::Colored {
                 text: text.into(),
@@ -143,8 +142,7 @@ macro_rules! color_method {
 }
 
 macro_rules! style_method {
-    ($name:ident, $style:expr, $doc:expr) => {
-        #[doc = $doc]
+    ($name:ident, $style:expr) => {
         pub fn $name(&mut self, text: impl Into<Cow<'a, str>>) -> &mut Self {
             self.parts.push(StylePart::Styled {
                 text: text.into(),
@@ -156,8 +154,7 @@ macro_rules! style_method {
 }
 
 macro_rules! color_style_method {
-    ($name:ident, $color:expr, $style:expr, $doc:expr) => {
-        #[doc = $doc]
+    ($name:ident, $color:expr, $style:expr) => {
         pub fn $name(&mut self, text: impl Into<Cow<'a, str>>) -> &mut Self {
             self.parts.push(StylePart::ColoredStyled {
                 text: text.into(),
@@ -253,84 +250,44 @@ impl<'a> StyledText<'a> {
     }
 
     // 基本颜色方法
-    color_method!(white, Colour::White, "白色");
-    color_method!(red, Colour::Red, "红色");
-    color_method!(green, Colour::Green, "绿色");
-    color_method!(blue, Colour::Blue, "蓝色");
-    color_method!(purple, Colour::Purple, "紫色");
-    color_method!(yellow, Colour::Yellow, "黄色");
-    color_method!(cyan, Colour::Cyan, "青色");
-    color_method!(black, Colour::Black, "黑色");
+    color_method!(white, Colour::White);
+    color_method!(red, Colour::Red);
+    color_method!(green, Colour::Green);
+    color_method!(blue, Colour::Blue);
+    color_method!(purple, Colour::Purple);
+    color_method!(yellow, Colour::Yellow);
+    color_method!(cyan, Colour::Cyan);
+    color_method!(black, Colour::Black);
 
     // 基本样式方法
-    style_method!(bold, Style::new().bold(), "粗体");
-    style_method!(dimmed, Style::new().dimmed(), "淡化");
-    style_method!(italic, Style::new().italic(), "斜体");
-    style_method!(underline, Style::new().underline(), "下划线");
-    style_method!(blink, Style::new().blink(), "闪烁");
-    style_method!(reverse, Style::new().reverse(), "反色");
-    style_method!(hidden, Style::new().hidden(), "隐藏");
-    style_method!(strikethrough, Style::new().strikethrough(), "删除线");
+    style_method!(bold, Style::new().bold());
+    style_method!(dimmed, Style::new().dimmed());
+    style_method!(italic, Style::new().italic());
+    style_method!(underline, Style::new().underline());
+    style_method!(blink, Style::new().blink());
+    style_method!(reverse, Style::new().reverse());
+    style_method!(hidden, Style::new().hidden());
+    style_method!(strikethrough, Style::new().strikethrough());
 
     // 颜色+粗体组合
-    color_style_method!(white_bold, Colour::White, Style::new().bold(), "白色粗体");
-    color_style_method!(red_bold, Colour::Red, Style::new().bold(), "红色粗体");
-    color_style_method!(green_bold, Colour::Green, Style::new().bold(), "绿色粗体");
-    color_style_method!(blue_bold, Colour::Blue, Style::new().bold(), "蓝色粗体");
-    color_style_method!(purple_bold, Colour::Purple, Style::new().bold(), "紫色粗体");
-    color_style_method!(yellow_bold, Colour::Yellow, Style::new().bold(), "黄色粗体");
-    color_style_method!(cyan_bold, Colour::Cyan, Style::new().bold(), "青色粗体");
-    color_style_method!(black_bold, Colour::Black, Style::new().bold(), "黑色粗体");
+    color_style_method!(white_bold, Colour::White, Style::new().bold());
+    color_style_method!(red_bold, Colour::Red, Style::new().bold());
+    color_style_method!(green_bold, Colour::Green, Style::new().bold());
+    color_style_method!(blue_bold, Colour::Blue, Style::new().bold());
+    color_style_method!(purple_bold, Colour::Purple, Style::new().bold());
+    color_style_method!(yellow_bold, Colour::Yellow, Style::new().bold());
+    color_style_method!(cyan_bold, Colour::Cyan, Style::new().bold());
+    color_style_method!(black_bold, Colour::Black, Style::new().bold());
 
     // 颜色+下划线组合
-    color_style_method!(
-        white_underline,
-        Colour::White,
-        Style::new().underline(),
-        "白色下划线"
-    );
-    color_style_method!(
-        red_underline,
-        Colour::Red,
-        Style::new().underline(),
-        "红色下划线"
-    );
-    color_style_method!(
-        green_underline,
-        Colour::Green,
-        Style::new().underline(),
-        "绿色下划线"
-    );
-    color_style_method!(
-        blue_underline,
-        Colour::Blue,
-        Style::new().underline(),
-        "蓝色下划线"
-    );
-    color_style_method!(
-        purple_underline,
-        Colour::Purple,
-        Style::new().underline(),
-        "紫色下划线"
-    );
-    color_style_method!(
-        yellow_underline,
-        Colour::Yellow,
-        Style::new().underline(),
-        "黄色下划线"
-    );
-    color_style_method!(
-        cyan_underline,
-        Colour::Cyan,
-        Style::new().underline(),
-        "青色下划线"
-    );
-    color_style_method!(
-        black_underline,
-        Colour::Black,
-        Style::new().underline(),
-        "黑色下划线"
-    );
+    color_style_method!(white_underline, Colour::White, Style::new().underline());
+    color_style_method!(red_underline, Colour::Red, Style::new().underline());
+    color_style_method!(green_underline, Colour::Green, Style::new().underline());
+    color_style_method!(blue_underline, Colour::Blue, Style::new().underline());
+    color_style_method!(purple_underline, Colour::Purple, Style::new().underline());
+    color_style_method!(yellow_underline, Colour::Yellow, Style::new().underline());
+    color_style_method!(cyan_underline, Colour::Cyan, Style::new().underline());
+    color_style_method!(black_underline, Colour::Black, Style::new().underline());
 
     // RGB 颜色方法
     pub fn rgb(&mut self, r: u8, g: u8, b: u8, text: impl Into<Cow<'a, str>>) -> &mut Self {
