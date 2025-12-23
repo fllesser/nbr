@@ -169,7 +169,30 @@ macro_rules! color_style_method {
     };
 }
 
-#[allow(unused)]
+use std::fmt::{self, Display, Write};
+
+impl<'a> Display for StyledText<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut first = true;
+        for part in &self.parts {
+            if !first {
+                write!(f, "{}", self.sep)?;
+            }
+            first = false;
+
+            match part {
+                StylePart::Text(text) => write!(f, "{}", text)?,
+                StylePart::Colored { text, color } => write!(f, "{}", color.paint(text.as_ref()))?,
+                StylePart::Styled { text, style } => write!(f, "{}", style.paint(text.as_ref()))?,
+                StylePart::ColoredStyled { text, color, style } => {
+                    write!(f, "{}", style.fg(*color).paint(text.as_ref()))?
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<'a> StyledText<'a> {
     pub fn new(sep: &'a str) -> Self {
         let parts = Vec::new();
@@ -177,45 +200,45 @@ impl<'a> StyledText<'a> {
     }
 
     pub fn println(&self) {
-        println!("{}", self.build());
+        println!("{self}");
     }
 
     pub fn println_bold(&self) {
-        println!("{}", self.build_bold());
+        println!("{}", self.fmt_bold());
     }
 
-    pub fn build(&self) -> String {
-        self.parts
-            .iter()
-            .map(|part| match part {
-                StylePart::Text(text) => text.to_string(),
-                StylePart::Colored { text, color } => color.paint(text.as_ref()).to_string(),
-                StylePart::Styled { text, style } => style.paint(text.as_ref()).to_string(),
-                StylePart::ColoredStyled { text, color, style } => {
-                    style.fg(*color).paint(text.as_ref()).to_string()
-                }
-            })
-            .collect::<Vec<String>>()
-            .join(self.sep)
-    }
+    pub fn fmt_bold(&self) -> String {
+        let mut result = String::new();
+        let mut first = true;
 
-    pub fn build_bold(&self) -> String {
-        self.parts
-            .iter()
-            .map(|part| match part {
-                StylePart::Text(text) => Style::new().bold().paint(text.as_ref()).to_string(),
-                StylePart::Colored { text, color } => Style::new()
-                    .bold()
-                    .fg(*color)
-                    .paint(text.as_ref())
-                    .to_string(),
-                StylePart::Styled { text, style } => style.bold().paint(text.as_ref()).to_string(),
-                StylePart::ColoredStyled { text, color, style } => {
-                    style.bold().fg(*color).paint(text.as_ref()).to_string()
+        for part in &self.parts {
+            if !first {
+                write!(result, "{}", self.sep).unwrap();
+            }
+            first = false;
+
+            match part {
+                StylePart::Text(text) => {
+                    write!(result, "{}", Style::new().bold().paint(text.as_ref())).unwrap();
                 }
-            })
-            .collect::<Vec<String>>()
-            .join(self.sep)
+                StylePart::Colored { text, color } => {
+                    write!(
+                        result,
+                        "{}",
+                        Style::new().bold().fg(*color).paint(text.as_ref())
+                    )
+                    .unwrap();
+                }
+                StylePart::Styled { text, style } => {
+                    write!(result, "{}", style.bold().paint(text.as_ref())).unwrap();
+                }
+                StylePart::ColoredStyled { text, color, style } => {
+                    write!(result, "{}", style.bold().fg(*color).paint(text.as_ref())).unwrap();
+                }
+            }
+        }
+
+        result
     }
 
     /// 接收闭包
@@ -343,27 +366,6 @@ impl<'a> StyledText<'a> {
             style: Style::new().bold(),
         });
         self
-    }
-
-    /// 直接输出到终端，避免字符串分配
-    pub fn print(&self) {
-        let mut first = true;
-        for part in &self.parts {
-            if !first {
-                print!("{}", self.sep);
-            }
-            first = false;
-
-            match part {
-                StylePart::Text(text) => print!("{}", text),
-                StylePart::Colored { text, color } => print!("{}", color.paint(text.as_ref())),
-                StylePart::Styled { text, style } => print!("{}", style.paint(text.as_ref())),
-                StylePart::ColoredStyled { text, color, style } => {
-                    print!("{}", style.fg(*color).paint(text.as_ref()))
-                }
-            }
-        }
-        println!();
     }
 
     /// 获取部件数量

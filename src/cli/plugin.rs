@@ -289,7 +289,7 @@ impl PluginManager {
             .text("Would you like to install")
             .cyan(options.name)
             .text("from github")
-            .build();
+            .to_string();
         // 确定是否安装 github 插件
         if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(prompt)
@@ -323,7 +323,7 @@ impl PluginManager {
             .text("Would you like to install")
             .cyan(options.name)
             .text("from PyPI?")
-            .build();
+            .to_string();
         if Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(prompt)
             .default(true)
@@ -359,7 +359,7 @@ impl PluginManager {
         let prompt = StyledText::new(" ")
             .text("Would you like to install")
             .cyan(package_name)
-            .build();
+            .to_string();
         if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(prompt)
             .default(true)
