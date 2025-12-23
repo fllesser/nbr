@@ -135,7 +135,7 @@ impl Adapter {
                 first.to_ascii_uppercase() + rest
             })
             .collect::<String>();
-        format!("{}Adapter", camel_case)
+        camel_case + "Adapter"
     }
 }
 

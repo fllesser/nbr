@@ -224,7 +224,7 @@ impl AdapterManager {
         let prompt = StyledText::new(" ")
             .white_bold("Would you like to install")
             .cyan_bold(format!("[{}]", selected_adapters_names).as_str())
-            .build();
+            .to_string();
 
         if !Confirm::with_theme(&ColorfulTheme::default())
             .with_prompt(&prompt)
