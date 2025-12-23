@@ -168,19 +168,15 @@ macro_rules! color_style_method {
 macro_rules! print_style_method {
     ($fmt:ident, $print:ident, $style:ident) => {
         pub fn $print(&self) {
-            println!("{}", self.$fmt());
+            let msg = self.$fmt().expect("Failed to format styled text");
+            println!("{}", msg);
         }
 
-        pub fn $fmt(&self) -> String {
+        pub fn $fmt(&self) -> Result<String, std::fmt::Error> {
             let mut result = String::new();
-            let mut first = true;
+            let mut iter = self.parts.iter().peekable();
 
-            for part in &self.parts {
-                if !first {
-                    write!(result, "{}", self.sep).unwrap();
-                }
-                first = false;
-
+            while let Some(part) = iter.next() {
                 let styled_text = match part {
                     StylePart::Text(text) => Style::new().$style().paint(text.as_ref()),
                     StylePart::Colored { text, color } => {
@@ -192,22 +188,22 @@ macro_rules! print_style_method {
                     }
                 };
 
-                write!(result, "{}", styled_text).unwrap();
+                write!(result, "{}", styled_text)?;
+
+                if iter.peek().is_some() {
+                    write!(result, "{}", self.sep)?;
+                }
             }
-            result
+            Ok(result)
         }
     };
 }
 
 impl<'a> std::fmt::Display for StyledText<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut first = true;
-        for part in &self.parts {
-            if !first {
-                write!(f, "{}", self.sep)?;
-            }
-            first = false;
+        let mut iter = self.parts.iter().peekable();
 
+        while let Some(part) = iter.next() {
             match part {
                 StylePart::Text(text) => write!(f, "{}", text)?,
                 StylePart::Colored { text, color } => write!(f, "{}", color.paint(text.as_ref()))?,
@@ -215,6 +211,9 @@ impl<'a> std::fmt::Display for StyledText<'a> {
                 StylePart::ColoredStyled { text, color, style } => {
                     write!(f, "{}", style.fg(*color).paint(text.as_ref()))?
                 }
+            }
+            if iter.peek().is_some() {
+                write!(f, "{}", self.sep)?;
             }
         }
         Ok(())
