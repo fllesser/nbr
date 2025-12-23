@@ -4,6 +4,7 @@ use anyhow::{Context, Result};
 
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 use tracing::error;
@@ -53,27 +54,30 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
         .map(|a| (a.alias(), a.module_name.to_owned()))
         .collect::<Vec<_>>();
 
-    let adapters_import = name_module_tuples
-        .iter()
-        .map(|(alias, module)| format!("from {module} import Adapter as {alias}"))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let mut adapters_import = String::new();
+    let mut adapters_register = String::new();
+    let mut iter = name_module_tuples.iter().peekable();
+    while let Some((alias, module)) = iter.next() {
+        write!(adapters_import, "from {module} import Adapter as {alias}")?;
+        write!(adapters_register, "driver.register_adapter({alias})")?;
+        if iter.peek().is_some() {
+            adapters_import.push('\n');
+            adapters_register.push('\n');
+        }
+    }
 
-    let adapters_register = name_module_tuples
-        .iter()
-        .map(|(alias, _)| format!("driver.register_adapter({alias})"))
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    let builtin_plugins_load = nonebot
-        .builtin_plugins
-        .as_ref()
-        .unwrap_or(&vec![])
-        .iter()
-        .map(|plugin| format!(r#""{plugin}""#))
-        .reduce(|a, b| format!("{a}, {b}"))
-        .map(|s| format!("nonebot.load_builtin_plugins({s})"))
-        .unwrap_or_default();
+    let mut builtin_plugins_load = String::new();
+    if let Some(builtin_plugins) = nonebot.builtin_plugins.as_ref() {
+        write!(builtin_plugins_load, "nonebot.load_builtin_plugins(")?;
+        let mut iter = builtin_plugins.iter().peekable();
+        while let Some(plugin) = iter.next() {
+            write!(builtin_plugins_load, r#""{plugin}""#)?;
+            if iter.peek().is_some() {
+                write!(builtin_plugins_load, ", ")?;
+            }
+        }
+        builtin_plugins_load.push(')');
+    }
 
     let content = format!(
         include_str!("templates/bot"),
