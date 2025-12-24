@@ -845,6 +845,20 @@ mod tests {
                 extras: Some(vec!["extra1", "extra2"]),
                 specifier: Some(">=0.1.0"),
             },
+        ];
+        for test_case in test_cases {
+            let options = InstallOptions::new(test_case.input, false, false, None)
+                .expect("Parse input failed");
+            assert_eq!(options.name, test_case.name);
+            assert_eq!(options.module_name, test_case.module_name);
+            assert_eq!(options.extras, test_case.extras);
+            assert_eq!(options.specifier, test_case.specifier);
+        }
+    }
+
+    #[test]
+    fn test_git_url() {
+        let test_cases = vec![
             TestCase {
                 input: "git+https://github.com/owner/nonebot-plugin-test",
                 name: "nonebot-plugin-test",
@@ -867,6 +881,7 @@ mod tests {
             assert_eq!(options.module_name, test_case.module_name);
             assert_eq!(options.extras, test_case.extras);
             assert_eq!(options.specifier, test_case.specifier);
+            assert_eq!(options.git_url, Some(test_case.input));
         }
     }
 }
