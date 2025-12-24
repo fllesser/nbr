@@ -743,17 +743,16 @@ impl PluginManager {
         }
 
         if !plugin.tags.is_empty() {
+            let tags_str: String = plugin
+                .tags
+                .iter()
+                .filter_map(|t| t.get("label"))
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
             StyledText::new(" ")
                 .text("  Tags:")
-                .yellow(
-                    plugin
-                        .tags
-                        .iter()
-                        .map(|t| t.get("label").unwrap().to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                        .as_str(),
-                )
+                .yellow(tags_str)
                 .println();
         }
     }

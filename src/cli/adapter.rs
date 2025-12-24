@@ -320,7 +320,11 @@ impl AdapterManager {
 
         let mut adapter_packages = selected_adapters
             .iter()
-            .map(|name| registry_adapters.get(*name).unwrap().project_link.as_str())
+            .filter_map(|name| {
+                registry_adapters
+                    .get(*name)
+                    .map(|a| a.project_link.as_str())
+            })
             .collect::<HashSet<&str>>() // 🐶 ob
             .into_iter()
             .collect::<Vec<&str>>();
@@ -366,8 +370,9 @@ impl AdapterManager {
 
             info!("Installed Adapters:");
             installed_adapters.iter().for_each(|name| {
-                let adapter = adapters_map.get(*name).unwrap();
-                self.display_adapter(adapter);
+                if let Some(adapter) = adapters_map.get(*name) {
+                    self.display_adapter(adapter);
+                }
             });
         }
 

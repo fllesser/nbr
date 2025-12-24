@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use tempfile::{TempDir, tempdir};
 
 pub async fn create_temp_project(create_venv: bool) -> (TempDir, PathBuf) {
-    let dir = tempdir().unwrap();
+    let dir = tempdir().expect("Could not create temp dir");
     let output_dir = dir.path().to_path_buf();
 
     let options = ProjectOptions {
@@ -34,6 +34,8 @@ pub async fn create_temp_project(create_venv: bool) -> (TempDir, PathBuf) {
         create_venv,
     };
 
-    create_project(&options).await.unwrap();
+    create_project(&options)
+        .await
+        .expect("Could not create temp nonebot project");
     (dir, output_dir)
 }

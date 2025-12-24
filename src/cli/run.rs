@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::signal;
@@ -26,9 +26,7 @@ pub struct BotRunner {
     work_dir: PathBuf,
     /// Current running process
     current_process: Arc<Mutex<Option<Child>>>,
-    /// File watcher for auto-reload
-    watcher: Option<RecommendedWatcher>,
-    /// Watch event receiver
+    /// Watch event receiver (文件监视器通过通道接收事件，不需要保存watcher实例)
     watch_rx: Option<Receiver<Event>>,
 }
 
@@ -41,52 +39,44 @@ impl BotRunner {
         work_dir: PathBuf,
     ) -> Result<Self> {
         let current_process = Arc::new(Mutex::new(None));
-        let (watch_tx, watch_rx) = if auto_reload {
+
+        let watch_rx = if auto_reload {
             let (tx, rx) = mpsc::channel();
-            (Some(tx), Some(rx))
+
+            // 创建文件监视器，它会自动运行，不需要保存在结构体中
+            let mut watcher = RecommendedWatcher::new(
+                move |res: notify::Result<Event>| {
+                    if let Ok(event) = res
+                        && let Err(e) = tx.send(event)
+                    {
+                        error!("Failed to send file watch event: {}", e);
+                    }
+                },
+                Config::default(),
+            )
+            .context("Failed to create file watcher")?;
+
+            watcher
+                .watch(&work_dir, RecursiveMode::Recursive)
+                .context("Failed to watch directory")?;
+
+            // 监视器创建后会持续运行，我们只需要接收器
+            Some(rx)
         } else {
-            (None, None)
+            None
         };
 
-        let mut runner = Self {
+        let runner = Self {
             bot_file,
             python_executable,
             auto_reload,
             work_dir,
             current_process,
-            watcher: None,
             watch_rx,
         };
 
-        if auto_reload {
-            runner.setup_file_watcher(watch_tx.unwrap())?;
-        }
-
+        debug!("Bot runner created with auto_reload: {}", auto_reload);
         Ok(runner)
-    }
-
-    /// Setup file watcher for auto-reload
-    fn setup_file_watcher(&mut self, tx: Sender<Event>) -> Result<()> {
-        let mut watcher = RecommendedWatcher::new(
-            move |res: notify::Result<Event>| {
-                if let Ok(event) = res
-                    && let Err(e) = tx.send(event)
-                {
-                    error!("Failed to send file watch event: {}", e);
-                }
-            },
-            Config::default(),
-        )
-        .context("Failed to create file watcher")?;
-
-        // Watch the working directory recursively
-        watcher
-            .watch(&self.work_dir, RecursiveMode::Recursive)
-            .context("Failed to watch directory")?;
-
-        self.watcher = Some(watcher);
-        debug!("File watcher setup for auto-reload");
-        Ok(())
     }
 
     /// Start the bot process
@@ -190,7 +180,7 @@ impl BotRunner {
         if self.watch_rx.is_none() {
             return Ok(false);
         }
-        let watch_rx = self.watch_rx.as_ref().unwrap();
+        let watch_rx = self.watch_rx.as_ref().context("watch_rx not initialized")?;
 
         loop {
             // Check if process is still running
