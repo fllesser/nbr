@@ -2,7 +2,7 @@ use crate::cli::EnvCommands;
 use crate::log::StyledText;
 use crate::utils::{process_utils, terminal_utils};
 use crate::uv::{self, Package};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::{env, fmt};
@@ -691,9 +691,7 @@ pub fn find_python_executable(work_dir: &Path) -> Result<String> {
         return Ok(python_executable.to_string_lossy().to_string());
     }
     // Fall back to system Python
-    process_utils::find_python().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Python executable not found. Please use `uv sync -p {{version}}` to install Python",
-        )
-    })
+    process_utils::find_python().context(
+        "Python executable not found. Please use `uv python install 3.1x` to install Python",
+    )
 }

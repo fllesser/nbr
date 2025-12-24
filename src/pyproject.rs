@@ -242,25 +242,23 @@ impl NbTomlEditor {
     fn nonebot_table_mut(&mut self) -> Result<&mut Table> {
         self.doc_mut["tool"]["nonebot"]
             .as_table_mut()
-            .ok_or_else(|| anyhow::anyhow!("tool.nonebot is not a table"))
+            .context("tool.nonebot is not a table")
     }
 
     fn adapters_array_mut(&mut self) -> Result<&mut Array> {
         let table = self.nonebot_table_mut()?;
         let item = table
             .get_mut("adapters")
-            .ok_or_else(|| anyhow::anyhow!("adapters not found in tool.nonebot"))?;
-        item.as_array_mut()
-            .ok_or_else(|| anyhow::anyhow!("adapters is not an array"))
+            .context("adapters not found in tool.nonebot")?;
+        item.as_array_mut().context("adapters is not an array")
     }
 
     fn plugins_array_mut(&mut self) -> Result<&mut Array> {
         let table = self.nonebot_table_mut()?;
         let item = table
             .get_mut("plugins")
-            .ok_or_else(|| anyhow::anyhow!("plugins not found in tool.nonebot"))?;
-        item.as_array_mut()
-            .ok_or_else(|| anyhow::anyhow!("plugins is not an array"))
+            .context("plugins not found in tool.nonebot")?;
+        item.as_array_mut().context("plugins is not an array")
     }
 
     fn save(&self) -> Result<()> {

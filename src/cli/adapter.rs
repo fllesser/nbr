@@ -3,7 +3,7 @@ use crate::log::StyledText;
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
 use crate::utils::terminal_utils;
 use crate::uv;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Subcommand;
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::{Confirm, MultiSelect};
@@ -95,6 +95,18 @@ impl AdapterManager {
         Ok(cache_dir.join("adapters.json"))
     }
 
+    fn set_registry_adapters(&self, adapters: HashMap<String, RegistryAdapter>) -> Result<()> {
+        self.registry_adapters
+            .set(adapters)
+            .map_err(|_| anyhow::anyhow!("Failed to set cached adapters"))
+    }
+
+    pub fn get_registry_adapters(&self) -> Result<&HashMap<String, RegistryAdapter>> {
+        self.registry_adapters
+            .get()
+            .context("Registry adapters not initialized")
+    }
+
     /// Fetch registry adapters from registry.nonebot.dev
     pub async fn fetch_registry_adapters(
         &self,
@@ -108,12 +120,10 @@ impl AdapterManager {
         let cache_file = self.get_cache_file()?;
         if !fetch_remote && cache_file.exists() {
             debug!("Loading adapters from cache: {}", cache_file.display());
-            let adapters: HashMap<String, RegistryAdapter> =
+            let registry_adapters: HashMap<String, RegistryAdapter> =
                 serde_json::from_slice(&std::fs::read(&cache_file)?)?;
-            self.registry_adapters
-                .set(adapters)
-                .map_err(|_| anyhow::anyhow!("Failed to parse adapter info"))?;
-            return Ok(self.registry_adapters.get().unwrap());
+            self.set_registry_adapters(registry_adapters)?;
+            return self.get_registry_adapters();
         }
 
         // 从 registry 获取
@@ -124,24 +134,20 @@ impl AdapterManager {
         let adapters: Vec<RegistryAdapter> = response
             .json()
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to parse adapter info: {}", e))?;
+            .context("Failed to parse adapter info")?;
 
         // 解析成功后，结束 spinner
         spinner.finish_and_clear();
 
-        let adapters_map = adapters
+        let registry_adapters = adapters
             .iter()
             .map(|a| (a.name.to_owned(), a.clone()))
             .collect::<HashMap<String, RegistryAdapter>>();
 
-        self.registry_adapters
-            .set(adapters_map.clone())
-            .map_err(|_| anyhow::anyhow!("Failed to cache adapter info"))?;
-
         // 缓存到文件
-        std::fs::write(cache_file, serde_json::to_string(&adapters_map)?)?;
-
-        Ok(self.registry_adapters.get().unwrap())
+        std::fs::write(cache_file, serde_json::to_string(&registry_adapters)?)?;
+        self.set_registry_adapters(registry_adapters)?;
+        self.get_registry_adapters()
     }
 
     /// Parse installed adapters from pyproject.toml
@@ -152,7 +158,7 @@ impl AdapterManager {
 
         let config = PyProjectConfig::parse(Some(&self.work_dir)).ok()?;
         let adapters = config.nonebot()?.adapters.to_owned()?;
-        self.installed_adapters.set(adapters).unwrap();
+        self.installed_adapters.set(adapters).ok()?;
         self.installed_adapters.get()
     }
 
