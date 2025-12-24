@@ -44,7 +44,7 @@ pub fn generate_bot_content(work_dir: &Path) -> Result<String> {
     let pyproject = PyProjectConfig::parse(Some(work_dir))?;
     let nonebot = pyproject
         .nonebot()
-        .ok_or_else(|| anyhow::anyhow!("No tool.nonebot in pyproject.toml"))?;
+        .context("No tool.nonebot in pyproject.toml")?;
 
     let name_module_tuples = nonebot
         .adapters

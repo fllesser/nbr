@@ -163,7 +163,7 @@ impl Default for PluginManager {
 #[derive(Debug, Clone)]
 pub struct InstallOptions<'a> {
     pub name: &'a str,
-    pub module_name: Option<String>,
+    pub module_name: String,
     pub git_url: Option<&'a str>,
     pub upgrade: bool,
     pub reinstall: bool,
@@ -174,48 +174,51 @@ pub struct InstallOptions<'a> {
 
 impl<'a> InstallOptions<'a> {
     pub fn new(
-        name: &'a str,
+        input: &'a str,
         upgrade: bool,
         reinstall: bool,
         index_url: Option<&'a str>,
     ) -> Result<Self> {
-        let options = Self {
+        let (name, git_url, extras, specifier) = if input.starts_with("git+") {
+            const GIT_URL_PATTERN: &str = r"nonebot-plugin-([^/.@]+)";
+            let re = Regex::new(GIT_URL_PATTERN).context("Invalid regex pattern")?;
+            let captures = re
+                .captures(input)
+                .context(format!("Invalid plugin name: {}", input))?;
+            let name = captures
+                .get(0)
+                .map(|m| m.as_str())
+                .context("Regex should have at least one capture group")?;
+            (name, Some(input), None, None)
+        } else {
+            const PATTERN: &str = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
+            let re = Regex::new(PATTERN).context("Invalid regex pattern")?;
+            let captures = re
+                .captures(input)
+                .context(format!("Invalid plugin name: {}", input))?;
+            let name = captures
+                .get(1)
+                .map(|m| m.as_str())
+                .context("Regex should have at least one capture group")?;
+            let extras = captures
+                .get(2)
+                .map(|m| m.as_str().split(',').collect::<Vec<&str>>());
+            let specifier = captures.get(3).map(|m| m.as_str());
+            (name, None, extras, specifier)
+        };
+
+        let module_name = name.replace("-", "_");
+
+        Ok(Self {
             name,
-            module_name: None,
-            git_url: None,
+            module_name,
+            git_url,
             upgrade,
             reinstall,
             index_url,
-            extras: None,
-            specifier: None,
-        };
-        options.parse_name()
-    }
-
-    pub fn parse_name(mut self) -> Result<Self> {
-        if self.name.starts_with("git+") {
-            const GIT_URL_PATTERN: &str = r"nonebot-plugin-(?P<repo>[^/@]+)";
-            let re = Regex::new(GIT_URL_PATTERN).unwrap();
-            let captures = re
-                .captures(self.name)
-                .ok_or_else(|| anyhow::anyhow!("Invalid plugin name: {}", self.name))?;
-            self.git_url = Some(self.name);
-            self.name = captures.get(0).map(|m| m.as_str()).unwrap();
-            self.module_name = Some(self.name.replace("-", "_"));
-            return Ok(self);
-        }
-        const PATTERN: &str = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
-        let re = Regex::new(PATTERN).unwrap();
-        let captures = re
-            .captures(self.name)
-            .ok_or_else(|| anyhow::anyhow!("Invalid plugin name: {}", self.name))?;
-        self.name = captures.get(1).map(|m| m.as_str()).unwrap();
-        self.module_name = Some(self.name.replace("-", "_"));
-        self.extras = captures
-            .get(2)
-            .map(|m| m.as_str().split(',').collect::<Vec<&str>>());
-        self.specifier = captures.get(3).map(|m| m.as_str());
-        Ok(self)
+            extras,
+            specifier,
+        })
     }
 
     pub fn install(&self) -> Result<()> {
@@ -266,11 +269,7 @@ impl PluginManager {
         })
     }
 
-    pub async fn install(
-        &mut self,
-        options: InstallOptions<'_>,
-        fetch_remote: bool,
-    ) -> anyhow::Result<()> {
+    pub async fn install(&mut self, options: InstallOptions<'_>, fetch_remote: bool) -> Result<()> {
         if options.git_url.is_some() {
             return self.install_from_github(options).await;
         }
@@ -281,8 +280,10 @@ impl PluginManager {
         self.install_unregistered_plugin(options).await
     }
 
-    pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> anyhow::Result<()> {
-        let git_url = options.git_url.unwrap();
+    pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> Result<()> {
+        let git_url = options
+            .git_url
+            .context("git_url should be present if install_from_github is called")?;
         debug!("Installing plugin from github: {}", git_url);
 
         let prompt = StyledText::new(" ")
@@ -304,7 +305,7 @@ impl PluginManager {
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![&options.module_name.unwrap()])?;
+            .add_plugins(vec![&options.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
@@ -313,10 +314,7 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn install_unregistered_plugin(
-        &mut self,
-        options: InstallOptions<'_>,
-    ) -> anyhow::Result<()> {
+    pub async fn install_unregistered_plugin(&mut self, options: InstallOptions<'_>) -> Result<()> {
         debug!("Installing unregistered plugin: {}", options.name);
 
         let prompt = StyledText::new(" ")
@@ -337,7 +335,7 @@ impl PluginManager {
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![&options.module_name.unwrap()])?;
+            .add_plugins(vec![&options.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
@@ -351,7 +349,7 @@ impl PluginManager {
         &self,
         registry_plugin: &RegistryPlugin,
         options: InstallOptions<'_>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
         // Show plugin information if available
         self.display_plugin_info(registry_plugin);
@@ -384,7 +382,7 @@ impl PluginManager {
     }
 
     /// Uninstall a plugin
-    pub async fn uninstall(&self, name: &str) -> anyhow::Result<()> {
+    pub async fn uninstall(&self, name: &str) -> Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
         if let Ok(registry_plugin) = self.get_registry_plugin(name, false).await {
@@ -457,7 +455,7 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn get_installed_plugins(&self, outdated: bool) -> anyhow::Result<Vec<Package>> {
+    pub async fn get_installed_plugins(&self, outdated: bool) -> Result<Vec<Package>> {
         let installed_packages = uv::list(outdated).await?;
         let installed_plugins = installed_packages
             .into_iter()
@@ -466,7 +464,7 @@ impl PluginManager {
         Ok(installed_plugins)
     }
 
-    pub async fn list(&self, show_outdated: bool) -> anyhow::Result<()> {
+    pub async fn list(&self, show_outdated: bool) -> Result<()> {
         // 获取所有插件
         let mut installed_plugins = self.get_installed_plugins(false).await?;
         // 获取需要更新的插件
@@ -492,7 +490,7 @@ impl PluginManager {
         package_name.starts_with("nonebot") && package_name.contains("plugin")
     }
 
-    pub async fn reset(&self) -> anyhow::Result<()> {
+    pub async fn reset(&self) -> Result<()> {
         let mut installed_plugins = self.get_installed_plugins(false).await?;
 
         let mut requires_plugins: Vec<String> = Vec::new();
@@ -531,7 +529,7 @@ impl PluginManager {
         query: &str,
         limit: usize,
         fetch_remote: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         debug!("Searching plugins for: {}", query);
 
         let results = self
@@ -566,7 +564,7 @@ impl PluginManager {
         plugin_name: Option<&str>,
         update_all: bool,
         reinstall: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<()> {
         if update_all {
             self.update_all_plugins().await?;
         } else if let Some(name) = plugin_name {
@@ -578,7 +576,7 @@ impl PluginManager {
     }
 
     /// Update all plugins
-    async fn update_all_plugins(&self) -> anyhow::Result<()> {
+    async fn update_all_plugins(&self) -> Result<()> {
         let outdated_plugins = self.get_installed_plugins(true).await?;
 
         if outdated_plugins.is_empty() {
@@ -615,7 +613,7 @@ impl PluginManager {
     }
 
     /// Update a single plugin
-    fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> anyhow::Result<()> {
+    fn update_single_plugin(&self, package_name: &str, reinstall: bool) -> Result<()> {
         if reinstall {
             uv::reinstall(package_name)?;
         } else {
@@ -630,10 +628,22 @@ impl PluginManager {
         Ok(cache_dir.join("plugins.json"))
     }
 
+    fn set_registry_plugins(&self, plugins: HashMap<String, RegistryPlugin>) -> Result<()> {
+        self.registry_plugins
+            .set(plugins)
+            .map_err(|_| anyhow::anyhow!("Failed to parse cached plugins info"))
+    }
+
+    pub fn get_registry_plugins(&self) -> Result<&HashMap<String, RegistryPlugin>> {
+        self.registry_plugins
+            .get()
+            .context("Registry plugins not initialized")
+    }
+
     pub async fn fetch_registry_plugins(
         &self,
         fetch_remote: bool,
-    ) -> anyhow::Result<&HashMap<String, RegistryPlugin>> {
+    ) -> Result<&HashMap<String, RegistryPlugin>> {
         if let Some(plugins) = self.registry_plugins.get() {
             return Ok(plugins);
         }
@@ -641,12 +651,10 @@ impl PluginManager {
         let cache_file = self.get_cache_file()?;
         if !fetch_remote && cache_file.exists() {
             debug!("Loading plugins from cache: {}", cache_file.display());
-            let plugins: HashMap<String, RegistryPlugin> =
+            let registry_plugins: HashMap<String, RegistryPlugin> =
                 serde_json::from_slice(&std::fs::read(&cache_file)?)?;
-            self.registry_plugins
-                .set(plugins)
-                .map_err(|_| anyhow::anyhow!("Failed to parse plugin info"))?;
-            return Ok(self.registry_plugins.get().unwrap());
+            self.set_registry_plugins(registry_plugins)?;
+            return self.get_registry_plugins();
         }
 
         let spinner = terminal_utils::create_spinner("Fetching plugins from registry...");
@@ -664,17 +672,15 @@ impl PluginManager {
             .context("Failed to parse plugin info")?;
 
         spinner.finish_and_clear();
-        let plugins_map = plugins
+        let registry_plugins = plugins
             .iter()
             .map(|p| (p.project_link.clone(), p.clone()))
             .collect::<HashMap<String, RegistryPlugin>>();
-        self.registry_plugins
-            .set(plugins_map.clone())
-            .map_err(|_| anyhow::anyhow!("Failed to cache plugin info"))?;
 
         // 缓存到文件
-        std::fs::write(cache_file, serde_json::to_string(&plugins_map)?)?;
-        Ok(self.registry_plugins.get().unwrap())
+        std::fs::write(cache_file, serde_json::to_string(&registry_plugins)?)?;
+        self.set_registry_plugins(registry_plugins)?;
+        self.get_registry_plugins()
     }
 
     /// Get plugin from registry
@@ -682,7 +688,7 @@ impl PluginManager {
         &self,
         package_name: &str,
         fetch_remote: bool,
-    ) -> anyhow::Result<&RegistryPlugin> {
+    ) -> Result<&RegistryPlugin> {
         let plugins = self.fetch_registry_plugins(fetch_remote).await?;
         let plugin = plugins
             .get(package_name)
@@ -696,7 +702,7 @@ impl PluginManager {
         query: &str,
         limit: usize,
         fetch_remote: bool,
-    ) -> anyhow::Result<Vec<&RegistryPlugin>> {
+    ) -> Result<Vec<&RegistryPlugin>> {
         let plugins_map = self.fetch_registry_plugins(fetch_remote).await?;
 
         let results: Vec<&RegistryPlugin> = plugins_map
@@ -773,5 +779,109 @@ impl PluginManager {
             .text("  Install Command:")
             .yellow(format!("nbr plugin install {}", plugin.project_link))
             .println();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    struct TestCase {
+        input: &'static str,
+        name: &'static str,
+        module_name: &'static str,
+        extras: Option<Vec<&'static str>>,
+        specifier: Option<&'static str>,
+    }
+
+    #[test]
+    fn test_install_options_new_with_extras_and_version() {
+        let test_cases = vec![
+            TestCase {
+                input: "nonebot-plugin-test",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: None,
+            },
+            TestCase {
+                input: "nonebot-plugin-test<=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: Some("<=0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test>=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: Some(">=0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test==0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: Some("==0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test[extra]",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: Some(vec!["extra"]),
+                specifier: None,
+            },
+            TestCase {
+                input: "nonebot-plugin-test[extra]>=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: Some(vec!["extra"]),
+                specifier: Some(">=0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test[extra1,extra2]>=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: Some(vec!["extra1", "extra2"]),
+                specifier: Some(">=0.1.0"),
+            },
+        ];
+        for test_case in test_cases {
+            let options = InstallOptions::new(test_case.input, false, false, None)
+                .expect("Parse input failed");
+            assert_eq!(options.name, test_case.name);
+            assert_eq!(options.module_name, test_case.module_name);
+            assert_eq!(options.extras, test_case.extras);
+            assert_eq!(options.specifier, test_case.specifier);
+        }
+    }
+
+    #[test]
+    fn test_git_url() {
+        let test_cases = vec![
+            TestCase {
+                input: "git+https://github.com/owner/nonebot-plugin-test",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: None,
+            },
+            TestCase {
+                input: "git+https://github.com/owner/nonebot-plugin-test.git",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: None,
+            },
+        ];
+        for test_case in test_cases {
+            let options = InstallOptions::new(test_case.input, false, false, None)
+                .expect("Parse input failed");
+            assert_eq!(options.name, test_case.name);
+            assert_eq!(options.module_name, test_case.module_name);
+            assert_eq!(options.extras, test_case.extras);
+            assert_eq!(options.specifier, test_case.specifier);
+            assert_eq!(options.git_url, Some(test_case.input));
+        }
     }
 }
