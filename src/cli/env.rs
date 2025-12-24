@@ -426,7 +426,7 @@ impl EnvironmentChecker {
 
         let virtual_env = self
             .get_virtual_env()
-            .map(|path| path.to_string_lossy().to_string());
+            .map(|path| path.to_string_lossy().into_owned());
 
         let uv_version = uv::self_version().await.ok().map(|v| v.trim().to_string());
         let site_packages = uv::list(false).await.unwrap_or_default();
