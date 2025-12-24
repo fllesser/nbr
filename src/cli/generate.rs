@@ -1,7 +1,6 @@
 use crate::log::StyledText;
 use crate::pyproject::PyProjectConfig;
 use anyhow::{Context, Result};
-
 use dialoguer::Confirm;
 use dialoguer::theme::ColorfulTheme;
 use std::fmt::Write;

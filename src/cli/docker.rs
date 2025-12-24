@@ -1,9 +1,7 @@
-use std::{fs, path::Path};
-
-use crate::{cli::common, log::StyledText, pyproject::PyProjectConfig};
-
 use super::DockerCommands;
+use crate::{cli::common, log::StyledText, pyproject::PyProjectConfig};
 use anyhow::{Context, Result};
+use std::{fs, path::Path};
 
 pub(crate) fn handle(commands: &DockerCommands) -> Result<()> {
     let work_dir = std::env::current_dir()?;

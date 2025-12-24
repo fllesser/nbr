@@ -1,3 +1,12 @@
+use super::adapter::{AdapterManager, RegistryAdapter};
+use super::common;
+use super::docker;
+use crate::error::Error;
+use crate::pyproject::{
+    BuildSystem, DependencyGroupItem, DependencyGroups, NbTomlEditor, Nonebot, Project,
+    PyProjectConfig, Tool,
+};
+use crate::uv;
 use anyhow::{Context, Result};
 use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
@@ -8,16 +17,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use strum::Display;
 use tracing::info;
-
-use super::adapter::{AdapterManager, RegistryAdapter};
-use super::common;
-use super::docker;
-use crate::error::Error;
-use crate::pyproject::{
-    BuildSystem, DependencyGroupItem, DependencyGroups, NbTomlEditor, Nonebot, Project,
-    PyProjectConfig, Tool,
-};
-use crate::uv;
 
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lowercase")]

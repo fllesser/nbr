@@ -10,11 +10,10 @@ use dialoguer::{Confirm, MultiSelect};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use tracing::{debug, error, info, warn};
-
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::Duration;
+use tracing::{debug, error, info, warn};
 
 // {
 // "module_name": "nonebot.adapters.onebot.v11",
