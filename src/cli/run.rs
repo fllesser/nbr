@@ -14,7 +14,7 @@ use std::time::Duration;
 use tokio::signal;
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn};
-/// Bot process manager
+
 pub struct BotRunner {
     /// Bot entry file path
     bot_file: PathBuf,
@@ -26,7 +26,10 @@ pub struct BotRunner {
     work_dir: PathBuf,
     /// Current running process
     current_process: Arc<Mutex<Option<Child>>>,
-    /// Watch event receiver (文件监视器通过通道接收事件，不需要保存watcher实例)
+    /// File watcher for auto-reload
+    #[allow(unused)]
+    watcher: Option<RecommendedWatcher>,
+    /// Watch event receiver
     watch_rx: Option<Receiver<Event>>,
 }
 
@@ -40,10 +43,9 @@ impl BotRunner {
     ) -> Result<Self> {
         let current_process = Arc::new(Mutex::new(None));
 
-        let watch_rx = if auto_reload {
+        let (watcher, watch_rx) = if auto_reload {
             let (tx, rx) = mpsc::channel();
 
-            // 创建文件监视器，它会自动运行，不需要保存在结构体中
             let mut watcher = RecommendedWatcher::new(
                 move |res: notify::Result<Event>| {
                     if let Ok(event) = res
@@ -60,10 +62,9 @@ impl BotRunner {
                 .watch(&work_dir, RecursiveMode::Recursive)
                 .context("Failed to watch directory")?;
 
-            // 监视器创建后会持续运行，我们只需要接收器
-            Some(rx)
+            (Some(watcher), Some(rx))
         } else {
-            None
+            (None, None)
         };
 
         let runner = Self {
@@ -72,10 +73,10 @@ impl BotRunner {
             auto_reload,
             work_dir,
             current_process,
+            watcher,
             watch_rx,
         };
 
-        debug!("Bot runner created with auto_reload: {}", auto_reload);
         Ok(runner)
     }
 
@@ -177,10 +178,9 @@ impl BotRunner {
 
     /// Wait for reload trigger (file change or process exit)
     async fn wait_for_reload_trigger(&self) -> Result<bool> {
-        if self.watch_rx.is_none() {
+        let Some(watch_rx) = self.watch_rx.as_ref() else {
             return Ok(false);
-        }
-        let watch_rx = self.watch_rx.as_ref().context("watch_rx not initialized")?;
+        };
 
         loop {
             // Check if process is still running
