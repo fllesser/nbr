@@ -297,7 +297,10 @@ impl NbTomlEditor {
     pub fn remove_adapters(&mut self, adapter_names: Vec<&str>) -> Result<()> {
         let adapters_arr_mut = self.adapters_array_mut()?;
         adapters_arr_mut.retain(|a| {
-            !adapter_names.contains(&a.as_inline_table().unwrap()["name"].as_str().unwrap())
+            a.as_inline_table()
+                .and_then(|table| table.get("name"))
+                .and_then(|v| v.as_str())
+                .is_none_or(|name| !adapter_names.contains(&name))
         });
         self.save()
     }
@@ -308,7 +311,7 @@ impl NbTomlEditor {
 
         let plugin_names = plugins_arr_mut
             .iter()
-            .map(|p| p.as_str().unwrap())
+            .filter_map(|p| p.as_str())
             .collect::<Vec<&str>>();
         plugins.retain(|p| !plugin_names.contains(p));
         plugins_arr_mut.extend(plugins);
@@ -319,7 +322,13 @@ impl NbTomlEditor {
 
     pub fn remove_plugins(&mut self, plugins: Vec<&str>) -> Result<()> {
         let plugins_arr_mut = self.plugins_array_mut()?;
-        plugins_arr_mut.retain(|p| !plugins.contains(&p.as_str().unwrap()));
+        plugins_arr_mut.retain(|p| {
+            if let Some(name) = p.as_str() {
+                !plugins.contains(&name)
+            } else {
+                true
+            }
+        });
         Self::fmt_toml_array(plugins_arr_mut);
         self.save()
     }
@@ -371,17 +380,26 @@ dev = [
     "ruff"
 ]
 "#;
-        let pyproject = PyProjectConfig::parse_from_str(toml_content).unwrap();
-        let dep_groups = pyproject.dependency_groups.unwrap();
+        let pyproject =
+            PyProjectConfig::parse_from_str(toml_content).expect("Failed to parse test TOML");
+        let dep_groups = pyproject
+            .dependency_groups
+            .expect("dependency_groups should be present");
 
         // Check test group
-        let test_group = dep_groups.groups.get("test").unwrap();
+        let test_group = dep_groups
+            .groups
+            .get("test")
+            .expect("test group should be present");
         assert_eq!(test_group.len(), 2);
         assert!(matches!(&test_group[0], DependencyGroupItem::String(s) if s == "pytest>=7.0"));
         assert!(matches!(&test_group[1], DependencyGroupItem::String(s) if s == "coverage"));
 
         // Check dev group with include-group
-        let dev_group = dep_groups.groups.get("dev").unwrap();
+        let dev_group = dep_groups
+            .groups
+            .get("dev")
+            .expect("dev group should be present");
         assert_eq!(dev_group.len(), 3);
         assert!(
             matches!(&dev_group[0], DependencyGroupItem::IncludeGroup { include_group } if include_group == "test")
@@ -421,7 +439,7 @@ dev = [
         pyproject.dependency_groups = Some(DependencyGroups { groups });
 
         // Serialize to TOML
-        let toml_str = toml::to_string(&pyproject).unwrap();
+        let toml_str = toml::to_string(&pyproject).expect("Failed to serialize pyproject");
 
         println!("Serialized TOML:\n{}", toml_str);
 
@@ -433,8 +451,11 @@ dev = [
         assert!(toml_str.contains("include-group = \"test\""));
 
         // Parse it back and verify
-        let parsed: PyProjectConfig = toml::from_str(&toml_str).unwrap();
-        let parsed_groups = parsed.dependency_groups.unwrap();
+        let parsed: PyProjectConfig =
+            toml::from_str(&toml_str).expect("Failed to parse serialized TOML");
+        let parsed_groups = parsed
+            .dependency_groups
+            .expect("dependency_groups should be present");
         assert_eq!(parsed_groups.groups.len(), 2);
     }
 
@@ -463,14 +484,20 @@ dev = [
         dev_group_items.extend(dev_deps.into_iter().map(DependencyGroupItem::String));
 
         // Insert both test and dev groups
-        let dep_groups = pyproject.dependency_groups.as_mut().unwrap();
+        let dep_groups = pyproject
+            .dependency_groups
+            .as_mut()
+            .expect("dependency_groups should be present");
         dep_groups
             .groups
             .insert("test".to_string(), test_group_items);
         dep_groups.groups.insert("dev".to_string(), dev_group_items);
 
         // Verify the order in memory
-        let dev_group = dep_groups.groups.get("dev").unwrap();
+        let dev_group = dep_groups
+            .groups
+            .get("dev")
+            .expect("dev group should be present");
         assert_eq!(dev_group.len(), 3);
 
         // First item should be include-group
@@ -485,7 +512,7 @@ dev = [
         );
 
         // Serialize and check order is preserved
-        let toml_str = toml::to_string(&pyproject).unwrap();
+        let toml_str = toml::to_string(&pyproject).expect("Failed to serialize pyproject");
 
         // The include-group should appear before other items in the serialized form
         let dev_line_start = toml_str.find("dev = [").expect("dev group not found");

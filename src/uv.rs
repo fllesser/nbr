@@ -1,6 +1,6 @@
 use crate::log::StyledText;
 use crate::utils::{process_utils, terminal_utils};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     hash::{Hash, Hasher},
@@ -88,42 +88,42 @@ pub async fn show_package_info(package: &str, working_dir: Option<&Path>) -> Res
     let mut lines = stdout.lines();
     let name = lines
         .next()
-        .unwrap()
+        .context("Failed to get package name from uv output")?
         .trim_start_matches("Name: ")
         .to_owned();
     let version = lines
         .next()
-        .unwrap()
+        .context("Failed to get package version from uv output")?
         .trim_start_matches("Version: ")
         .to_owned();
     let latest_version = None;
     let location = Some(
         lines
             .next()
-            .unwrap()
+            .context("Failed to get package location from uv output")?
             .trim_start_matches("Location: ")
             .to_owned(),
     );
     let requires = Some(
         lines
             .next()
-            .unwrap()
+            .context("Failed to get package requirements from uv output")?
             .trim_start_matches("Requires:")
             .trim()
             .split(", ")
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_owned())
+            .filter(|s: &&str| !s.is_empty())
+            .map(|s: &str| s.to_owned())
             .collect::<Vec<String>>(),
     );
     let requires_by = Some(
         lines
             .next()
-            .unwrap()
+            .context("Failed to get package required-by from uv output")?
             .trim_start_matches("Required-by:")
             .trim()
             .split(", ")
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_owned())
+            .filter(|s: &&str| !s.is_empty())
+            .map(|s: &str| s.to_owned())
             .collect::<Vec<String>>(),
     );
 
@@ -179,8 +179,10 @@ impl Package {
             .green(&self.version)
             .text(" ")
             .with(|text| {
-                if self.is_outdated() {
-                    text.yellow(format!("(v{})", self.latest_version.as_ref().unwrap()));
+                if let Some(v) = self.latest_version.as_ref()
+                    && self.is_outdated()
+                {
+                    text.yellow(format!("(v{})", v));
                 }
             })
             .println();

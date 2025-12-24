@@ -163,7 +163,7 @@ impl Default for PluginManager {
 #[derive(Debug, Clone)]
 pub struct InstallOptions<'a> {
     pub name: &'a str,
-    pub module_name: Option<String>,
+    pub module_name: String,
     pub git_url: Option<&'a str>,
     pub upgrade: bool,
     pub reinstall: bool,
@@ -174,48 +174,51 @@ pub struct InstallOptions<'a> {
 
 impl<'a> InstallOptions<'a> {
     pub fn new(
-        name: &'a str,
+        input: &'a str,
         upgrade: bool,
         reinstall: bool,
         index_url: Option<&'a str>,
     ) -> Result<Self> {
-        let options = Self {
+        let (name, git_url, extras, specifier) = if input.starts_with("git+") {
+            const GIT_URL_PATTERN: &str = r"nonebot-plugin-([^/.@]+)";
+            let re = Regex::new(GIT_URL_PATTERN).context("Invalid regex pattern")?;
+            let captures = re
+                .captures(input)
+                .context(format!("Invalid plugin name: {}", input))?;
+            let name = captures
+                .get(0)
+                .map(|m| m.as_str())
+                .context("Regex should have at least one capture group")?;
+            (name, Some(input), None, None)
+        } else {
+            const PATTERN: &str = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
+            let re = Regex::new(PATTERN).context("Invalid regex pattern")?;
+            let captures = re
+                .captures(input)
+                .context(format!("Invalid plugin name: {}", input))?;
+            let name = captures
+                .get(1)
+                .map(|m| m.as_str())
+                .context("Regex should have at least one capture group")?;
+            let extras = captures
+                .get(2)
+                .map(|m| m.as_str().split(',').collect::<Vec<&str>>());
+            let specifier = captures.get(3).map(|m| m.as_str());
+            (name, None, extras, specifier)
+        };
+
+        let module_name = name.replace("-", "_");
+
+        Ok(Self {
             name,
-            module_name: None,
-            git_url: None,
+            module_name,
+            git_url,
             upgrade,
             reinstall,
             index_url,
-            extras: None,
-            specifier: None,
-        };
-        options.parse_name()
-    }
-
-    pub fn parse_name(mut self) -> Result<Self> {
-        if self.name.starts_with("git+") {
-            const GIT_URL_PATTERN: &str = r"nonebot-plugin-(?P<repo>[^/@]+)";
-            let re = Regex::new(GIT_URL_PATTERN).unwrap();
-            let captures = re
-                .captures(self.name)
-                .context(format!("Invalid plugin name: {}", self.name))?;
-            self.git_url = Some(self.name);
-            self.name = captures.get(0).map(|m| m.as_str()).unwrap();
-            self.module_name = Some(self.name.replace("-", "_"));
-            return Ok(self);
-        }
-        const PATTERN: &str = r"^([a-zA-Z0-9_-]+)(?:\[([a-zA-Z0-9_,\s]*)\])?(?:\s*((?:==|>=|<=|>|<|~=)\s*[a-zA-Z0-9\.]+))?$";
-        let re = Regex::new(PATTERN).unwrap();
-        let captures = re
-            .captures(self.name)
-            .context(format!("Invalid plugin name: {}", self.name))?;
-        self.name = captures.get(1).map(|m| m.as_str()).unwrap();
-        self.module_name = Some(self.name.replace("-", "_"));
-        self.extras = captures
-            .get(2)
-            .map(|m| m.as_str().split(',').collect::<Vec<&str>>());
-        self.specifier = captures.get(3).map(|m| m.as_str());
-        Ok(self)
+            extras,
+            specifier,
+        })
     }
 
     pub fn install(&self) -> Result<()> {
@@ -278,7 +281,9 @@ impl PluginManager {
     }
 
     pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> Result<()> {
-        let git_url = options.git_url.unwrap();
+        let git_url = options
+            .git_url
+            .context("git_url should be present if install_from_github is called")?;
         debug!("Installing plugin from github: {}", git_url);
 
         let prompt = StyledText::new(" ")
@@ -300,7 +305,7 @@ impl PluginManager {
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![&options.module_name.unwrap()])?;
+            .add_plugins(vec![&options.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
@@ -330,7 +335,7 @@ impl PluginManager {
 
         // Add to configuration
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![&options.module_name.unwrap()])?;
+            .add_plugins(vec![&options.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
@@ -774,5 +779,94 @@ impl PluginManager {
             .text("  Install Command:")
             .yellow(format!("nbr plugin install {}", plugin.project_link))
             .println();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    struct TestCase {
+        input: &'static str,
+        name: &'static str,
+        module_name: &'static str,
+        extras: Option<Vec<&'static str>>,
+        specifier: Option<&'static str>,
+    }
+
+    #[test]
+    fn test_install_options_new_with_extras_and_version() {
+        let test_cases = vec![
+            TestCase {
+                input: "nonebot-plugin-test",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: None,
+            },
+            TestCase {
+                input: "nonebot-plugin-test<=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: Some("<=0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test>=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: Some(">=0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test==0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: Some("==0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test[extra]",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: Some(vec!["extra"]),
+                specifier: None,
+            },
+            TestCase {
+                input: "nonebot-plugin-test[extra]>=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: Some(vec!["extra"]),
+                specifier: Some(">=0.1.0"),
+            },
+            TestCase {
+                input: "nonebot-plugin-test[extra1,extra2]>=0.1.0",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: Some(vec!["extra1", "extra2"]),
+                specifier: Some(">=0.1.0"),
+            },
+            TestCase {
+                input: "git+https://github.com/owner/nonebot-plugin-test",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: None,
+            },
+            TestCase {
+                input: "git+https://github.com/owner/nonebot-plugin-test.git",
+                name: "nonebot-plugin-test",
+                module_name: "nonebot_plugin_test",
+                extras: None,
+                specifier: None,
+            },
+        ];
+        for test_case in test_cases {
+            let options = InstallOptions::new(test_case.input, false, false, None)
+                .expect("Parse input failed");
+            assert_eq!(options.name, test_case.name);
+            assert_eq!(options.module_name, test_case.module_name);
+            assert_eq!(options.extras, test_case.extras);
+            assert_eq!(options.specifier, test_case.specifier);
+        }
     }
 }

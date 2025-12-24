@@ -144,7 +144,7 @@ pub mod net_utils {
             pb.set_style(
                 ProgressStyle::default_bar()
                     .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")
-                    .unwrap()
+                    .context("Failed to create progress bar template")?
                     .progress_chars("█▉▊▋▌▍▎▏  "),
             );
             pb.set_message(format!("Downloading {}", url));
@@ -224,7 +224,7 @@ pub mod terminal_utils {
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len} {msg}")
-                .unwrap()
+                .expect("Failed to create progress bar template")
                 .progress_chars("█▉▊▋▌▍▎▏  "),
         );
         pb.set_message(message.into());
@@ -235,7 +235,8 @@ pub mod terminal_utils {
     pub fn create_spinner(message: impl Into<String>) -> ProgressBar {
         let pb = ProgressBar::new_spinner();
         pb.set_style(
-            ProgressStyle::with_template("{spinner:.green.bold} {msg:.green.bold}").unwrap(),
+            ProgressStyle::with_template("{spinner:.green.bold} {msg:.green.bold}")
+                .expect("Failed to create spinner template"),
         );
         pb.set_message(message.into());
         pb.enable_steady_tick(Duration::from_millis(100));

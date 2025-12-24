@@ -210,7 +210,7 @@ impl AdapterManager {
 
         Ok(selected_adapters
             .iter()
-            .map(|name| registry_adapters.get(name).unwrap())
+            .filter_map(|name| registry_adapters.get(name))
             .collect())
     }
 
