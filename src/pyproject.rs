@@ -4,7 +4,6 @@ use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
 };
-
 use toml_edit::{Array, Document, DocumentMut, InlineTable, Table};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

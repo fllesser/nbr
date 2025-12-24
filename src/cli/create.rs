@@ -1,3 +1,12 @@
+use super::adapter::{AdapterManager, RegistryAdapter};
+use super::common;
+use super::docker;
+use crate::error::Error;
+use crate::pyproject::{
+    BuildSystem, DependencyGroupItem, DependencyGroups, NbTomlEditor, Nonebot, Project,
+    PyProjectConfig, Tool,
+};
+use crate::uv;
 use anyhow::{Context, Result};
 use clap::{Args, ValueEnum};
 use dialoguer::theme::ColorfulTheme;
@@ -8,16 +17,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use strum::Display;
 use tracing::info;
-
-use super::adapter::{AdapterManager, RegistryAdapter};
-use super::common;
-use super::docker;
-use crate::error::Error;
-use crate::pyproject::{
-    BuildSystem, DependencyGroupItem, DependencyGroups, NbTomlEditor, Nonebot, Project,
-    PyProjectConfig, Tool,
-};
-use crate::uv;
 
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "lowercase")]
@@ -65,11 +64,11 @@ pub enum DevTool {
 }
 
 impl DevTool {
-    pub fn to_dependency(&self) -> String {
+    pub fn to_dependency(&self) -> &'static str {
         match self {
-            Self::Ruff => "ruff>=0.14.8".to_string(),
-            Self::Basedpyright => "basedpyright>=1.35.0".to_string(),
-            Self::PreCommit => "pre-commit>=4.3.0".to_string(),
+            Self::Ruff => "ruff>=0.14.8",
+            Self::Basedpyright => "basedpyright>=1.35.0",
+            Self::PreCommit => "pre-commit>=4.3.0",
         }
     }
 }
@@ -414,7 +413,7 @@ fn create_project_structure(options: &ProjectOptions) -> Result<()> {
 fn collect_dependencies(options: &ProjectOptions) -> Vec<String> {
     // 补齐驱动依赖
     let mut dependencies = vec![];
-    let drivers = options.drivers.join(",").to_string().to_lowercase();
+    let drivers = options.drivers.join(",").to_lowercase();
     dependencies.push(format!("nonebot2[{}]>=2.4.3", drivers));
 
     let adapter_deps = options
@@ -433,7 +432,7 @@ fn collect_dependency_groups(options: &ProjectOptions) -> DependencyGroups {
     let mut dev_deps: Vec<DependencyGroupItem> = options
         .dev_tools
         .iter()
-        .map(|t| DependencyGroupItem::String(t.to_dependency()))
+        .map(|t| DependencyGroupItem::String(t.to_dependency().to_owned()))
         .collect();
     dev_deps.push(DependencyGroupItem::IncludeGroup {
         include_group: "test".to_string(),
