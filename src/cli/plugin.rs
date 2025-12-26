@@ -184,7 +184,7 @@ impl<'a> InstallOptions<'a> {
             let re = Regex::new(GIT_URL_PATTERN).context("Invalid regex pattern")?;
             let captures = re
                 .captures(input)
-                .context(format!("Invalid plugin name: {}", input))?;
+                .with_context(|| format!("Invalid plugin name: {}", input))?;
             let name = captures
                 .get(0)
                 .map(|m| m.as_str())
@@ -195,7 +195,7 @@ impl<'a> InstallOptions<'a> {
             let re = Regex::new(PATTERN).context("Invalid regex pattern")?;
             let captures = re
                 .captures(input)
-                .context(format!("Invalid plugin name: {}", input))?;
+                .with_context(|| format!("Invalid plugin name: {}", input))?;
             let name = captures
                 .get(1)
                 .map(|m| m.as_str())
