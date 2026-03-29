@@ -31,6 +31,8 @@ pub struct Cli {
     pub commands: NbrCommands,
     #[clap(short, long, action = ArgAction::Count, help = "Verbose level, -v: DEBUG, -vv: TRACE")]
     pub verbose: u8,
+    #[clap(short, long, help = "Force yes to all prompts")]
+    pub yes: bool,
 }
 
 impl Cli {
@@ -38,7 +40,7 @@ impl Cli {
         match self.commands {
             NbrCommands::Create(create_args) => create::handle(create_args).await?,
             NbrCommands::Run { file, reload } => run::handle(file, reload).await?,
-            NbrCommands::Plugin { commands } => plugin::handle(&commands).await?,
+            NbrCommands::Plugin { commands } => plugin::handle(&commands, self.yes).await?,
             NbrCommands::Adapter { commands } => adapter::handle(&commands).await?,
             NbrCommands::Generate { force } => generate::handle(force).await?,
             NbrCommands::Env { commands } => env::handle(&commands).await?,
