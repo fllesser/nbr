@@ -30,11 +30,15 @@ pub enum PluginCommands {
         reinstall: bool,
         #[clap(short, long, help = "Fetch plugins from remote")]
         fetch_remote: bool,
+        #[clap(short, long, help = "Installation without confirmation")]
+        yes: bool,
     },
     #[clap(about = "Uninstall a plugin")]
     Uninstall {
         #[clap(help = "Plugin name")]
         name: String,
+        #[clap(short, long, help = "Uninstall without confirmation")]
+        yes: bool,
     },
     #[clap(about = "List installed plugins, show outdated plugins if --outdated is set")]
     List {
@@ -79,11 +83,12 @@ pub async fn handle(commands: &PluginCommands) -> Result<()> {
             upgrade,
             reinstall,
             fetch_remote,
+            yes,
         } => {
             let options = InstallOptions::new(name, *upgrade, *reinstall, index.as_deref())?;
-            manager.install(options, *fetch_remote).await?
+            manager.install(options, *fetch_remote, *yes).await?
         }
-        PluginCommands::Uninstall { name } => manager.uninstall(name).await?,
+        PluginCommands::Uninstall { name, yes } => manager.uninstall(name, *yes).await?,
         PluginCommands::List { outdated } => manager.list(*outdated).await?,
         PluginCommands::Search {
             query,
@@ -269,18 +274,29 @@ impl PluginManager {
         })
     }
 
-    pub async fn install(&mut self, options: InstallOptions<'_>, fetch_remote: bool) -> Result<()> {
+    pub async fn install(
+        &mut self,
+        options: InstallOptions<'_>,
+        fetch_remote: bool,
+        yes: bool,
+    ) -> Result<()> {
         if options.git_url.is_some() {
-            return self.install_from_github(options).await;
+            return self.install_from_github(options, yes).await;
         }
         if let Ok(registry_plugin) = self.get_registry_plugin(options.name, fetch_remote).await {
-            return self.install_registry_plugin(registry_plugin, options).await;
+            return self
+                .install_registry_plugin(registry_plugin, options, yes)
+                .await;
         }
 
-        self.install_unregistered_plugin(options).await
+        self.install_unregistered_plugin(options, yes).await
     }
 
-    pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> Result<()> {
+    pub async fn install_from_github(
+        &mut self,
+        options: InstallOptions<'_>,
+        yes: bool,
+    ) -> Result<()> {
         let git_url = options
             .git_url
             .context("git_url should be present if install_from_github is called")?;
@@ -292,11 +308,7 @@ impl PluginManager {
             .text("from github")
             .to_string();
         // 确定是否安装 github 插件
-        if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(prompt)
-            .default(true)
-            .interact()?
-        {
+        if self.confirm_operation(prompt, true, yes).await? {
             options.install()?;
         } else {
             error!("{}", "Installation operation cancelled.");
@@ -314,7 +326,11 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn install_unregistered_plugin(&mut self, options: InstallOptions<'_>) -> Result<()> {
+    pub async fn install_unregistered_plugin(
+        &mut self,
+        options: InstallOptions<'_>,
+        yes: bool,
+    ) -> Result<()> {
         debug!("Installing unregistered plugin: {}", options.name);
 
         let prompt = StyledText::new(" ")
@@ -322,11 +338,8 @@ impl PluginManager {
             .cyan(options.name)
             .text("from PyPI?")
             .to_string();
-        if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(prompt)
-            .default(true)
-            .interact()?
-        {
+
+        if self.confirm_operation(prompt, true, yes).await? {
             options.install()?;
         } else {
             error!("{}", "Installation operation cancelled.");
@@ -349,6 +362,7 @@ impl PluginManager {
         &self,
         registry_plugin: &RegistryPlugin,
         options: InstallOptions<'_>,
+        yes: bool,
     ) -> Result<()> {
         let package_name = &registry_plugin.project_link;
         // Show plugin information if available
@@ -358,11 +372,9 @@ impl PluginManager {
             .text("Would you like to install")
             .cyan(package_name)
             .to_string();
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(prompt)
-            .default(true)
-            .interact()?
-        {
+        if self.confirm_operation(prompt, true, yes).await? {
+            options.install()?;
+        } else {
             error!("Installation operation cancelled.");
             return Ok(());
         }
@@ -382,28 +394,25 @@ impl PluginManager {
     }
 
     /// Uninstall a plugin
-    pub async fn uninstall(&self, name: &str) -> Result<()> {
+    pub async fn uninstall(&self, name: &str, yes: bool) -> Result<()> {
         debug!("Uninstalling plugin: {}", name);
 
         if let Ok(registry_plugin) = self.get_registry_plugin(name, false).await {
-            self.uninstall_registry_plugin(registry_plugin).await
+            self.uninstall_registry_plugin(registry_plugin, yes).await
         } else {
-            self.uninstall_unregistered_plugin(name).await
+            self.uninstall_unregistered_plugin(name, yes).await
         }
     }
 
-    pub async fn uninstall_unregistered_plugin(&self, package_name: &str) -> Result<()> {
+    pub async fn uninstall_unregistered_plugin(&self, package_name: &str, yes: bool) -> Result<()> {
         debug!("Uninstalling unregistered plugin: {}", package_name);
 
         if !uv::is_installed(package_name).await {
             anyhow::bail!("Plugin '{}' is not installed.", package_name);
         }
 
-        if Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!("Would you like to uninstall '{package_name}'",))
-            .default(false)
-            .interact()?
-        {
+        let prompt = format!("Would you like to uninstall '{package_name}'");
+        if self.confirm_operation(prompt, true, yes).await? {
             uv::remove(vec![&package_name])
                 .working_dir(&self.work_dir)
                 .run()?;
@@ -422,7 +431,11 @@ impl PluginManager {
         Ok(())
     }
 
-    pub async fn uninstall_registry_plugin(&self, registry_plugin: &RegistryPlugin) -> Result<()> {
+    pub async fn uninstall_registry_plugin(
+        &self,
+        registry_plugin: &RegistryPlugin,
+        yes: bool,
+    ) -> Result<()> {
         let package_name = registry_plugin.project_link.clone();
         // Check if already installed
         if !uv::is_installed(&package_name).await {
@@ -432,11 +445,8 @@ impl PluginManager {
             );
         }
         // Confirm uninstallation
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!("Would you like to uninstall '{package_name}'"))
-            .default(false)
-            .interact()?
-        {
+        let prompt = format!("Would you like to uninstall '{package_name}'");
+        if self.confirm_operation(prompt, false, yes).await? {
             error!("{}", "Uninstallation operation cancelled.");
             return Ok(());
         }
@@ -462,6 +472,22 @@ impl PluginManager {
             .filter(|p| Self::is_plugin(&p.name))
             .collect();
         Ok(installed_plugins)
+    }
+
+    async fn confirm_operation(
+        &self,
+        message: String,
+        default: bool,
+        force_yes: bool,
+    ) -> Result<bool> {
+        if force_yes {
+            return Ok(true);
+        }
+
+        Ok(Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(message)
+            .default(default)
+            .interact()?)
     }
 
     pub async fn list(&self, show_outdated: bool) -> Result<()> {
@@ -589,14 +615,11 @@ impl PluginManager {
             .for_each(|plugin| plugin.display_info());
 
         // 确认更新
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!(
-                "Would you like to update these {} outdated plugins",
-                outdated_plugins.len()
-            ))
-            .default(true)
-            .interact()?
-        {
+        let prompt = format!(
+            "Would you like to update these {} outdated plugins",
+            outdated_plugins.len()
+        );
+        if !self.confirm_operation(prompt, true, false).await? {
             error!("{}", "Update operation cancelled.");
             return Ok(());
         }
@@ -692,7 +715,7 @@ impl PluginManager {
         let plugins = self.fetch_registry_plugins(fetch_remote).await?;
         let plugin = plugins
             .get(package_name)
-            .with_context(|| format!("Plugin '{}' not found", package_name))?;
+            .with_context(|| format!("Plugin '{package_name}' not found"))?;
         Ok(plugin)
     }
 
