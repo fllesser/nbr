@@ -1,3 +1,4 @@
+use super::GlobalContext;
 use crate::config::get_cache_dir;
 use crate::log::StyledText;
 use crate::pyproject::NbTomlEditor;
@@ -5,8 +6,6 @@ use crate::utils::terminal_utils;
 use crate::uv::{self, CmdBuilder, Package};
 use anyhow::{Context, Result};
 use clap::Subcommand;
-use dialoguer::Confirm;
-use dialoguer::theme::ColorfulTheme;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -70,8 +69,8 @@ pub enum PluginCommands {
     Create,
 }
 
-pub async fn handle(commands: &PluginCommands, yes: bool) -> Result<()> {
-    let mut manager = PluginManager::new(None, yes)?;
+pub async fn handle(commands: &PluginCommands, ctx: GlobalContext) -> Result<()> {
+    let mut manager = PluginManager::new(None, ctx)?;
     match commands {
         PluginCommands::Install {
             name,
@@ -152,13 +151,13 @@ pub struct PluginManager {
     work_dir: PathBuf,
     /// Registry plugins, key is package name
     registry_plugins: OnceLock<HashMap<String, RegistryPlugin>>,
-    /// Force yes to all prompts
-    force_yes: bool,
+    /// Global Context
+    global_context: GlobalContext,
 }
 
 impl Default for PluginManager {
     fn default() -> Self {
-        Self::new(None, false).unwrap()
+        Self::new(None, GlobalContext::default()).unwrap()
     }
 }
 
@@ -253,7 +252,7 @@ impl<'a> InstallOptions<'a> {
 
 impl PluginManager {
     /// Create a new plugin manager
-    pub fn new(work_dir: Option<PathBuf>, force_yes: bool) -> Result<Self> {
+    pub fn new(work_dir: Option<PathBuf>, ctx: GlobalContext) -> Result<Self> {
         let work_dir = work_dir.unwrap_or_else(|| Path::new(".").to_path_buf());
 
         let client = Client::builder()
@@ -268,7 +267,7 @@ impl PluginManager {
             client,
             work_dir,
             registry_plugins,
-            force_yes,
+            global_context: ctx,
         })
     }
 
@@ -295,7 +294,7 @@ impl PluginManager {
             .text("from github")
             .to_string();
         // 确定是否安装 github 插件
-        if self.confirm_operation(prompt, true).await? {
+        if self.global_context.confirm(prompt, true).await? {
             options.install()?;
         } else {
             error!("{}", "Installation operation cancelled.");
@@ -322,7 +321,7 @@ impl PluginManager {
             .text("from PyPI?")
             .to_string();
 
-        if self.confirm_operation(prompt, true).await? {
+        if self.global_context.confirm(prompt, true).await? {
             options.install()?;
         } else {
             error!("{}", "Installation operation cancelled.");
@@ -354,7 +353,7 @@ impl PluginManager {
             .text("Would you like to install")
             .cyan(package_name)
             .to_string();
-        if self.confirm_operation(prompt, true).await? {
+        if self.global_context.confirm(prompt, true).await? {
             options.install()?;
         } else {
             error!("Installation operation cancelled.");
@@ -394,7 +393,7 @@ impl PluginManager {
         }
 
         let prompt = format!("Would you like to uninstall '{package_name}'");
-        if self.confirm_operation(prompt, true).await? {
+        if self.global_context.confirm(prompt, true).await? {
             uv::remove(vec![&package_name])
                 .working_dir(&self.work_dir)
                 .run()?;
@@ -424,7 +423,7 @@ impl PluginManager {
         }
         // Confirm uninstallation
         let prompt = format!("Would you like to uninstall '{package_name}'");
-        if self.confirm_operation(prompt, false).await? {
+        if self.global_context.confirm(prompt, false).await? {
             error!("{}", "Uninstallation operation cancelled.");
             return Ok(());
         }
@@ -450,17 +449,6 @@ impl PluginManager {
             .filter(|p| Self::is_plugin(&p.name))
             .collect();
         Ok(installed_plugins)
-    }
-
-    async fn confirm_operation(&self, message: String, default: bool) -> Result<bool> {
-        if self.force_yes {
-            return Ok(true);
-        }
-
-        Ok(Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(message)
-            .default(default)
-            .interact()?)
     }
 
     pub async fn list(&self, show_outdated: bool) -> Result<()> {
@@ -592,7 +580,7 @@ impl PluginManager {
             "Would you like to update these {} outdated plugins",
             outdated_plugins.len()
         );
-        if !self.confirm_operation(prompt, true).await? {
+        if !self.global_context.confirm(prompt, true).await? {
             error!("{}", "Update operation cancelled.");
             return Ok(());
         }

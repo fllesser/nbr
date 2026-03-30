@@ -1,3 +1,4 @@
+use crate::cli::GlobalContext;
 use crate::config::get_cache_dir;
 use crate::log::StyledText;
 use crate::pyproject::{Adapter, NbTomlEditor, PyProjectConfig};
@@ -5,8 +6,8 @@ use crate::utils::terminal_utils;
 use crate::uv;
 use anyhow::{Context, Result};
 use clap::Subcommand;
+use dialoguer::MultiSelect;
 use dialoguer::theme::ColorfulTheme;
-use dialoguer::{Confirm, MultiSelect};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -63,17 +64,19 @@ pub struct AdapterManager {
     registry_adapters: OnceLock<HashMap<String, RegistryAdapter>>,
     /// Installed adapters
     installed_adapters: OnceLock<Vec<Adapter>>,
+    /// Global Context
+    global_context: GlobalContext,
 }
 
 impl Default for AdapterManager {
     fn default() -> Self {
-        Self::new(None).unwrap()
+        Self::new(None, GlobalContext::default()).unwrap()
     }
 }
 
 impl AdapterManager {
     /// Create a new adapter manager
-    pub fn new(work_dir: Option<PathBuf>) -> Result<Self> {
+    pub fn new(work_dir: Option<PathBuf>, ctx: GlobalContext) -> Result<Self> {
         let work_dir = work_dir.unwrap_or_else(|| Path::new(".").to_path_buf());
 
         let client = Client::builder()
@@ -86,6 +89,7 @@ impl AdapterManager {
             work_dir,
             registry_adapters: OnceLock::new(),
             installed_adapters: OnceLock::new(),
+            global_context: ctx,
         })
     }
 
@@ -231,11 +235,7 @@ impl AdapterManager {
             .cyan_bold(format!("[{}]", selected_adapters_names).as_str())
             .to_string();
 
-        if !Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(&prompt)
-            .default(true)
-            .interact()?
-        {
+        if self.global_context.confirm(prompt, true).await? {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
@@ -437,8 +437,8 @@ pub enum AdapterCommands {
 }
 
 /// Handle the adapter command
-pub async fn handle(commands: &AdapterCommands) -> Result<()> {
-    let adapter_manager = AdapterManager::new(None)?;
+pub async fn handle(commands: &AdapterCommands, ctx: GlobalContext) -> Result<()> {
+    let adapter_manager = AdapterManager::new(None, ctx)?;
 
     match commands {
         AdapterCommands::Install { fetch_remote } => {

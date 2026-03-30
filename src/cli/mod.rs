@@ -8,7 +8,9 @@ pub mod init;
 pub mod plugin;
 pub mod run;
 
+use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand};
+use dialoguer::{Confirm, theme::ColorfulTheme};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 // nbr banner
@@ -37,11 +39,17 @@ pub struct Cli {
 
 impl Cli {
     pub async fn run(self) -> anyhow::Result<()> {
+        let global_context = GlobalContext {
+            verbose: self.verbose,
+            yes: self.yes,
+            dialoguer_theme: ColorfulTheme::default(),
+        };
+
         match self.commands {
-            NbrCommands::Create(create_args) => create::handle(create_args).await?,
+            NbrCommands::Create(create_args) => create::handle(create_args, global_context).await?,
             NbrCommands::Run { file, reload } => run::handle(file, reload).await?,
-            NbrCommands::Plugin { commands } => plugin::handle(&commands, self.yes).await?,
-            NbrCommands::Adapter { commands } => adapter::handle(&commands).await?,
+            NbrCommands::Plugin { commands } => plugin::handle(&commands, global_context).await?,
+            NbrCommands::Adapter { commands } => adapter::handle(&commands, global_context).await?,
             NbrCommands::Generate { force } => generate::handle(force).await?,
             NbrCommands::Env { commands } => env::handle(&commands).await?,
             NbrCommands::Docker { commands } => docker::handle(&commands)?,
@@ -126,4 +134,26 @@ pub enum DockerCommands {
     Build,
     #[clap(about = "Generate Docker configs")]
     Gen,
+}
+
+#[derive(Default)]
+pub struct GlobalContext {
+    pub verbose: u8,
+    pub yes: bool,
+    pub dialoguer_theme: ColorfulTheme,
+}
+
+impl GlobalContext {
+    async fn confirm(&self, message: String, default: bool) -> Result<bool> {
+        if self.yes {
+            return Ok(true);
+        }
+
+        let confirmed = Confirm::with_theme(&self.dialoguer_theme)
+            .with_prompt(message)
+            .default(default)
+            .interact()?;
+
+        Ok(confirmed)
+    }
 }

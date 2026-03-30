@@ -1,7 +1,5 @@
 use nbr::cli::adapter::RegistryAdapter;
-use nbr::cli::create::{
-    BuiltinPlugin, DevTool, Environment, ProjectOptions, Template, create_project,
-};
+use nbr::cli::create::{BuiltinPlugin, DevTool, Environment, ProjectOptions, Template};
 use std::path::PathBuf;
 use tempfile::{TempDir, tempdir};
 
@@ -32,9 +30,11 @@ pub async fn create_temp_project(create_venv: bool) -> (TempDir, PathBuf) {
         dev_tools: vec![DevTool::Ruff],
         gen_dockerfile: true,
         create_venv,
+        global_context: Default::default(),
     };
 
-    create_project(&options)
+    options
+        .create()
         .await
         .expect("Could not create temp nonebot project");
     (dir, output_dir)

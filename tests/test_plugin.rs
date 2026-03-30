@@ -1,10 +1,10 @@
 mod common;
-use nbr::cli::plugin::PluginManager;
+use nbr::cli::{GlobalContext, plugin::PluginManager};
 
 #[tokio::test]
 async fn test_plugin_list() {
     let (_dir, project_path) = common::create_temp_project(false).await;
-    let manager = PluginManager::new(Some(project_path.clone()), true).unwrap();
+    let manager = PluginManager::new(Some(project_path.clone()), GlobalContext::default()).unwrap();
 
     // In the temp project, we install "echo" plugin by default.
     // However, get_installed_plugins uses `uv list` which checks the virtual environment.
