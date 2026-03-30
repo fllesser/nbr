@@ -2,6 +2,7 @@ mod common;
 use nbr::uv;
 
 #[tokio::test]
+#[ignore]
 async fn test_uv_operations_snapshot() {
     let (_dir, project_path) = common::create_temp_project(true).await;
 

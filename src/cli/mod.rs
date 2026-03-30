@@ -8,9 +8,10 @@ pub mod init;
 pub mod plugin;
 pub mod run;
 
-use anyhow::Result;
 use clap::{ArgAction, Parser, Subcommand};
-use dialoguer::{Confirm, theme::ColorfulTheme};
+use dialoguer::theme::ColorfulTheme;
+
+pub use crate::context::GlobalContext;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 // nbr banner
@@ -134,26 +135,4 @@ pub enum DockerCommands {
     Build,
     #[clap(about = "Generate Docker configs")]
     Gen,
-}
-
-#[derive(Default)]
-pub struct GlobalContext {
-    pub verbose: u8,
-    pub yes: bool,
-    pub dialoguer_theme: ColorfulTheme,
-}
-
-impl GlobalContext {
-    async fn confirm(&self, message: String, default: bool) -> Result<bool> {
-        if self.yes {
-            return Ok(true);
-        }
-
-        let confirmed = Confirm::with_theme(&self.dialoguer_theme)
-            .with_prompt(message)
-            .default(default)
-            .interact()?;
-
-        Ok(confirmed)
-    }
 }
