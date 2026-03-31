@@ -1,8 +1,7 @@
 use crate::context::GlobalContext;
 use crate::project::SelectedAdapter;
 use crate::pyproject::{Adapter, PyProjectConfig};
-use crate::registry_store;
-use crate::uv;
+use crate::{registry_store, uv};
 use anyhow::{Context, Result};
 use dialoguer::MultiSelect;
 use dialoguer::theme::ColorfulTheme;
@@ -42,10 +41,6 @@ impl AdapterManager {
         })
     }
 
-    fn get_cache_file(&self) -> Result<PathBuf> {
-        registry::cache_file()
-    }
-
     fn set_registry_adapters(&self, adapters: HashMap<String, RegistryAdapter>) -> Result<()> {
         self.registry_adapters
             .set(adapters)
@@ -66,23 +61,13 @@ impl AdapterManager {
             return Ok(adapters);
         }
 
-        let cache_file = self.get_cache_file()?;
-        if !fetch_remote {
-            debug!("Loading adapters from cache: {}", cache_file.display());
-            if let Some(registry_adapters) = registry_store::load_cached_map(&cache_file)? {
-                self.set_registry_adapters(registry_adapters)?;
-                return self.get_registry_adapters();
-            }
-        }
+        let registry_adapters = registry_store::fetch_map_with_cache::<RegistryAdapter, _>(
+            "adapters.json",
+            fetch_remote,
+            |a| a.name.clone(),
+        )
+        .await?;
 
-        let adapters = registry::fetch_remote_registry_adapters().await?;
-
-        let registry_adapters = adapters
-            .iter()
-            .map(|a| (a.name.to_owned(), a.clone()))
-            .collect::<HashMap<String, RegistryAdapter>>();
-
-        registry_store::save_cached_map(&cache_file, &registry_adapters)?;
         self.set_registry_adapters(registry_adapters)?;
         self.get_registry_adapters()
     }

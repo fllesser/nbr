@@ -1,8 +1,5 @@
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-use crate::registry_store;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryPlugin {
@@ -21,13 +18,6 @@ pub struct RegistryPlugin {
     pub time: String,
     pub version: String,
     pub skip_test: bool,
-}
-
-pub async fn fetch_all(client: &reqwest::Client) -> Result<Vec<RegistryPlugin>> {
-    let plugins_json_url = registry_store::registry_url("plugins.json");
-    registry_store::fetch_registry_vec(client, &plugins_json_url)
-        .await
-        .context("Failed to fetch plugin info")
 }
 
 pub fn filter_search<'a>(

@@ -9,7 +9,6 @@ use crate::context::GlobalContext;
 use crate::log::StyledText;
 use crate::pyproject::{NbTomlEditor, PyProjectConfig};
 use crate::registry_store;
-use crate::utils::terminal_utils;
 use crate::uv::{self, Package};
 
 use super::options::InstallOptions;
@@ -381,26 +380,13 @@ impl PluginManager {
             return Ok(plugins);
         }
 
-        let cache_file = registry_store::cache_file("plugins.json")?;
-        if !fetch_remote && let Some(map) = registry_store::load_cached_map(&cache_file)? {
-            debug!("Loading plugins from cache: {}", cache_file.display());
-            self.set_registry_plugins(map)?;
-            return self.get_registry_plugins();
-        }
+        let registry_plugins = registry_store::fetch_map_with_cache::<RegistryPlugin, _>(
+            "plugins.json",
+            fetch_remote,
+            |p| p.project_link.clone(),
+        )
+        .await?;
 
-        let spinner = terminal_utils::create_spinner("Fetching plugins from registry...");
-        let plugins: Vec<RegistryPlugin> =
-            registry_store::fetch_registry_vec_by_route("plugins.json")
-                .await
-                .context("Failed to fetch plugin info")?;
-        spinner.finish_and_clear();
-
-        let registry_plugins = plugins
-            .iter()
-            .map(|p| (p.project_link.clone(), p.clone()))
-            .collect::<HashMap<String, RegistryPlugin>>();
-
-        registry_store::save_cached_map(&cache_file, &registry_plugins)?;
         self.set_registry_plugins(registry_plugins)?;
         self.get_registry_plugins()
     }

@@ -1,12 +1,8 @@
-use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 use crate::project::SelectedAdapter;
 use crate::pyproject::Adapter;
-use crate::registry_store;
-use crate::utils::terminal_utils;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RegistryAdapter {
@@ -40,18 +36,4 @@ impl From<&RegistryAdapter> for SelectedAdapter {
             version: adapter.version.clone(),
         }
     }
-}
-
-pub fn cache_file() -> Result<PathBuf> {
-    registry_store::cache_file("adapters.json")
-}
-
-pub async fn fetch_remote_registry_adapters() -> Result<Vec<RegistryAdapter>> {
-    let spinner = terminal_utils::create_spinner("Fetching adapters from registry...");
-    let adapters: Vec<RegistryAdapter> =
-        registry_store::fetch_registry_vec_by_route("adapters.json")
-            .await
-            .context("Failed to parse adapter info")?;
-    spinner.finish_and_clear();
-    Ok(adapters)
 }

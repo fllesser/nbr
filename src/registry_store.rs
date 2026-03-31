@@ -5,6 +5,7 @@ use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tracing::warn;
 
 use crate::config::get_cache_dir;
 
@@ -30,7 +31,11 @@ where
     if !path.exists() {
         return Ok(None);
     }
-    let map: HashMap<String, T> = serde_json::from_slice(&std::fs::read(path)?)?;
+    let map = serde_json::from_slice(
+        &std::fs::read(path)
+            .with_context(|| format!("Failed to read cached file: {}", path.display()))?,
+    )
+    .with_context(|| format!("Failed to parse cached file: {}", path.display()))?;
     Ok(Some(map))
 }
 
@@ -42,7 +47,7 @@ where
     Ok(())
 }
 
-pub async fn fetch_registry_vec<T>(client: &Client, url: &str) -> Result<Vec<T>>
+async fn fetch_vec<T>(client: &Client, url: &str) -> Result<Vec<T>>
 where
     T: DeserializeOwned,
 {
@@ -50,15 +55,15 @@ where
         .get(url)
         .send()
         .await
-        .context("Network error while fetching registry data")?;
+        .with_context(|| format!("Network error while fetching registry data from: {}", url))?;
     let items = response
         .json::<Vec<T>>()
         .await
-        .context("Failed to parse registry data")?;
+        .with_context(|| format!("Failed to parse registry data from: {}", url))?;
     Ok(items)
 }
 
-pub async fn fetch_registry_vec_by_route<T>(route: &str) -> Result<Vec<T>>
+async fn fetch_vec_by_route<T>(route: &str) -> Result<Vec<T>>
 where
     T: DeserializeOwned,
 {
@@ -68,5 +73,40 @@ where
         .build()
         .context("Failed to build HTTP client")?;
     let url = registry_url(route);
-    fetch_registry_vec(&client, &url).await
+    fetch_vec(&client, &url).await
+}
+
+pub async fn fetch_map_with_cache<T, F>(
+    file_name: &str,
+    fetch_remote: bool,
+    key_fn: F,
+) -> Result<HashMap<String, T>>
+where
+    T: DeserializeOwned + Serialize + Clone,
+    F: Fn(&T) -> String,
+{
+    // file_name 同时用于缓存文件名和 registry 路由
+    let cache_path = cache_file(file_name)?;
+
+    if !fetch_remote && let Some(cached) = load_cached_map(&cache_path)? {
+        return Ok(cached);
+    }
+
+    let items: Vec<T> = fetch_vec_by_route(file_name).await?;
+
+    let map: HashMap<String, T> = items
+        .iter()
+        .cloned()
+        .map(|item| {
+            let key = key_fn(&item);
+            (key, item)
+        })
+        .collect();
+
+    // 忽略缓存写入错误以避免影响主流程
+    if let Err(e) = save_cached_map(&cache_path, &map) {
+        warn!("Failed to save cached map: {}", e);
+    }
+
+    Ok(map)
 }
