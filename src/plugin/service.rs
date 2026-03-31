@@ -37,10 +37,13 @@ impl PluginManager {
     }
 
     pub async fn install(&mut self, options: InstallOptions<'_>, fetch_remote: bool) -> Result<()> {
-        if options.git_url.is_some() {
+        if options.spec.git_url.is_some() {
             return self.install_from_github(options).await;
         }
-        if let Ok(registry_plugin) = self.get_registry_plugin(options.name, fetch_remote).await {
+        if let Ok(registry_plugin) = self
+            .get_registry_plugin(options.spec.name, fetch_remote)
+            .await
+        {
             return self.install_registry_plugin(registry_plugin, options).await;
         }
         self.install_unregistered_plugin(options).await
@@ -48,13 +51,14 @@ impl PluginManager {
 
     pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> Result<()> {
         let git_url = options
+            .spec
             .git_url
             .context("git_url should be present if install_from_github is called")?;
         debug!("Installing plugin from github: {}", git_url);
 
         let prompt = StyledText::new(" ")
             .text("Would you like to install")
-            .cyan(options.name)
+            .cyan(options.spec.name)
             .text("from github")
             .to_string();
         if self.global_context.confirm(prompt, true).await? {
@@ -65,21 +69,21 @@ impl PluginManager {
         }
 
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![&options.module_name])?;
+            .add_plugins(vec![&options.spec.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
-            .cyan_bold(options.name)
+            .cyan_bold(options.spec.name)
             .println();
         Ok(())
     }
 
     pub async fn install_unregistered_plugin(&mut self, options: InstallOptions<'_>) -> Result<()> {
-        debug!("Installing unregistered plugin: {}", options.name);
+        debug!("Installing unregistered plugin: {}", options.spec.name);
 
         let prompt = StyledText::new(" ")
             .text("Would you like to install")
-            .cyan(options.name)
+            .cyan(options.spec.name)
             .text("from PyPI?")
             .to_string();
 
@@ -91,11 +95,11 @@ impl PluginManager {
         }
 
         NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-            .add_plugins(vec![&options.module_name])?;
+            .add_plugins(vec![&options.spec.module_name])?;
 
         StyledText::new(" ")
             .green_bold("✓ Successfully installed plugin:")
-            .cyan_bold(options.name)
+            .cyan_bold(options.spec.name)
             .println();
         Ok(())
     }

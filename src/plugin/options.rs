@@ -3,24 +3,16 @@ use anyhow::{Context, Result};
 use regex::Regex;
 
 #[derive(Debug, Clone)]
-pub struct InstallOptions<'a> {
+pub struct InstallSpec<'a> {
     pub name: &'a str,
     pub module_name: String,
     pub git_url: Option<&'a str>,
-    pub upgrade: bool,
-    pub reinstall: bool,
-    pub index_url: Option<&'a str>,
     pub extras: Option<Vec<&'a str>>,
     pub specifier: Option<&'a str>,
 }
 
-impl<'a> InstallOptions<'a> {
-    pub fn new(
-        input: &'a str,
-        upgrade: bool,
-        reinstall: bool,
-        index_url: Option<&'a str>,
-    ) -> Result<Self> {
+impl<'a> InstallSpec<'a> {
+    pub fn parse(input: &'a str) -> Result<Self> {
         let (name, git_url, extras, specifier) = if input.starts_with("git+") {
             const GIT_URL_PATTERN: &str = r"nonebot-plugin-([^/.@]+)";
             let re = Regex::new(GIT_URL_PATTERN).context("Invalid regex pattern")?;
@@ -55,21 +47,44 @@ impl<'a> InstallOptions<'a> {
             name,
             module_name,
             git_url,
+            extras,
+            specifier,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InstallOptions<'a> {
+    pub spec: InstallSpec<'a>,
+    pub upgrade: bool,
+    pub reinstall: bool,
+    pub index_url: Option<&'a str>,
+}
+
+impl<'a> InstallOptions<'a> {
+    pub fn new(
+        input: &'a str,
+        upgrade: bool,
+        reinstall: bool,
+        index_url: Option<&'a str>,
+    ) -> Result<Self> {
+        let spec = InstallSpec::parse(input)?;
+
+        Ok(Self {
+            spec,
             upgrade,
             reinstall,
             index_url,
-            extras,
-            specifier,
         })
     }
 
     pub fn install(&self) -> Result<()> {
         let mut args = vec!["add"];
 
-        if let Some(git_url) = self.git_url {
+        if let Some(git_url) = self.spec.git_url {
             args.push(git_url);
         } else {
-            args.push(self.name);
+            args.push(self.spec.name);
         }
 
         if self.upgrade {
@@ -82,7 +97,7 @@ impl<'a> InstallOptions<'a> {
             args.push("--index-url");
             args.push(index_url);
         }
-        if let Some(ref extras) = self.extras {
+        if let Some(ref extras) = self.spec.extras {
             let extras = extras.iter().flat_map(|e| ["--extra", e]);
             args.extend(extras);
         }
@@ -104,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn test_install_options_new_with_extras_and_version() {
+    fn test_install_spec_parse_with_extras_and_version() {
         let test_cases = vec![
             TestCase {
                 input: "nonebot-plugin-test",
@@ -157,17 +172,16 @@ mod tests {
             },
         ];
         for test_case in test_cases {
-            let options =
-                InstallOptions::new(test_case.input, false, false, None).expect("Parse failed");
-            assert_eq!(options.name, test_case.name);
-            assert_eq!(options.module_name, test_case.module_name);
-            assert_eq!(options.extras, test_case.extras);
-            assert_eq!(options.specifier, test_case.specifier);
+            let spec = InstallSpec::parse(test_case.input).expect("Parse failed");
+            assert_eq!(spec.name, test_case.name);
+            assert_eq!(spec.module_name, test_case.module_name);
+            assert_eq!(spec.extras, test_case.extras);
+            assert_eq!(spec.specifier, test_case.specifier);
         }
     }
 
     #[test]
-    fn test_git_url() {
+    fn test_install_spec_parse_git_url() {
         let test_cases = vec![
             TestCase {
                 input: "git+https://github.com/owner/nonebot-plugin-test",
@@ -185,13 +199,12 @@ mod tests {
             },
         ];
         for test_case in test_cases {
-            let options =
-                InstallOptions::new(test_case.input, false, false, None).expect("Parse failed");
-            assert_eq!(options.name, test_case.name);
-            assert_eq!(options.module_name, test_case.module_name);
-            assert_eq!(options.extras, test_case.extras);
-            assert_eq!(options.specifier, test_case.specifier);
-            assert_eq!(options.git_url, Some(test_case.input));
+            let spec = InstallSpec::parse(test_case.input).expect("Parse failed");
+            assert_eq!(spec.name, test_case.name);
+            assert_eq!(spec.module_name, test_case.module_name);
+            assert_eq!(spec.extras, test_case.extras);
+            assert_eq!(spec.specifier, test_case.specifier);
+            assert_eq!(spec.git_url, Some(test_case.input));
         }
     }
 }
