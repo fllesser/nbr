@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tracing::debug;
 
-mod display;
 mod registry;
 mod service;
 
@@ -156,6 +155,6 @@ impl AdapterManager {
     }
 
     pub fn display_adapter(&self, adapter: &RegistryAdapter) {
-        display::display_adapter(adapter);
+        adapter.display();
     }
 }

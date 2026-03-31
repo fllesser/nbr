@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+use crate::log::StyledText;
 use crate::project::SelectedAdapter;
 use crate::pyproject::Adapter;
 
@@ -35,5 +36,16 @@ impl From<&RegistryAdapter> for SelectedAdapter {
             project_link: adapter.project_link.clone(),
             version: adapter.version.clone(),
         }
+    }
+}
+
+impl RegistryAdapter {
+    pub fn display(&self) {
+        StyledText::new(" ")
+            .cyan_bold("  •")
+            .cyan_bold(&self.name)
+            .text(format!("({})", self.project_link).as_str())
+            .green(format!("v{}", self.version).as_str())
+            .println();
     }
 }
