@@ -10,14 +10,6 @@ use crate::config::get_cache_dir;
 
 pub const REGISTRY_BASE_URL: &str = "https://registry.nonebot.dev";
 
-pub fn build_registry_client() -> Result<Client> {
-    Client::builder()
-        .timeout(Duration::from_secs(15))
-        .user_agent("nbr")
-        .build()
-        .context("Failed to build HTTP client")
-}
-
 pub fn cache_file(file_name: &str) -> Result<PathBuf> {
     let cache_dir = get_cache_dir()?;
     Ok(cache_dir.join(file_name))
@@ -70,7 +62,11 @@ pub async fn fetch_registry_vec_by_route<T>(route: &str) -> Result<Vec<T>>
 where
     T: DeserializeOwned,
 {
-    let client = build_registry_client()?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(15))
+        .user_agent("nbr")
+        .build()
+        .context("Failed to build HTTP client")?;
     let url = registry_url(route);
     fetch_registry_vec(&client, &url).await
 }

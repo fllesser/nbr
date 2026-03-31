@@ -6,7 +6,6 @@ use crate::docker;
 use crate::pyproject::{BuildSystem, NbTomlEditor, Nonebot, Project, PyProjectConfig, Tool};
 use crate::uv;
 
-use super::deps;
 use super::options::{Environment, ProjectOptions, Template};
 
 impl ProjectOptions {
@@ -60,8 +59,8 @@ impl ProjectOptions {
     }
 
     fn create_pyproject_config(&self) -> Result<()> {
-        let dependencies = deps::collect_dependencies(&self.adapters, &self.drivers);
-        let dependency_groups = deps::collect_dependency_groups(&self.dev_tools);
+        let dependencies = self.collect_dependencies();
+        let dependency_groups = self.collect_dependency_groups();
 
         let pyproject = PyProjectConfig {
             project: Project {
