@@ -11,8 +11,8 @@ use std::sync::OnceLock;
 use tracing::debug;
 
 mod display;
-mod ops;
 mod registry;
+mod service;
 
 pub use registry::RegistryAdapter;
 

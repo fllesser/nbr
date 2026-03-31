@@ -151,21 +151,22 @@ impl PluginManager {
         }
 
         let prompt = format!("Would you like to uninstall '{package_name}'");
-        if self.global_context.confirm(prompt, true).await? {
-            uv::remove(vec![&package_name])
-                .working_dir(&self.work_dir)
-                .run()?;
-            NbTomlEditor::with_work_dir(Some(&self.work_dir))?
-                .remove_plugins(vec![&package_name.replace("-", "_")])?;
-
-            StyledText::new(" ")
-                .green_bold("✓ Successfully uninstalled plugin:")
-                .cyan_bold(package_name)
-                .println();
-        } else {
+        // 默认取消：用户必须显式确认才执行卸载
+        if !self.global_context.confirm(prompt, false).await? {
             error!("Uninstallation operation cancelled.");
             return Ok(());
         }
+
+        uv::remove(vec![&package_name])
+            .working_dir(&self.work_dir)
+            .run()?;
+        NbTomlEditor::with_work_dir(Some(&self.work_dir))?
+            .remove_plugins(vec![&package_name.replace("-", "_")])?;
+
+        StyledText::new(" ")
+            .green_bold("✓ Successfully uninstalled plugin:")
+            .cyan_bold(package_name)
+            .println();
 
         Ok(())
     }
@@ -179,7 +180,7 @@ impl PluginManager {
             );
         }
         let prompt = format!("Would you like to uninstall '{package_name}'");
-        if self.global_context.confirm(prompt, false).await? {
+        if !self.global_context.confirm(prompt, false).await? {
             error!("{}", "Uninstallation operation cancelled.");
             return Ok(());
         }

@@ -28,7 +28,8 @@ impl AdapterManager {
             .cyan_bold(format!("[{}]", selected_adapters_names).as_str())
             .to_string();
 
-        if self.global_context.confirm(prompt, true).await? {
+        // 默认取消：用户必须显式确认才执行安装；-y 时会直接通过
+        if !self.global_context.confirm(prompt, false).await? {
             error!("{}", "Installation operation cancelled.");
             return Ok(());
         }
