@@ -9,6 +9,9 @@ pub mod plugin;
 pub mod run;
 
 use clap::{ArgAction, Parser, Subcommand};
+use dialoguer::theme::ColorfulTheme;
+
+pub use crate::context::GlobalContext;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 // nbr banner
@@ -31,15 +34,23 @@ pub struct Cli {
     pub commands: NbrCommands,
     #[clap(short, long, action = ArgAction::Count, help = "Verbose level, -v: DEBUG, -vv: TRACE")]
     pub verbose: u8,
+    #[clap(short, long, help = "Force yes to all prompts")]
+    pub yes: bool,
 }
 
 impl Cli {
     pub async fn run(self) -> anyhow::Result<()> {
+        let global_context = GlobalContext {
+            verbose: self.verbose,
+            yes: self.yes,
+            dialoguer_theme: ColorfulTheme::default(),
+        };
+
         match self.commands {
-            NbrCommands::Create(create_args) => create::handle(create_args).await?,
+            NbrCommands::Create(create_args) => create::handle(create_args, global_context).await?,
             NbrCommands::Run { file, reload } => run::handle(file, reload).await?,
-            NbrCommands::Plugin { commands } => plugin::handle(&commands).await?,
-            NbrCommands::Adapter { commands } => adapter::handle(&commands).await?,
+            NbrCommands::Plugin { commands } => plugin::handle(&commands, global_context).await?,
+            NbrCommands::Adapter { commands } => adapter::handle(&commands, global_context).await?,
             NbrCommands::Generate { force } => generate::handle(force).await?,
             NbrCommands::Env { commands } => env::handle(&commands).await?,
             NbrCommands::Docker { commands } => docker::handle(&commands)?,

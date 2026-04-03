@@ -148,7 +148,7 @@ pub struct BuildSystem {
 impl Default for BuildSystem {
     fn default() -> Self {
         Self {
-            requires: vec!["uv_build>=0.9.0,<0.10.0".to_string()],
+            requires: vec!["uv_build>=0.10.0,<0.11.0".to_string()],
             build_backend: "uv_build".to_string(),
         }
     }

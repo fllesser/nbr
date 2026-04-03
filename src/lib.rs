@@ -1,7 +1,14 @@
+pub mod adapter;
 pub mod cli;
 pub mod config;
+pub mod context;
+pub mod docker;
+pub mod environment;
 pub mod error;
 pub mod log;
+pub mod plugin;
+pub mod project;
 pub mod pyproject;
+pub mod registry_store;
 pub mod utils;
 pub mod uv;

@@ -1,7 +1,7 @@
 use super::DockerCommands;
-use crate::{cli::common, log::StyledText, pyproject::PyProjectConfig};
-use anyhow::{Context, Result};
-use std::{fs, path::Path};
+use crate::{cli::common, docker};
+use anyhow::Result;
+use std::path::Path;
 
 pub(crate) fn handle(commands: &DockerCommands) -> Result<()> {
     let work_dir = std::env::current_dir()?;
@@ -24,41 +24,9 @@ pub(crate) fn build_docker(work_dir: &Path) -> Result<()> {
 }
 
 pub(crate) fn generate_docker_files(work_dir: &Path) -> Result<()> {
-    let pyproject = PyProjectConfig::parse(Some(work_dir))?;
-    // if .python-version file not exists, select it
+    let mut python_version = None;
     if !work_dir.join(".python-version").exists() {
-        let python_version = common::select_python_version()?;
-        create_python_pin_file(work_dir, &python_version)?;
+        python_version = Some(common::select_python_version()?);
     }
-
-    create_dockerfile(work_dir)?;
-    create_compose_file(work_dir, &pyproject.project.name)?;
-    create_dockerignore(work_dir)?;
-
-    StyledText::new(" ")
-        .green_bold("✓ Successfully generated Docker configs")
-        .println();
-
-    Ok(())
-}
-
-pub(crate) fn create_python_pin_file(work_dir: &Path, python_version: &str) -> Result<()> {
-    fs::write(work_dir.join(".python-version"), python_version)
-        .context("Failed to write .python-version")
-}
-
-pub(crate) fn create_dockerfile(work_dir: &Path) -> Result<()> {
-    let dockerfile = include_str!("templates/dockerfile");
-    fs::write(work_dir.join("Dockerfile"), dockerfile).context("Failed to write Dockerfile")
-}
-
-pub(crate) fn create_compose_file(work_dir: &Path, project_name: &str) -> Result<()> {
-    let compose_config = include_str!("templates/compose.yml");
-    let compose_config = compose_config.replace("${PROJECT_NAME}", project_name);
-    fs::write(work_dir.join("compose.yml"), compose_config).context("Failed to write compose.yml")
-}
-
-pub(crate) fn create_dockerignore(work_dir: &Path) -> Result<()> {
-    let dockerignore = include_str!("templates/.dockerignore");
-    fs::write(work_dir.join(".dockerignore"), dockerignore).context("Failed to write .dockerignore")
+    docker::generate_docker_files(work_dir, python_version.as_deref())
 }
