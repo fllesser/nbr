@@ -18,10 +18,10 @@ path = "src/main.rs"
 
 [dependencies]
 # CLI framework
-clap = { version = "4.5.53", features = ["derive", "color", "suggestions"] }
+clap = { version = "4.6.1", features = ["derive", "color", "suggestions"] }
 
 # Async runtime
-tokio = { version = "1.48.0", features = [
+tokio = { version = "1.52.3", features = [
   "signal",
   "process",
   "rt-multi-thread",
@@ -29,63 +29,63 @@ tokio = { version = "1.48.0", features = [
 ] }
 
 # HTTP client
-reqwest = { version = "0.12.27", features = [
+reqwest = { version = "0.13.3", features = [
   "json",
-  "rustls-tls",
+  "rustls",
   "stream",
 ], default-features = false }
 
 # Serialization
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.146"
+serde_json = "1.0.149"
 # serde_yaml = "0.9"
 
 # TOML handling
-toml = "0.9.8"
+toml = "1.1.2+spec-1.1.0"
 
 # Terminal UI and progress bars
-indicatif = "0.18.3"
-console = "0.16.2"
-dialoguer = "0.12"
+indicatif = "0.18.4"
+console = "0.16.3"
+dialoguer = "0.12.0"
 
 # Error handling
-anyhow = "1.0.100"
-thiserror = "2.0.17"
+anyhow = "1.0.102"
+thiserror = "2.0.18"
 
 # Git operations
 # git2 = { version = "0.20.2", default-features = false }
 
 # Directory management
-directories = "6.0"
+directories = "6.0.0"
 
 # Regex support
-regex = "1.12"
+regex = "1.12.3"
 
 # File watching
 notify = "8.2.0"
 
 # System information
-sysinfo = { version = "0.37.2", features = ["disk"] }
+sysinfo = { version = "0.39.2", features = ["disk"] }
 
 # Futures utilities
-futures-util = "0.3"
+futures-util = "0.3.32"
 
 # Logging
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = [
+tracing-subscriber = { version = "0.3.23", features = [
   "env-filter",
   "time",
   "ansi",
 ] }
 
-toml_edit = "0.24.0"
+toml_edit = "0.25.11+spec-1.1.0"
 tracing-core = "0.1.36"
-ansi_term = "0.12"
-strum = { version = "0.27.2", features = ["derive"] }
+ansi_term = "0.12.1"
+strum = { version = "0.28.0", features = ["derive"] }
 
 [dev-dependencies]
-tempfile = "3.23"
-insta = { version = "1.42.1", features = ["yaml", "redactions"] }
+tempfile = "3.27.0"
+insta = { version = "1.47.2", features = ["yaml", "redactions"] }
 
 [profile.release]
 lto = true
