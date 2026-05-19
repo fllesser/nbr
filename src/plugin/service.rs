@@ -38,15 +38,15 @@ impl PluginManager {
 
     pub async fn install(&mut self, options: InstallOptions<'_>, fetch_remote: bool) -> Result<()> {
         if options.spec.git_url.is_some() {
-            return self.install_from_github(options).await;
-        }
-        if let Ok(registry_plugin) = self
+            self.install_from_github(options).await
+        } else if let Ok(rp) = self
             .get_registry_plugin(options.spec.name, fetch_remote)
             .await
         {
-            return self.install_registry_plugin(registry_plugin, options).await;
+            self.install_registry_plugin(rp, options).await
+        } else {
+            self.install_unregistered_plugin(options).await
         }
-        self.install_unregistered_plugin(options).await
     }
 
     pub async fn install_from_github(&mut self, options: InstallOptions<'_>) -> Result<()> {
