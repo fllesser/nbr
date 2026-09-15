@@ -93,12 +93,12 @@ jobs:
         run: rustup show
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@50708e9ba8d7b6587a2cb575ddaa9a62e927bc06 # v2.62.63
+        uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
         with:
           tool: cargo-nextest
 
       - name: "Install cargo-llvm-cov"
-        uses: taiki-e/install-action@50708e9ba8d7b6587a2cb575ddaa9a62e927bc06 # v2.62.63
+        uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
         with:
           tool: cargo-llvm-cov
 
@@ -140,7 +140,7 @@ jobs:
         run: rustup show
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@50708e9ba8d7b6587a2cb575ddaa9a62e927bc06 # v2.62.63
+        uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
         with:
           tool: cargo-nextest
 
@@ -177,7 +177,7 @@ jobs:
         run: rustup show
 
       - name: "Install cargo nextest"
-        uses: taiki-e/install-action@50708e9ba8d7b6587a2cb575ddaa9a62e927bc06 # v2.62.63
+        uses: taiki-e/install-action@26e9283f268b880168bdbd2c545dfcd60ec2c6ab # v2.87.13
         with:
           tool: cargo-nextest
 
